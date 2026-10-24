@@ -21,6 +21,7 @@ mod paths;
 mod prepare;
 mod repair;
 mod saved_plans;
+mod self_update;
 mod storage_report;
 mod updates;
 
@@ -54,6 +55,10 @@ pub use paths::DataDirectory;
 pub use prepare::{CustomPreparation, Preparation, Ready, custom_plan};
 pub use repair::{RepairAssessment, RepairOutcome};
 pub use saved_plans::{Applied, Approval, SavedPlan, UninstallPlan};
+pub use self_update::{
+	AppliedLauncher, Blocker, InstallLayout, LauncherCheck, LauncherRelease, LauncherUpdateOutcome,
+	LauncherUpdateReport, ReleaseConfig, StagedLauncher,
+};
 pub use storage_report::StorageReport;
 pub use updates::{
 	AutoStatus, AvailableUpdate, CycleOutcome, CycleReport, CycleResult, Decision, Initiator,

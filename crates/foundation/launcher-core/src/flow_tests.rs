@@ -214,6 +214,7 @@ async fn world() -> World {
 		},
 		artifacts: Some(artifacts.clone()),
 		secrets: Some(Arc::new(crate::MemorySecret::default())),
+		releases: crate::ReleaseConfig::production(),
 	};
 
 	let engine = Engine::open_with(&DataDirectory::at(directory.path().join("data")), config)

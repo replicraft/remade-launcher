@@ -64,6 +64,75 @@ impl StartPage {
 	}
 }
 
+/// How the launcher treats updates to itself.
+///
+/// This is its own choice, apart from how installed apps are updated. Turning
+/// app updates to manual does not stop the launcher from keeping itself
+/// current, and the other way round.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LauncherUpdates {
+	/// Download and check a new launcher in the background, and switch to it
+	/// the next time the launcher is closed.
+	#[default]
+	Automatic,
+	/// Say that a new launcher is available. Nothing is downloaded.
+	Notify,
+	/// Never look for one.
+	Off,
+}
+
+impl LauncherUpdates {
+	pub const ALL: [Self; 3] = [Self::Automatic, Self::Notify, Self::Off];
+
+	pub const fn label(self) -> &'static str {
+		match self {
+			Self::Automatic => "Automatic",
+			Self::Notify => "Tell me",
+			Self::Off => "Off",
+		}
+	}
+
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::Automatic => "automatic",
+			Self::Notify => "notify",
+			Self::Off => "off",
+		}
+	}
+
+	pub const fn description(self) -> &'static str {
+		match self {
+			Self::Automatic => {
+				"Download a new launcher in the background and switch to it when you close this one."
+			}
+			Self::Notify => "Say when a new launcher is available, and leave the rest to you.",
+			Self::Off => "Never look for a new launcher.",
+		}
+	}
+
+	/// Whether the launcher may look for a new release at all.
+	pub const fn checks(self) -> bool {
+		!matches!(self, Self::Off)
+	}
+
+	/// Whether it may download one without being asked.
+	pub const fn downloads(self) -> bool {
+		matches!(self, Self::Automatic)
+	}
+}
+
+impl std::str::FromStr for LauncherUpdates {
+	type Err = ();
+
+	fn from_str(text: &str) -> Result<Self, ()> {
+		Self::ALL
+			.into_iter()
+			.find(|mode| mode.as_str() == text.trim().to_ascii_lowercase())
+			.ok_or(())
+	}
+}
+
 /// What the launcher remembers about how it was laid out.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -219,6 +288,7 @@ pub struct Preferences {
 	pub layout: Layout,
 	pub notifications: Notifications,
 	pub network: Network,
+	pub launcher_updates: LauncherUpdates,
 }
 
 impl Default for Preferences {
@@ -232,6 +302,7 @@ impl Default for Preferences {
 			layout: Layout::default(),
 			notifications: Notifications::default(),
 			network: Network::default(),
+			launcher_updates: LauncherUpdates::default(),
 		}
 	}
 }
@@ -285,6 +356,19 @@ mod tests {
 		);
 		assert_eq!(defaults.network.proxy, Proxy::System);
 		assert_eq!(defaults.network.timeout_seconds, 30);
+		assert_eq!(defaults.launcher_updates, LauncherUpdates::Automatic);
+	}
+
+	#[test]
+	fn launcher_updates_have_their_own_names_and_meanings() {
+		for mode in LauncherUpdates::ALL {
+			assert_eq!(mode.as_str().parse(), Ok(mode));
+		}
+
+		assert_eq!("Tell".parse::<LauncherUpdates>(), Err(()));
+		assert!(LauncherUpdates::Automatic.downloads() && LauncherUpdates::Automatic.checks());
+		assert!(!LauncherUpdates::Notify.downloads() && LauncherUpdates::Notify.checks());
+		assert!(!LauncherUpdates::Off.checks());
 	}
 
 	#[test]

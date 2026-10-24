@@ -14,7 +14,9 @@ pub mod updates;
 
 pub use error::{ErrorCategory, ErrorCode, LauncherError, Result, Retry};
 pub use ids::{InstallationId, OperationId};
-pub use preferences::{Language, Layout, Network, Notifications, Preferences, Proxy, StartPage};
+pub use preferences::{
+	Language, LauncherUpdates, Layout, Network, Notifications, Preferences, Proxy, StartPage,
+};
 pub use settings::ThemePreference;
 pub use target::{Abi, Arch, HostTarget, Os};
 pub use updates::{CONSENT_POLICY_VERSION, MinimumAge, UpdateMode};

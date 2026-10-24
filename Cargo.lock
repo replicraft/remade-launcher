@@ -2760,7 +2760,9 @@ dependencies = [
 name = "launcher-core"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "directories",
+ "ed25519-dalek",
  "flate2",
  "futures-util",
  "hex",
@@ -2773,6 +2775,7 @@ dependencies = [
  "launcher-resolver",
  "launcher-storage",
  "rayon",
+ "semver",
  "serde",
  "serde_json",
  "serde_json_canonicalizer",

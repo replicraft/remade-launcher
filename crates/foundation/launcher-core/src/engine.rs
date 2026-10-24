@@ -13,6 +13,7 @@ use crate::explore::{self, ExploreQuery, ExploreRow};
 use crate::lifecycle::{HttpArtifacts, InstalledApp, LifecycleService, OperationSummary};
 use crate::network;
 use crate::paths::DataDirectory;
+use crate::self_update::ReleaseConfig;
 
 pub(crate) fn now_unix() -> i64 {
 	time::OffsetDateTime::now_utc().unix_timestamp()
@@ -36,6 +37,10 @@ pub struct Engine {
 	catalog: CatalogService,
 	lifecycle: LifecycleService,
 	pub(crate) events: EventBus,
+	/// Where launcher releases come from, and which keys may sign them.
+	pub(crate) releases: ReleaseConfig,
+	/// One launcher download at a time.
+	pub(crate) launcher_update: tokio::sync::Mutex<()>,
 }
 
 impl Engine {
@@ -107,6 +112,8 @@ impl Engine {
 			catalog,
 			lifecycle,
 			events,
+			releases: config.releases,
+			launcher_update: tokio::sync::Mutex::new(()),
 		})
 	}
 

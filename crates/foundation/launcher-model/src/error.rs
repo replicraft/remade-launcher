@@ -59,6 +59,11 @@ pub enum ErrorCode {
 	OperationInProgress,
 	Cancelled,
 	AdoptionRefused,
+	/// The launcher cannot replace itself here, for example because a package
+	/// manager owns it or this build has no release key.
+	SelfUpdateUnavailable,
+	/// A launcher release failed a signature or rollback check.
+	ReleaseRejected,
 	ConfirmationRequired,
 	ConsentRequired,
 	SourceApprovalRequired,
@@ -92,6 +97,8 @@ impl ErrorCode {
 			Self::OperationInProgress => "operation.in_progress",
 			Self::Cancelled => "operation.cancelled",
 			Self::AdoptionRefused => "installation.adoption_refused",
+			Self::SelfUpdateUnavailable => "selfupdate.unavailable",
+			Self::ReleaseRejected => "selfupdate.release_rejected",
 			Self::ConfirmationRequired => "cli.confirmation_required",
 			Self::ConsentRequired => "policy.consent_required",
 			Self::SourceApprovalRequired => "policy.source_approval_required",
@@ -113,7 +120,10 @@ impl ErrorCode {
 			| Self::ProviderRateLimited
 			| Self::ProviderNotFound
 			| Self::ProviderResponseMalformed => ErrorCategory::Network,
-			Self::SourceIdentityChanged | Self::ArtifactDigestMismatch => ErrorCategory::Trust,
+			Self::SourceIdentityChanged | Self::ArtifactDigestMismatch | Self::ReleaseRejected => {
+				ErrorCategory::Trust
+			}
+			Self::SelfUpdateUnavailable => ErrorCategory::Compatibility,
 			Self::PackageUnsafe | Self::PackageUnsupported => ErrorCategory::Compatibility,
 			Self::InstallationNotFound
 			| Self::InstallationChanged
@@ -144,8 +154,10 @@ impl ErrorCode {
 			| Self::ProviderResponseMalformed
 			| Self::SourceIdentityChanged
 			| Self::ArtifactDigestMismatch
+			| Self::ReleaseRejected
 			| Self::PackageUnsafe
 			| Self::PackageUnsupported
+			| Self::SelfUpdateUnavailable
 			| Self::InstallationNotFound => Retry::Never,
 			Self::InstallationChanged | Self::LaunchFailed => Retry::AfterUserAction,
 			Self::OperationInProgress => Retry::Later,

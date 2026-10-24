@@ -69,6 +69,8 @@ pub(crate) fn classify(code: ErrorCode) -> (&'static str, ExitStatus) {
 		ErrorCode::OperationInProgress => ("OPERATION_IN_PROGRESS", Conflict),
 		ErrorCode::Cancelled => ("CANCELLED", ApprovalRequired),
 		ErrorCode::AdoptionRefused => ("ADOPTION_REFUSED", Conflict),
+		ErrorCode::SelfUpdateUnavailable => ("SELF_UPDATE_UNAVAILABLE", Unsupported),
+		ErrorCode::ReleaseRejected => ("RELEASE_REJECTED", Trust),
 		ErrorCode::ConfirmationRequired => ("APPROVAL_REQUIRED", ApprovalRequired),
 		ErrorCode::ConsentRequired => ("CONSENT_REQUIRED", ApprovalRequired),
 		ErrorCode::SourceApprovalRequired => {
