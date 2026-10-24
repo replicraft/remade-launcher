@@ -15,8 +15,14 @@ pub(crate) fn setting_row(
 ) {
 	let palette = theme::palette(ui);
 	let width = ui.available_width();
+	// Controls are taller than a line of text, so the title is let down by
+	// half the difference to line up with the middle of the control.
+	let nudge = ((ui.spacing().interact_size.y - ui.text_style_height(&egui::TextStyle::Body))
+		/ 2.0)
+		.max(0.0);
 
 	let describe = |ui: &mut Ui| {
+		ui.add_space(nudge);
 		ui.label(RichText::new(title).family(theme::semibold()));
 
 		if let Some(description) = description {

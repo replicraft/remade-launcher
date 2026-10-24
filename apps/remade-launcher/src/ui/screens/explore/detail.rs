@@ -10,7 +10,8 @@ use launcher_model::Os;
 
 use super::filters::category_label;
 use crate::ui::components::{
-	app_tile_for, panel, platform_badges, primary_button, quiet_button, tag, verified_badge,
+	app_tile_for, panel, platform_badges, primary_button, quiet_button, quiet_button_with_icon,
+	tag, verified_badge,
 };
 use crate::ui::screens::Action;
 use crate::ui::{icons, theme};
@@ -190,9 +191,10 @@ fn page(ui: &mut Ui, facts: &Facts<'_>) -> Option<Action> {
 					});
 				}
 
-				let report = format!("{}  Report entry", icons::FLAG);
+				// Only the flag is red, so the label stays calm.
+				let flag = (icons::FLAG, theme::palette(ui).danger);
 
-				if quiet_button(ui, &report, true, vec2(160.0, 38.0))
+				if quiet_button_with_icon(ui, flag, "Report entry", true, vec2(160.0, 38.0))
 					.on_hover_text("Tell us if something about this entry is wrong")
 					.clicked()
 				{
@@ -208,41 +210,22 @@ fn page(ui: &mut Ui, facts: &Facts<'_>) -> Option<Action> {
 
 /// The icon, name, and summary on the left; Install on the right.
 fn header(ui: &mut Ui, facts: &Facts<'_>, installable: bool, action: &mut Option<Action>) {
+	// The left side is given a definite width that stops well short of the
+	// button, so the text can never run up against Install.
+	const BUTTON_WIDTH: f32 = 240.0;
+	const GAP: f32 = 56.0;
+	const TILE: f32 = 84.0;
+
+	let left = (ui.available_width() - BUTTON_WIDTH - GAP).max(280.0);
+
 	ui.horizontal_top(|ui| {
-		app_tile_for(ui, Some(facts.slug), facts.name, 84.0);
-		ui.add_space(8.0);
+		ui.allocate_ui_with_layout(vec2(left, 0.0), Layout::left_to_right(Align::Min), |ui| {
+			ui.set_width(left);
 
-		ui.vertical(|ui| {
-			ui.set_max_width((ui.available_width() - 240.0 - 72.0).max(240.0));
-			ui.spacing_mut().item_spacing.y = 4.0;
+			app_tile_for(ui, Some(facts.slug), facts.name, TILE);
+			ui.add_space(8.0);
 
-			ui.horizontal(|ui| {
-				ui.label(
-					RichText::new(facts.name)
-						.size(28.0)
-						.family(theme::semibold()),
-				);
-				verified_badge(ui, true);
-			});
-
-			ui.label(
-				RichText::new(facts.summary)
-					.size(15.0)
-					.color(theme::muted(ui)),
-			);
-			ui.add_space(4.0);
-
-			ui.horizontal_wrapped(|ui| {
-				tag(ui, facts.kind);
-
-				if let Some(maturity) = facts.maturity {
-					tag(ui, maturity.label());
-				}
-
-				for category in facts.categories {
-					tag(ui, &category_label(category));
-				}
-			});
+			header_text(ui, facts, left - TILE - 8.0);
 		});
 
 		ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
@@ -251,7 +234,7 @@ fn header(ui: &mut Ui, facts: &Facts<'_>, installable: bool, action: &mut Option
 
 				let label = format!("{}  Install", icons::DOWNLOAD);
 
-				if primary_button(ui, &label, installable, vec2(240.0, 60.0)).clicked() {
+				if primary_button(ui, &label, installable, vec2(BUTTON_WIDTH, 60.0)).clicked() {
 					*action = Some(Action::Install {
 						slug: facts.slug.to_owned(),
 					});
@@ -270,6 +253,45 @@ fn header(ui: &mut Ui, facts: &Facts<'_>, installable: bool, action: &mut Option
 					);
 				}
 			});
+		});
+	});
+}
+
+/// The name, summary, and tags, wrapped to `width`.
+fn header_text(ui: &mut Ui, facts: &Facts<'_>, width: f32) {
+	ui.vertical(|ui| {
+		ui.set_max_width(width);
+		ui.spacing_mut().item_spacing.y = 4.0;
+
+		ui.horizontal(|ui| {
+			ui.label(
+				RichText::new(facts.name)
+					.size(28.0)
+					.family(theme::semibold()),
+			);
+			verified_badge(ui, true);
+		});
+
+		ui.add(
+			egui::Label::new(
+				RichText::new(facts.summary)
+					.size(15.0)
+					.color(theme::muted(ui)),
+			)
+			.wrap(),
+		);
+		ui.add_space(4.0);
+
+		ui.horizontal_wrapped(|ui| {
+			tag(ui, facts.kind);
+
+			if let Some(maturity) = facts.maturity {
+				tag(ui, maturity.label());
+			}
+
+			for category in facts.categories {
+				tag(ui, &category_label(category));
+			}
 		});
 	});
 }

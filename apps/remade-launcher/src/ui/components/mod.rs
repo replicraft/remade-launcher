@@ -41,7 +41,7 @@ pub(crate) use notice::{Tone, notice};
 pub(crate) use panel::panel;
 pub(crate) use platform_badges::platform_badges;
 pub(crate) use primary_button::primary_button;
-pub(crate) use quiet_button::quiet_button;
+pub(crate) use quiet_button::{quiet_button, quiet_button_with_icon};
 pub(crate) use search_bar::search_bar;
 pub(crate) use section_title::section_title;
 pub(crate) use setting_row::setting_row;
