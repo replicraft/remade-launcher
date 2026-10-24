@@ -370,15 +370,17 @@ impl LauncherApp {
 		let mut action = None;
 		let mut close = false;
 
-		let response = egui::Modal::new(egui::Id::unique("add-dialog")).show(context, |ui| {
-			ui.set_width(520.0);
+		let response = egui::Modal::new(egui::Id::unique("add-dialog"))
+			.frame(theme::dialog_frame(context))
+			.show(context, |ui| {
+				ui.set_width(520.0);
 
-			action = self.add.show(ui);
+				action = self.add.show(ui);
 
-			if ui.button("Close").clicked() {
-				close = true;
-			}
-		});
+				if ui.button("Close").clicked() {
+					close = true;
+				}
+			});
 
 		if close || response.should_close() {
 			self.adding = false;

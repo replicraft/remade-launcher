@@ -16,6 +16,7 @@ use launcher_model::ThemePreference;
 pub(crate) const SIDEBAR_WIDTH: f32 = 244.0;
 pub(crate) const SIDEBAR_COLLAPSED_WIDTH: f32 = 64.0;
 pub(crate) const CONTENT_MARGIN: i8 = 28;
+pub(crate) const DIALOG_PADDING: i8 = 28;
 
 pub(crate) struct Palette {
 	pub(crate) background: Color32,
@@ -76,6 +77,11 @@ pub(crate) fn palette_for(context: &egui::Context) -> &'static Palette {
 	} else {
 		&LIGHT
 	}
+}
+
+/// The frame for dialogs: the standard popup look with roomier padding.
+pub(crate) fn dialog_frame(context: &egui::Context) -> egui::Frame {
+	egui::Frame::popup(&context.global_style()).inner_margin(egui::Margin::same(DIALOG_PADDING))
 }
 
 /// A semi-bold family, for headings and emphasis. egui cannot make text bold

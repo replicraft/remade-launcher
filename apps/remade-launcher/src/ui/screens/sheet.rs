@@ -65,7 +65,9 @@ pub(crate) enum Outcome {
 pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 	let mut outcome = Outcome::Stay;
 
-	let response = Modal::new(Id::unique("sheet")).show(ctx, |ui| {
+	let response = Modal::new(Id::unique("sheet"))
+		.frame(theme::dialog_frame(ctx))
+		.show(ctx, |ui| {
 		ui.set_width(460.0);
 
 		match sheet {
