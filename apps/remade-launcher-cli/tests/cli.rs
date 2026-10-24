@@ -513,11 +513,14 @@ fn replanning_an_update_for_an_unknown_app_is_a_typed_failure() {
 }
 
 #[test]
-fn repair_is_honestly_unavailable() {
-	let (code, value, _) = run().json(&["plan", "repair", "ghost"]);
+fn repairing_something_that_is_not_installed_is_a_typed_failure() {
+	for arguments in [["plan", "repair", "ghost"], ["repair", "ghost", "--yes"]] {
+		let (code, value, _) = run().json(&arguments);
 
-	assert_eq!(
-		(code, value["error"]["code"].as_str()),
-		(4, Some("REPAIR_UNSUPPORTED"))
-	);
+		assert_eq!(
+			(code, value["error"]["code"].as_str()),
+			(2, Some("INSTALLATION_NOT_FOUND")),
+			"{arguments:?}"
+		);
+	}
 }
