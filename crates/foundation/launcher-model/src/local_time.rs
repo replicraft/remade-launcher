@@ -2,34 +2,239 @@
 //!
 //! The engine stores and exchanges UTC. Anything a person reads is shown in
 //! their own time zone instead, so "published 3:42 PM" means their afternoon.
-//! Machine output (JSON, signed records) stays UTC and does not use this.
+//! The clock (12 or 24 hour) and the order of day, month, and year follow the
+//! system's language and region, unless the person chose otherwise in
+//! Settings. Machine output (JSON, signed records) stays UTC and does not use
+//! this.
+
+use std::sync::{OnceLock, RwLock};
 
 use jiff::Timestamp;
 use jiff::tz::TimeZone;
+use serde::{Deserialize, Serialize};
 
-/// "Oct 24, 2026".
-pub fn date(unix: i64) -> String {
-	format_in(unix, &TimeZone::system(), "%b %-d, %Y")
+/// Which clock to show.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeFormat {
+	/// What the system's region uses.
+	#[default]
+	System,
+	Hour12,
+	Hour24,
 }
 
-/// "Oct 24, 2026, 3:42 PM PDT".
+impl TimeFormat {
+	pub const ALL: [Self; 3] = [Self::System, Self::Hour12, Self::Hour24];
+
+	pub const fn label(self) -> &'static str {
+		match self {
+			Self::System => "System",
+			Self::Hour12 => "12-hour (3:42 PM)",
+			Self::Hour24 => "24-hour (15:42)",
+		}
+	}
+}
+
+/// How to order and write a date.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DateFormat {
+	/// What the system's region uses.
+	#[default]
+	System,
+	/// Oct 24, 2026
+	MonthDayYear,
+	/// 24 Oct 2026
+	DayMonthYear,
+	/// 2026-10-24
+	Iso,
+}
+
+impl DateFormat {
+	pub const ALL: [Self; 4] = [
+		Self::System,
+		Self::MonthDayYear,
+		Self::DayMonthYear,
+		Self::Iso,
+	];
+
+	pub const fn label(self) -> &'static str {
+		match self {
+			Self::System => "System",
+			Self::MonthDayYear => "Oct 24, 2026",
+			Self::DayMonthYear => "24 Oct 2026",
+			Self::Iso => "2026-10-24",
+		}
+	}
+}
+
+/// What a locale tag implies, before any override.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Conventions {
+	pub twelve_hour: bool,
+	pub dates: DateStyle,
+}
+
+/// A concrete date order. `System` is resolved to one of these.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DateStyle {
+	MonthDayYear,
+	DayMonthYear,
+	Iso,
+}
+
+/// The usual clock and date order for a locale tag such as `en-US` or
+/// `de_DE.UTF-8`. This is a short table of the common cases, not a locale
+/// database: anything it does not know gets a 24-hour clock and day first.
+pub fn conventions(tag: &str) -> Conventions {
+	let normalized = tag
+		.split(['.', '@'])
+		.next()
+		.unwrap_or(tag)
+		.replace('_', "-");
+	let mut parts = normalized.split('-');
+	let language = parts.next().unwrap_or("").to_ascii_lowercase();
+	let region = parts
+		.find(|part| part.len() == 2 && part.chars().all(|c| c.is_ascii_alphabetic()))
+		.map(str::to_ascii_uppercase)
+		.unwrap_or_default();
+
+	let twelve_hour = match (language.as_str(), region.as_str()) {
+		// English is split by region; the rest of these are the regions
+		// that keep a 12-hour clock in everyday use.
+		("en", "" | "US" | "CA" | "AU" | "NZ" | "IN" | "PH" | "PK" | "BD" | "MY" | "SG") => true,
+		("es", "US" | "MX" | "CO" | "VE")
+		| ("hi" | "ar" | "bn" | "ur" | "ko" | "fil" | "tl", _) => true,
+		_ => false,
+	};
+
+	let dates = match (language.as_str(), region.as_str()) {
+		("en", "" | "US" | "PH") => DateStyle::MonthDayYear,
+		("ja" | "zh" | "ko" | "hu" | "lt" | "mn", _) | ("sv", "SE") | ("en", "CA") => {
+			DateStyle::Iso
+		}
+		_ => DateStyle::DayMonthYear,
+	};
+
+	Conventions { twelve_hour, dates }
+}
+
+/// The system's locale tag, read once.
+fn system_tag() -> &'static str {
+	static TAG: OnceLock<String> = OnceLock::new();
+
+	TAG.get_or_init(|| sys_locale::get_locale().unwrap_or_else(|| "en-US".to_owned()))
+}
+
+/// The tag the system reports, such as `en-US`, for showing in Settings.
+pub fn system_locale() -> &'static str {
+	system_tag()
+}
+
+#[derive(Clone, Copy)]
+struct Chosen {
+	time: TimeFormat,
+	date: DateFormat,
+}
+
+static CHOSEN: RwLock<Chosen> = RwLock::new(Chosen {
+	time: TimeFormat::System,
+	date: DateFormat::System,
+});
+
+/// Sets the person's choices. Everything formatted afterwards follows them.
+pub fn configure(time: TimeFormat, date: DateFormat) {
+	if let Ok(mut chosen) = CHOSEN.write() {
+		*chosen = Chosen { time, date };
+	}
+}
+
+fn chosen() -> Chosen {
+	CHOSEN.read().map_or(
+		Chosen {
+			time: TimeFormat::System,
+			date: DateFormat::System,
+		},
+		|chosen| *chosen,
+	)
+}
+
+/// Resolves the choices against `tag`'s conventions.
+fn resolve(time: TimeFormat, date: DateFormat, tag: &str) -> Conventions {
+	let system = conventions(tag);
+
+	Conventions {
+		twelve_hour: match time {
+			TimeFormat::System => system.twelve_hour,
+			TimeFormat::Hour12 => true,
+			TimeFormat::Hour24 => false,
+		},
+		dates: match date {
+			DateFormat::System => system.dates,
+			DateFormat::MonthDayYear => DateStyle::MonthDayYear,
+			DateFormat::DayMonthYear => DateStyle::DayMonthYear,
+			DateFormat::Iso => DateStyle::Iso,
+		},
+	}
+}
+
+fn current() -> Conventions {
+	let chosen = chosen();
+
+	resolve(chosen.time, chosen.date, system_tag())
+}
+
+fn date_pattern(style: DateStyle) -> &'static str {
+	match style {
+		DateStyle::MonthDayYear => "%b %-d, %Y",
+		DateStyle::DayMonthYear => "%-d %b %Y",
+		DateStyle::Iso => "%Y-%m-%d",
+	}
+}
+
+fn time_pattern(twelve_hour: bool) -> &'static str {
+	if twelve_hour { "%-I:%M %p" } else { "%H:%M" }
+}
+
+/// "Oct 24, 2026", "24 Oct 2026", or "2026-10-24".
+pub fn date(unix: i64) -> String {
+	format_in(unix, &TimeZone::system(), date_pattern(current().dates))
+}
+
+/// A date and time with the zone, such as "Oct 24, 2026, 3:42 PM PDT".
 pub fn date_time(unix: i64) -> String {
-	format_in(unix, &TimeZone::system(), "%b %-d, %Y, %-I:%M %p %Z")
+	date_time_in(unix, &TimeZone::system(), current())
+}
+
+fn date_time_in(unix: i64, zone: &TimeZone, conventions: Conventions) -> String {
+	let separator = if conventions.dates == DateStyle::Iso {
+		" "
+	} else {
+		", "
+	};
+	let pattern = format!(
+		"{}{separator}{} %Z",
+		date_pattern(conventions.dates),
+		time_pattern(conventions.twelve_hour)
+	);
+
+	format_in(unix, zone, &pattern)
 }
 
 /// "Today, 3:42 PM", "Yesterday, 9:05 AM", or the date for anything older.
 pub fn friendly(unix: i64, now: i64) -> String {
-	friendly_in(unix, now, &TimeZone::system())
+	friendly_in(unix, now, &TimeZone::system(), current())
 }
 
-fn friendly_in(unix: i64, now: i64, zone: &TimeZone) -> String {
+fn friendly_in(unix: i64, now: i64, zone: &TimeZone, conventions: Conventions) -> String {
 	let (Ok(then), Ok(today)) = (Timestamp::from_second(unix), Timestamp::from_second(now)) else {
 		return date_time(unix);
 	};
 
 	let then = then.to_zoned(zone.clone());
 	let today = today.to_zoned(zone.clone());
-	let clock = then.strftime("%-I:%M %p");
+	let clock = then.strftime(time_pattern(conventions.twelve_hour));
 	let days_ago = today
 		.date()
 		.since(then.date())
@@ -39,7 +244,7 @@ fn friendly_in(unix: i64, now: i64, zone: &TimeZone) -> String {
 	match days_ago {
 		0 => format!("Today, {clock}"),
 		1 => format!("Yesterday, {clock}"),
-		_ => then.strftime("%b %-d, %Y").to_string(),
+		_ => then.strftime(date_pattern(conventions.dates)).to_string(),
 	}
 }
 
@@ -60,29 +265,31 @@ mod tests {
 
 	use super::*;
 
+	const NOW: i64 = 1_792_874_520; // 2026-10-24 20:42:00 UTC
+
 	fn minus_five() -> TimeZone {
 		TimeZone::fixed(tz::offset(-5))
 	}
 
+	fn us() -> Conventions {
+		resolve(TimeFormat::System, DateFormat::System, "en-US")
+	}
+
 	#[test]
 	fn the_same_instant_reads_differently_in_another_zone() {
-		// 2026-10-24 20:42:00 UTC.
-		let unix = 1_792_874_520;
-
 		assert_eq!(
-			format_in(unix, &TimeZone::UTC, "%b %-d, %Y, %-I:%M %p"),
+			format_in(NOW, &TimeZone::UTC, "%b %-d, %Y, %-I:%M %p"),
 			"Oct 24, 2026, 8:42 PM"
 		);
 		assert_eq!(
-			format_in(unix, &minus_five(), "%b %-d, %Y, %-I:%M %p"),
+			format_in(NOW, &minus_five(), "%b %-d, %Y, %-I:%M %p"),
 			"Oct 24, 2026, 3:42 PM"
 		);
 	}
 
 	#[test]
 	fn an_early_morning_in_utc_is_still_the_day_before_locally() {
-		// 2026-10-25 02:42:00 UTC.
-		let unix = 1_792_874_520 + 6 * 3_600;
+		let unix = NOW + 6 * 3_600;
 
 		assert_eq!(format_in(unix, &TimeZone::UTC, "%b %-d"), "Oct 25");
 		assert_eq!(format_in(unix, &minus_five(), "%b %-d"), "Oct 24");
@@ -90,15 +297,16 @@ mod tests {
 
 	#[test]
 	fn friendly_names_today_and_yesterday_by_local_calendar_days() {
-		let now = 1_792_874_520;
-
-		assert_eq!(friendly_in(now - 600, now, &minus_five()), "Today, 3:32 PM");
 		assert_eq!(
-			friendly_in(now - 86_400, now, &minus_five()),
+			friendly_in(NOW - 600, NOW, &minus_five(), us()),
+			"Today, 3:32 PM"
+		);
+		assert_eq!(
+			friendly_in(NOW - 86_400, NOW, &minus_five(), us()),
 			"Yesterday, 3:42 PM"
 		);
 		assert_eq!(
-			friendly_in(now - 86_400 * 5, now, &minus_five()),
+			friendly_in(NOW - 86_400 * 5, NOW, &minus_five(), us()),
 			"Oct 19, 2026"
 		);
 	}
@@ -106,5 +314,76 @@ mod tests {
 	#[test]
 	fn nonsense_never_panics() {
 		assert_eq!(format_in(i64::MAX, &TimeZone::UTC, "%Y"), "an unknown time");
+	}
+
+	#[test]
+	fn regions_get_their_usual_clock_and_date_order() {
+		assert_eq!(
+			conventions("en-US"),
+			Conventions {
+				twelve_hour: true,
+				dates: DateStyle::MonthDayYear
+			}
+		);
+		assert_eq!(
+			conventions("en_GB.UTF-8"),
+			Conventions {
+				twelve_hour: false,
+				dates: DateStyle::DayMonthYear
+			}
+		);
+		assert_eq!(
+			conventions("de-DE"),
+			Conventions {
+				twelve_hour: false,
+				dates: DateStyle::DayMonthYear
+			}
+		);
+		assert_eq!(
+			conventions("ja-JP"),
+			Conventions {
+				twelve_hour: false,
+				dates: DateStyle::Iso
+			}
+		);
+		assert_eq!(
+			conventions("en-AU"),
+			Conventions {
+				twelve_hour: true,
+				dates: DateStyle::DayMonthYear
+			}
+		);
+		assert_eq!(conventions("sv-SE").dates, DateStyle::Iso);
+		// No region and no language we know: the safe, unambiguous defaults.
+		assert_eq!(
+			conventions("xx"),
+			Conventions {
+				twelve_hour: false,
+				dates: DateStyle::DayMonthYear
+			}
+		);
+	}
+
+	#[test]
+	fn an_override_beats_the_system_and_system_follows_it() {
+		let forced = resolve(TimeFormat::Hour24, DateFormat::Iso, "en-US");
+
+		assert!(!forced.twelve_hour);
+		assert_eq!(forced.dates, DateStyle::Iso);
+		assert_eq!(
+			date_time_in(NOW, &minus_five(), forced),
+			"2026-10-24 15:42 -05"
+		);
+
+		let german = resolve(TimeFormat::System, DateFormat::System, "de-DE");
+
+		assert_eq!(
+			date_time_in(NOW, &minus_five(), german),
+			"24 Oct 2026, 15:42 -05"
+		);
+		assert_eq!(
+			friendly_in(NOW - 600, NOW, &minus_five(), german),
+			"Today, 15:32"
+		);
 	}
 }

@@ -52,7 +52,7 @@ rayon = "1"
 tokio = { version = "1", default-features = false, features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 
 # Networking
-reqwest = { version = "0.13", default-features = false, features = ["brotli", "gzip", "http2", "rustls", "stream"] }
+reqwest = { version = "0.13", default-features = false, features = ["brotli", "gzip", "http2", "rustls", "socks", "stream", "system-proxy"] }
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
 
 # Storage
@@ -79,6 +79,7 @@ semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_json_canonicalizer = "0.4"
+sys-locale = "0.3"
 jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo", "tzdb-bundle-platform"] }
 time = { version = "0.3", default-features = false, features = ["parsing", "std"] }
 uuid = { version = "1", features = ["serde", "v7"] }

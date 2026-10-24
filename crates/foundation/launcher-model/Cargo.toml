@@ -9,6 +9,7 @@ license.workspace = true
 
 [dependencies]
 jiff.workspace = true
+sys-locale.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 uuid.workspace = true

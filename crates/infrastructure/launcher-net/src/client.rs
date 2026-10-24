@@ -1,14 +1,17 @@
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
+
+use launcher_model::Proxy;
 
 use futures_util::StreamExt;
 use launcher_model::{ErrorCode, LauncherError, product};
-use reqwest::header::{ACCEPT, HeaderMap, HeaderName, HeaderValue, IF_NONE_MATCH};
+use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderName, HeaderValue, IF_NONE_MATCH};
 use reqwest::{Client, Url, redirect};
 
 use crate::bounded::BoundedBuffer;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const DEFAULT_REQUEST_TIMEOUT_SECONDS: u32 = 30;
 const IDLE_CONNECTION_TIMEOUT: Duration = Duration::from_secs(90);
 const MAX_REDIRECTS: usize = 5;
 /// Longest a transfer may sit idle before it fails.
@@ -16,28 +19,64 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// Hard ceiling for one artifact download.
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(6 * 60 * 60);
 
+/// How the client reaches the network. Changing these takes effect for every
+/// copy of the client at once, so a setting can apply without a restart.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NetworkOptions {
+	pub proxy: Proxy,
+	/// How long a request may take, in seconds. Zero means the default.
+	pub timeout_seconds: u32,
+	/// A GitHub token, sent only to `api.github.com`, to raise the rate limit.
+	pub github_token: Option<String>,
+}
+
+/// What every copy of the client shares.
+struct Shared {
+	client: Client,
+	github_token: Option<Arc<str>>,
+}
+
 /// A cheaply cloneable HTTPS client.
 #[derive(Clone)]
 pub struct HttpClient {
-	inner: Client,
+	shared: Arc<RwLock<Shared>>,
 }
 
 impl HttpClient {
 	pub fn new() -> Result<Self, LauncherError> {
-		let inner = Client::builder()
-			.user_agent(product::user_agent())
-			.https_only(true)
-			.redirect(redirect_policy())
-			.read_timeout(READ_TIMEOUT)
-			.connect_timeout(CONNECT_TIMEOUT)
-			.timeout(REQUEST_TIMEOUT)
-			.pool_idle_timeout(IDLE_CONNECTION_TIMEOUT)
-			.tcp_nodelay(true)
-			.http2_adaptive_window(true)
-			.build()
-			.map_err(request_failed)?;
+		Self::with_options(&NetworkOptions::default())
+	}
 
-		Ok(Self { inner })
+	pub fn with_options(options: &NetworkOptions) -> Result<Self, LauncherError> {
+		Ok(Self {
+			shared: Arc::new(RwLock::new(shared(options)?)),
+		})
+	}
+
+	/// Applies new options to this client and every clone of it. Requests
+	/// already in flight finish on the old settings.
+	pub fn reconfigure(&self, options: &NetworkOptions) -> Result<(), LauncherError> {
+		let replacement = shared(options)?;
+
+		if let Ok(mut current) = self.shared.write() {
+			*current = replacement;
+		}
+
+		Ok(())
+	}
+
+	fn client(&self) -> Client {
+		self.shared.read().map_or_else(
+			|poisoned| poisoned.into_inner().client.clone(),
+			|shared| shared.client.clone(),
+		)
+	}
+
+	fn github_token(&self) -> Option<Arc<str>> {
+		self.shared
+			.read()
+			.ok()
+			.and_then(|shared| shared.github_token.clone())
 	}
 
 	/// Downloads `url` into memory, failing if the body exceeds `max_bytes`.
@@ -46,7 +85,7 @@ impl HttpClient {
 	/// Large artifacts will stream to disk through a separate path.
 	pub async fn get_bounded(&self, url: Url, max_bytes: usize) -> Result<Vec<u8>, LauncherError> {
 		let response = self
-			.inner
+			.client()
 			.get(url)
 			.send()
 			.await
@@ -62,6 +101,43 @@ impl HttpClient {
 
 		Ok(buffer.into_vec())
 	}
+}
+
+fn shared(options: &NetworkOptions) -> Result<Shared, LauncherError> {
+	let seconds = if options.timeout_seconds == 0 {
+		DEFAULT_REQUEST_TIMEOUT_SECONDS
+	} else {
+		options.timeout_seconds
+	};
+
+	let mut builder = Client::builder()
+		.user_agent(product::user_agent())
+		.https_only(true)
+		.redirect(redirect_policy())
+		.read_timeout(READ_TIMEOUT)
+		.connect_timeout(CONNECT_TIMEOUT)
+		.timeout(Duration::from_secs(u64::from(seconds)))
+		.pool_idle_timeout(IDLE_CONNECTION_TIMEOUT)
+		.tcp_nodelay(true)
+		.http2_adaptive_window(true);
+
+	builder = match &options.proxy {
+		// The system's proxy settings and the usual environment variables.
+		Proxy::System => builder,
+		Proxy::Direct => builder.no_proxy(),
+		Proxy::Custom(address) => {
+			builder.proxy(reqwest::Proxy::all(address.as_str()).map_err(request_failed)?)
+		}
+	};
+
+	Ok(Shared {
+		client: builder.build().map_err(request_failed)?,
+		github_token: options
+			.github_token
+			.as_deref()
+			.filter(|token| !token.is_empty())
+			.map(Arc::from),
+	})
 }
 
 /// Follows a bounded number of redirects, and only to public HTTPS hosts.
@@ -164,7 +240,7 @@ impl HttpClient {
 		};
 
 		let response = self
-			.inner
+			.client()
 			.get(url)
 			.timeout(DOWNLOAD_TIMEOUT)
 			.send()
@@ -259,6 +335,10 @@ impl HttpClient {
 			headers.insert(IF_NONE_MATCH, value);
 		}
 
+		if let Some(value) = authorization(&url, self.github_token().as_deref()) {
+			headers.insert(AUTHORIZATION, value);
+		}
+
 		for (name, value) in &request.headers {
 			headers.insert(
 				HeaderName::from_static(name),
@@ -267,7 +347,7 @@ impl HttpClient {
 		}
 
 		let response = self
-			.inner
+			.client()
 			.get(url)
 			.headers(headers)
 			.send()
@@ -307,6 +387,22 @@ impl HttpClient {
 			body: buffer.into_vec(),
 		})
 	}
+}
+
+/// The `Authorization` header for `url`, if the token belongs there.
+///
+/// A token goes only to GitHub's API over HTTPS, and is marked sensitive so
+/// it is never printed. Redirects to other hosts drop it.
+fn authorization(url: &Url, token: Option<&str>) -> Option<HeaderValue> {
+	if url.scheme() != "https" || url.host_str() != Some("api.github.com") {
+		return None;
+	}
+
+	let mut value = HeaderValue::from_str(&format!("Bearer {}", token?)).ok()?;
+
+	value.set_sensitive(true);
+
+	Some(value)
 }
 
 /// Extracts the `rel="next"` target from an RFC 8288 `Link` header.
@@ -383,6 +479,65 @@ mod tests {
 		);
 		assert!(next_link(r#"<https://a/b>; rel="last""#).is_none());
 		assert!(next_link("garbage").is_none());
+	}
+
+	#[test]
+	fn the_token_goes_to_the_github_api_and_nowhere_else() {
+		let api = Url::parse("https://api.github.com/repos/o/r").unwrap();
+
+		assert!(authorization(&api, Some("abc")).is_some_and(|value| value.is_sensitive()));
+		assert!(authorization(&api, None).is_none());
+
+		for elsewhere in [
+			"https://github.com/o/r",
+			"https://api.github.com.evil.example/x",
+			"https://objects.githubusercontent.com/x",
+			"http://api.github.com/x",
+		] {
+			assert!(
+				authorization(&Url::parse(elsewhere).unwrap(), Some("abc")).is_none(),
+				"{elsewhere}"
+			);
+		}
+	}
+
+	#[test]
+	fn reconfiguring_changes_every_clone() {
+		let client = HttpClient::new().unwrap();
+		let clone = client.clone();
+
+		client
+			.reconfigure(&NetworkOptions {
+				github_token: Some("t".into()),
+				..NetworkOptions::default()
+			})
+			.unwrap();
+
+		assert!(clone.github_token().is_some());
+
+		client.reconfigure(&NetworkOptions::default()).unwrap();
+
+		assert!(clone.github_token().is_none());
+	}
+
+	#[test]
+	fn proxies_are_built_or_refused() {
+		let direct = NetworkOptions {
+			proxy: Proxy::Direct,
+			..NetworkOptions::default()
+		};
+		let custom = NetworkOptions {
+			proxy: Proxy::Custom("socks5://127.0.0.1:1080".into()),
+			..NetworkOptions::default()
+		};
+		let broken = NetworkOptions {
+			proxy: Proxy::Custom("not an address".into()),
+			..NetworkOptions::default()
+		};
+
+		assert!(HttpClient::with_options(&direct).is_ok());
+		assert!(HttpClient::with_options(&custom).is_ok());
+		assert!(HttpClient::with_options(&broken).is_err());
 	}
 
 	#[test]
