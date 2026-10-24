@@ -1,0 +1,98 @@
+[workspace]
+resolver = "3"
+members = [
+	"apps/remade-launcher",
+	"crates/foundation/launcher-model",
+	"crates/foundation/launcher-core",
+	"crates/infrastructure/launcher-storage",
+	"crates/infrastructure/launcher-net",
+	"crates/ui/launcher-ui",
+]
+default-members = ["apps/remade-launcher"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+homepage = "https://remade.wiki"
+repository = "https://github.com/PixelSoftwareStudios/remade-launcher"
+# The code license is an owner decision that has not been made yet.
+# Add `license` here once it has.
+
+# ---------------------------------------------------------------------------
+# Dependencies
+#
+# Every third-party dependency is declared here once and inherited by member
+# crates with `workspace = true`. Keep each group sorted.
+# ---------------------------------------------------------------------------
+
+[workspace.dependencies]
+
+# Internal crates
+launcher-core = { path = "crates/foundation/launcher-core" }
+launcher-model = { path = "crates/foundation/launcher-model" }
+launcher-net = { path = "crates/infrastructure/launcher-net" }
+launcher-storage = { path = "crates/infrastructure/launcher-storage" }
+launcher-ui = { path = "crates/ui/launcher-ui" }
+
+# Async runtime
+tokio = { version = "1", default-features = false, features = ["macros", "rt-multi-thread", "sync", "time"] }
+
+# Networking
+reqwest = { version = "0.13", default-features = false, features = ["brotli", "gzip", "http2", "rustls", "stream"] }
+futures-util = { version = "0.3", default-features = false }
+
+# Storage
+rusqlite = { version = "0.40", features = ["bundled"] }
+tokio-rusqlite = "0.8"
+
+# User interface
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
+egui = { version = "0.37", default-features = false }
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Serialization and identifiers
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["serde", "v7"] }
+
+# Testing
+tempfile = "3"
+
+# Errors and diagnostics
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "env-filter", "fmt"] }
+
+# Platform
+directories = "6"
+mimalloc = "0.1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "deny"
+todo = "deny"
+unwrap_used = "warn"
+
+# ---------------------------------------------------------------------------
+# Build profiles
+# ---------------------------------------------------------------------------
+
+[profile.dev]
+# Keep incremental builds quick, but optimize dependencies so egui and
+# SQLite stay responsive while developing.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
