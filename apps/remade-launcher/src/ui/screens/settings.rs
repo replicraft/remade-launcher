@@ -6,7 +6,7 @@ use launcher_model::{MinimumAge, ThemePreference, UpdateMode, product};
 
 use super::page;
 use crate::ui::components::danger_button;
-use crate::ui::theme;
+use crate::ui::{icons, theme};
 
 pub(crate) enum SettingsAction {
 	None,
@@ -306,11 +306,14 @@ fn about(ui: &mut Ui, logo: &egui::TextureHandle, scroll_to: bool, action: &mut 
 			ui.label(RichText::new("Website").color(theme::muted(ui)));
 			ui.hyperlink_to("remade.wiki", env!("CARGO_PKG_HOMEPAGE"));
 			ui.end_row();
-
-			ui.label(RichText::new("Source code").color(theme::muted(ui)));
-			ui.hyperlink_to("GitHub", env!("CARGO_PKG_REPOSITORY"));
-			ui.end_row();
 		});
+
+	ui.add_space(8.0);
+
+	ui.hyperlink_to(
+		format!("{}  View the source on GitHub", icons::GITHUB),
+		env!("CARGO_PKG_REPOSITORY"),
+	);
 
 	ui.add_space(8.0);
 
