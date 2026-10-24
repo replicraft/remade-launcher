@@ -21,3 +21,18 @@ The platform icon family is separate from future application-card fallback artwo
 ## Evidence limits
 
 The pack validates dimensions, container structure, image decoding, hashes, and a visual contact sheet. It does not claim native Finder, Explorer, installer, Dock, icon-cache, or screen-reader tests. Those remain release evidence obligations in the platform chapters.
+
+## Fonts and icons (added with the interface)
+
+The user chose Open Sans for the interface font. These files are bundled in the
+desktop app, each with its license text beside it.
+
+| File | What | Source | License |
+|---|---|---|---|
+| `fonts/OpenSans-Regular.ttf`, `fonts/OpenSans-SemiBold.ttf` | Open Sans, static instances | https://github.com/googlefonts/opensans (`fonts/ttf/`) | SIL Open Font License 1.1, `fonts/OpenSans-OFL.txt` |
+| `fonts/Phosphor.ttf` | Phosphor Icons, regular weight, as a font | https://github.com/phosphor-icons/web (`src/regular/Phosphor.ttf`) | MIT, `fonts/Phosphor-LICENSE-MIT.txt` |
+
+The OFL permits bundling and redistribution with software. The font is not
+sold on its own, and its reserved font name is not used for a modified font.
+The icon codepoints used by the app are listed in
+`crates/ui/launcher-ui/src/icons.rs`.
