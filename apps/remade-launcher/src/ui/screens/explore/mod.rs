@@ -72,6 +72,11 @@ impl ExploreView {
 		}
 	}
 
+	/// Opens an app's page, such as from the Library.
+	pub(crate) fn select(&mut self, slug: String) {
+		self.selected = Some(slug);
+	}
+
 	/// Accepts results, ignoring any that a newer query has superseded.
 	pub(crate) fn receive(&mut self, request: u64, rows: Vec<ExploreRow>) {
 		if request == self.latest_request {

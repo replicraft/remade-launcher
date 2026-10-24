@@ -65,6 +65,8 @@ pub(crate) enum Action {
 	Cancel,
 	/// Open one app's update settings.
 	OpenAppSettings(InstallationId),
+	/// Open an installed app's page in the catalog.
+	ViewListing(String),
 	ReleaseNotes {
 		slug: String,
 		tag: String,

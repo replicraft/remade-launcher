@@ -162,6 +162,14 @@ fn actions(ui: &mut Ui, item: &Item<'_>, compact: bool) -> Option<Action> {
 			}
 		}
 
+		if !compact
+			&& app.curated
+			&& let Some(slug) = &app.catalog_slug
+			&& ui.button("View listing").clicked()
+		{
+			action = Some(Action::ViewListing(slug.clone()));
+		}
+
 		ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
 			if icon_button(ui, icons::TRASH, "Uninstall", 28.0).clicked() {
 				action = Some(Action::Uninstall(app.clone()));
@@ -191,9 +199,27 @@ pub(super) fn grid_card(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	);
 
 	top.horizontal(|ui| {
+		// Leave the top-right corner for the listing button.
+		ui.set_max_width(inner.width() - 110.0);
 		app_tile_for(ui, item.app.catalog_slug.as_deref(), &item.app.name, 44.0);
 		title(ui, item);
 	});
+
+	if item.app.curated
+		&& let Some(slug) = &item.app.catalog_slug
+	{
+		let spot = Rect::from_min_size(pos2(inner.right() - 100.0, inner.top()), vec2(100.0, 26.0));
+
+		if ui
+			.put(
+				spot,
+				egui::Button::new(RichText::new("View listing").small()),
+			)
+			.clicked()
+		{
+			action = Some(Action::ViewListing(slug.clone()));
+		}
+	}
 
 	top.add_space(6.0);
 	top.label(
@@ -275,7 +301,11 @@ pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 		.color(theme::muted(&name)),
 	);
 
-	let actions_width = 320.0;
+	let actions_width = if item.app.curated && item.app.catalog_slug.is_some() {
+		440.0
+	} else {
+		320.0
+	};
 	let actions_left = inner.right() - actions_width;
 	let status_left = title_left + TITLE_WIDTH + 12.0;
 	let status_width = (actions_left - 12.0 - status_left).max(80.0);

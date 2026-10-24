@@ -391,6 +391,14 @@ impl LauncherApp {
 	}
 
 	fn perform(&mut self, action: Action) {
+		// Looking at a listing changes nothing, so demo mode allows it too.
+		if let Action::ViewListing(slug) = action {
+			self.explore.select(slug);
+			self.go(Screen::Explore);
+
+			return;
+		}
+
 		if self.demo.is_some() {
 			return self.perform_demo(action);
 		}
@@ -412,6 +420,8 @@ impl LauncherApp {
 			Action::CheckUpdates => self.commands.check_updates(),
 			Action::OpenAppSettings(id) => self.app_settings = Some(id),
 			Action::Cancel => self.commands.cancel_operation(),
+			// Handled before this match.
+			Action::ViewListing(_) => {}
 			Action::UpdateAll => {
 				self.sheet = Some(Sheet::Working("Checking what can be updated…".into()));
 				self.commands.plan_all_updates();
