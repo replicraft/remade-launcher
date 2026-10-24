@@ -3646,6 +3646,7 @@ dependencies = [
  "launcher-storage",
  "mimalloc",
  "muda",
+ "objc2-foundation 0.3.2",
  "time",
  "tokio",
  "tracing",

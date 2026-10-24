@@ -13,6 +13,7 @@ use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
 
 use crate::ui::commands::{Commands, Message};
+use crate::ui::demo::{self, Demo};
 use crate::ui::menu::{AppMenu, MenuCommand};
 use crate::ui::screens::navigation::{self, NavAction, Sidebar};
 use crate::ui::screens::sheet::{self, Outcome, Sheet};
@@ -28,6 +29,8 @@ pub(crate) struct LauncherApp {
 	messages: Receiver<Message>,
 	logo: TextureHandle,
 	menu: AppMenu,
+	/// Invented data standing in for the real engine's, when asked for.
+	demo: Option<Demo>,
 	sidebar_collapsed: bool,
 	/// Bring the About section into view the next time Settings draws.
 	show_about: bool,
@@ -76,6 +79,8 @@ impl LauncherApp {
 			messages,
 			logo,
 			menu: AppMenu::install(context),
+			demo: demo::enabled()
+				.then(|| Demo::new(time::OffsetDateTime::now_utc().unix_timestamp())),
 			sidebar_collapsed: false,
 			show_about: false,
 			screen: Screen::Explore,
@@ -113,6 +118,12 @@ impl LauncherApp {
 						self.sheet = None;
 					}
 				}
+				Message::Explore { .. }
+				| Message::Installed(_)
+				| Message::Statuses(_)
+				| Message::Policies(_)
+				| Message::History(_)
+					if self.demo.is_some() => {}
 				Message::Explore { request, rows } => self.explore.receive(request, rows),
 				Message::Installed(apps) => self.installed = apps,
 				Message::Prepared(preparation) => self.show_preparation(preparation),
@@ -192,6 +203,59 @@ impl LauncherApp {
 		}
 	}
 
+	/// In demo mode the invented data always wins over whatever the engine
+	/// reports, so nothing real leaks into the screens.
+	fn apply_demo(&mut self) {
+		let Some(demo) = &self.demo else {
+			return;
+		};
+
+		self.installed.clone_from(&demo.installed);
+		self.statuses.clone_from(&demo.statuses);
+		self.policies.clone_from(&demo.policies);
+		self.history.clone_from(&demo.history);
+		self.checked = true;
+	}
+
+	/// Actions in demo mode change only the invented data, or explain that
+	/// nothing real happens.
+	fn perform_demo(&mut self, action: Action) {
+		let say = |text: &str| Sheet::Message {
+			title: "Demo mode".into(),
+			lines: vec![text.to_owned()],
+		};
+
+		match action {
+			Action::Pin(id, pinned) => {
+				if let Some(demo) = &mut self.demo {
+					demo.policies.entry(id).or_default().pinned_release_id = pinned.then_some(1);
+				}
+			}
+			Action::SetPolicy(id, policy) => {
+				if let Some(demo) = &mut self.demo {
+					demo.policies.insert(id, policy);
+				}
+			}
+			Action::ReleaseNotes { app, tag, .. } => {
+				self.sheet = Some(Sheet::Notes {
+					text: demo::notes(&app, &tag),
+					app,
+					version: tag,
+				});
+			}
+			Action::CheckUpdates | Action::Cancel => {}
+			Action::LookUp(_) => {
+				self.add.lookup_failed();
+				self.sheet = Some(say("Looking up repositories is turned off in demo mode."));
+			}
+			_ => {
+				self.sheet = Some(say(
+					"This would change your apps, so it does nothing in demo mode.",
+				))
+			}
+		}
+	}
+
 	fn show_preparation(&mut self, preparation: Preparation) {
 		self.sheet = Some(match preparation {
 			Preparation::Ready(ready) => Sheet::Review {
@@ -253,6 +317,10 @@ impl LauncherApp {
 	}
 
 	fn perform(&mut self, action: Action) {
+		if self.demo.is_some() {
+			return self.perform_demo(action);
+		}
+
 		match action {
 			Action::Install { slug } => {
 				self.update_of = None;
@@ -422,6 +490,7 @@ impl eframe::App for LauncherApp {
 		let context = ui.ctx().clone();
 
 		self.drain_messages();
+		self.apply_demo();
 		self.handle_shortcuts(&context);
 
 		let waiting = screens::updates::available(&self.statuses).len();
@@ -476,7 +545,11 @@ impl eframe::App for LauncherApp {
 
 			match self.screen {
 				Screen::Explore => {
-					action = self.explore.show(ui, &self.commands);
+					action = self.explore.show(
+						ui,
+						&self.commands,
+						self.demo.as_ref().map(|demo| demo.catalog.as_slice()),
+					);
 				}
 				Screen::Library => {
 					action = screens::library(

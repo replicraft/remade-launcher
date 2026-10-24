@@ -58,21 +58,39 @@ impl ExploreView {
 	}
 
 	/// Shows the catalog.
-	pub(crate) fn show(&mut self, ui: &mut Ui, commands: &Commands) -> Option<Action> {
+	/// `demo` replaces the engine's catalog with invented rows.
+	pub(crate) fn show(
+		&mut self,
+		ui: &mut Ui,
+		commands: &Commands,
+		demo: Option<&[ExploreRow]>,
+	) -> Option<Action> {
 		let mut action = None;
 		let state = commands.catalog_state();
 
-		self.search_if_changed(&state, commands);
+		match demo {
+			Some(rows) => self.rows = filter_demo(rows, &self.query, self.compatible_only),
+			None => self.search_if_changed(&state, commands),
+		}
 
 		page(ui, "Explore", |ui| {
-			banner(ui, &state, commands);
+			if demo.is_some() {
+				ui.label(
+					RichText::new(
+						"Demo catalog. These apps are made up and nothing here installs.",
+					)
+					.color(ui.visuals().warn_fg_color),
+				);
+			} else {
+				banner(ui, &state, commands);
+			}
 
 			search_bar(ui, "Search the catalog", &mut self.query);
 			ui.add_space(4.0);
 
 			ui.checkbox(&mut self.compatible_only, "Only apps for this device");
 
-			if state.catalog.is_none() {
+			if state.catalog.is_none() && demo.is_none() {
 				return;
 			}
 
@@ -107,6 +125,17 @@ impl ExploreView {
 							.iter()
 							.find(|row| row.slug == slug)
 							.map(|row| row.availability.clone());
+
+						if demo.is_some() {
+							let row = self.rows.iter().find(|row| row.slug == slug).cloned();
+
+							match row {
+								Some(row) => action = demo_detail(ui, &row, &mut self.selected),
+								None => self.selected = None,
+							}
+
+							return;
+						}
 
 						match project {
 							Some(project) => {
@@ -340,6 +369,67 @@ fn detail(
 				ui.label(RichText::new(reason).small().color(theme::muted(ui)));
 			}
 		});
+
+	action
+}
+
+/// Rows matching the search text, the way the engine would filter them.
+fn filter_demo(rows: &[ExploreRow], query: &str, compatible_only: bool) -> Vec<ExploreRow> {
+	let needle = query.trim().to_lowercase();
+
+	rows.iter()
+		.filter(|row| !compatible_only || row.availability == Availability::ThisDevice)
+		.filter(|row| {
+			needle.is_empty()
+				|| row.name.to_lowercase().contains(&needle)
+				|| row.summary.to_lowercase().contains(&needle)
+				|| row.repository.to_lowercase().contains(&needle)
+		})
+		.cloned()
+		.collect()
+}
+
+/// The detail pane for a demo row, which has no signed project behind it.
+fn demo_detail(ui: &mut Ui, row: &ExploreRow, selected: &mut Option<String>) -> Option<Action> {
+	let mut action = None;
+
+	ui.horizontal(|ui| {
+		ui.heading(&row.name);
+
+		ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+			if ui.button("Close").clicked() {
+				*selected = None;
+			}
+		});
+	});
+
+	ui.label(&row.summary);
+	ui.add_space(8.0);
+
+	fact(ui, "Source", &row.repository);
+	fact(ui, "Type", row.kind.label());
+	fact(ui, "Categories", &row.categories.join(", "));
+
+	ui.add_space(12.0);
+
+	let installable = row.availability == Availability::ThisDevice;
+
+	if ui
+		.add_enabled(installable, egui::Button::new("Install"))
+		.clicked()
+	{
+		action = Some(Action::Install {
+			slug: row.slug.clone(),
+		});
+	}
+
+	if !installable {
+		ui.label(
+			RichText::new(availability_text(&row.availability))
+				.small()
+				.color(theme::muted(ui)),
+		);
+	}
 
 	action
 }

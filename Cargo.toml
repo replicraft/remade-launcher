@@ -64,6 +64,7 @@ eframe = { version = "0.37", default-features = false, features = ["accesskit", 
 egui = { version = "0.37", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
 muda = { version = "0.21", default-features = false }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSProcessInfo", "NSString"] }
 
 # Archives and filesystem
 cap-std = "4"

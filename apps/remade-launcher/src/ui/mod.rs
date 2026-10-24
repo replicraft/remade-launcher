@@ -8,6 +8,7 @@ mod app;
 mod branding;
 mod commands;
 mod components;
+mod demo;
 mod icons;
 mod menu;
 mod screens;
