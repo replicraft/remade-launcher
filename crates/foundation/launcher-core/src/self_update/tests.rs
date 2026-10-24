@@ -707,3 +707,44 @@ async fn two_programs_cannot_update_the_launcher_at_once() {
 
 	assert!(world.stage(&release).await.is_ok());
 }
+
+/// Checks the real archive the build script makes, for a folder install and
+/// for a macOS app. Point `REMADE_UPDATE_ARCHIVE` at one and run with
+/// `--ignored`:
+///
+/// ```sh
+/// REMADE_UPDATE_ARCHIVE=dist/remade-update-0.1.0-aarch64-apple-darwin.tar.gz \
+///   cargo test -p launcher-core a_real_update_archive -- --ignored
+/// ```
+#[test]
+#[ignore = "needs an archive made by packaging/update/build-update-archive.sh"]
+fn a_real_update_archive_unpacks_for_a_folder_and_for_an_app() {
+	let archive = std::env::var("REMADE_UPDATE_ARCHIVE").expect("REMADE_UPDATE_ARCHIVE");
+	let folder = tempfile::tempdir().unwrap();
+
+	let programs = unpack(
+		Path::new(&archive),
+		&folder.path().join("programs"),
+		false,
+		"remade",
+	)
+	.unwrap();
+
+	assert!(programs.files.len() >= 3, "{:?}", programs.files);
+	assert!(programs.bundle.is_none());
+
+	if archive.contains("apple-darwin") {
+		let app = unpack(
+			Path::new(&archive),
+			&folder.path().join("app"),
+			true,
+			"remade-launcher",
+		)
+		.unwrap();
+
+		assert_eq!(
+			app.bundle.map(|bundle| bundle.name),
+			Some("Remade Launcher.app".to_owned())
+		);
+	}
+}

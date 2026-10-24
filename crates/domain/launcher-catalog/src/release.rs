@@ -585,4 +585,109 @@ mod tests {
 
 		assert_eq!(kind(check(&twice, None)), ErrorKind::SchemaInvalid);
 	}
+
+	/// The script that makes the real feed produces documents the launcher
+	/// accepts. It needs Python with `cryptography`, so it is skipped where
+	/// that is missing; set `REMADE_TEST_PYTHON` to choose the interpreter.
+	#[test]
+	fn the_feed_script_makes_documents_the_launcher_accepts() {
+		let python = std::env::var("REMADE_TEST_PYTHON").unwrap_or_else(|_| "python3".into());
+		let has_crypto = std::process::Command::new(&python)
+			.args(["-c", "import cryptography"])
+			.output()
+			.is_ok_and(|output| output.status.success());
+
+		if !has_crypto {
+			eprintln!("skipped: {python} has no `cryptography` module");
+
+			return;
+		}
+
+		let folder = tempfile::tempdir().unwrap();
+		let scripts =
+			std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../packaging/release");
+		let digest = "ab".repeat(32);
+
+		std::fs::write(
+			folder.path().join("assets.json"),
+			r#"{"assets":[
+				{"name":"remade-update-1.2.0-x86_64-unknown-linux-gnu.tar.gz","size":4096},
+				{"name":"remade-update-1.2.0-aarch64-apple-darwin.tar.gz","size":8192},
+				{"name":"RemadeLauncher-1.2.0-macos-arm64.dmg","size":999}]}"#,
+		)
+		.unwrap();
+		std::fs::write(
+			folder.path().join("SHA256SUMS.txt"),
+			format!(
+				"{digest}  remade-update-1.2.0-x86_64-unknown-linux-gnu.tar.gz\n{d2}  remade-update-1.2.0-aarch64-apple-darwin.tar.gz\n",
+				d2 = "cd".repeat(32)
+			),
+		)
+		.unwrap();
+
+		let output = std::process::Command::new(&python)
+			.current_dir(&scripts)
+			.env("TEST_SEED", STANDARD.encode([9u8; 32]))
+			.args([
+				"make-release-feed.py",
+				"--repo",
+				"owner/remade-launcher",
+				"--tag",
+				"v1.2.0",
+				"--assets",
+				folder.path().join("assets.json").to_str().unwrap(),
+				"--sums",
+				folder.path().join("SHA256SUMS.txt").to_str().unwrap(),
+				"--key-id",
+				"rel",
+				"--seed-env",
+				"TEST_SEED",
+				"--out-dir",
+				folder.path().join("out").to_str().unwrap(),
+				"--feed-id",
+				FEED,
+				"--now",
+				"2030-01-10T00:00:00Z",
+			])
+			.output()
+			.unwrap();
+
+		assert!(
+			output.status.success(),
+			"{}",
+			String::from_utf8_lossy(&output.stderr)
+		);
+
+		let manifest = std::fs::read(folder.path().join("out/launcher-release.json")).unwrap();
+		let signature = std::fs::read(folder.path().join("out/launcher-release.sig")).unwrap();
+		let registry = registry(&signing());
+		let verified = verify_release(
+			&manifest,
+			&signature,
+			&ReleaseContext {
+				registry: &registry,
+				feed_id: FEED,
+				channel: "stable",
+				now: timestamp::parse("2030-01-15T00:00:00Z").unwrap(),
+				high_water: None,
+			},
+		)
+		.expect("the launcher accepts what the script wrote");
+
+		assert_eq!(verified.version().to_string(), "1.2.0");
+		assert_eq!(verified.artifacts().len(), 2);
+
+		let linux = verified.artifact_for("linux", "x86_64").unwrap();
+
+		assert_eq!((linux.size, linux.sha256.as_str()), (4096, digest.as_str()));
+		assert_eq!(
+			linux.url,
+			"https://github.com/owner/remade-launcher/releases/download/v1.2.0/remade-update-1.2.0-x86_64-unknown-linux-gnu.tar.gz"
+		);
+		assert!(verified.artifact_for("macos", "aarch64").is_some());
+		assert!(
+			verified.artifact_for("windows", "x86_64").is_none(),
+			"only archives that exist are offered"
+		);
+	}
 }

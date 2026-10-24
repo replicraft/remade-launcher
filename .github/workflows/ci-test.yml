@@ -24,6 +24,9 @@ jobs:
       - name: Install the pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+      # The release feed script is tested against the launcher's own checks.
+      - name: Install the signing library
+        run: python3 -m pip install cryptography
       - name: Format
         run: cargo fmt --all --check
       - name: Lint

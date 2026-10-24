@@ -80,6 +80,27 @@ registers it as a per-user login item. Package notes:
 `packaging/macos/make-background.py` draws the arrow with the standard library
 only. Run it when the artwork changes and commit the two PNGs.
 
+## Launcher self-update
+
+Installed launchers update from one signed document, `launcher-release.json`
+with `launcher-release.sig`, attached to a rolling GitHub release tagged
+`launcher-feed`. Three pieces make it:
+
+- `packaging/update/build-update-archive.sh <target>` builds
+  `remade-update-<version>-<target>.tar.gz` (`.zip` on Windows), holding all
+  four programs and, on macOS, the signed app that `build-dmg.sh` leaves in
+  `target/update-app`. `build.yml` runs it on every platform and publishes it
+  with the release.
+- `packaging/release/make-release-feed.py` turns a published release into the
+  signed document, and `sign_file.py` signs any file the way the launcher
+  checks (the website's catalog can use the same one). They need
+  `pip install cryptography`.
+- `.github/workflows/release-feed.yml` runs the script after each release
+  build and once a week, because the document is valid for 60 days and an
+  expired one is ignored. It uses the `RELEASE_SIGNING_KEY` secret in the
+  `Release Signing` environment. Do not put required reviewers on that
+  environment, or the weekly run waits for approval.
+
 ## Image files
 
 Every PNG, including the ones inside `remade-launcher.ico` and

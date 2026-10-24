@@ -76,6 +76,8 @@ jobs:
         run: packaging/macos/build-dmg.sh
       - name: Command-line archive
         run: packaging/cli/build-archive.sh aarch64-apple-darwin
+      - name: Update archive
+        run: packaging/update/build-update-archive.sh aarch64-apple-darwin
       - name: Checksums
         working-directory: dist
         run: shasum -a 256 *.dmg > "$(ls *.dmg).sha256"
@@ -139,6 +141,8 @@ jobs:
           cargo generate-rpm -p apps/remade-launcher-cli --output dist/
       - name: Command-line archive
         run: packaging/cli/build-archive.sh ${{ matrix.target }}
+      - name: Update archive
+        run: packaging/update/build-update-archive.sh ${{ matrix.target }}
       - name: Inspect the packages
         run: |
           set -euo pipefail
@@ -193,6 +197,8 @@ jobs:
         run: cargo packager --config packaging/windows/Packager.toml --release
       - name: Command-line archive
         run: packaging/cli/build-archive.sh ${{ matrix.target }}
+      - name: Update archive
+        run: packaging/update/build-update-archive.sh ${{ matrix.target }}
       - name: Name and checksum the installer
         working-directory: dist
         run: |

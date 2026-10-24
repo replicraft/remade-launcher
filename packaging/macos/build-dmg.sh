@@ -90,6 +90,11 @@ rm -f "$dmg"
 	"$app_name" \
 	"$dmg"
 
+# The update archive carries this signed app, so keep a copy of it.
+rm -rf "$root/target/update-app"
+mkdir -p "$root/target/update-app"
+ditto "$bundle" "$root/target/update-app/$app_name.app"
+
 rm -rf "$staging" "$background"
 
 echo "Built $dmg"

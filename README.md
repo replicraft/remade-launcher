@@ -59,18 +59,40 @@ Set it in Settings, or with `remade config set launcher.updates notify`.
 `remade self-update status | check | apply | rollback` do it by hand, and a
 person asking directly is always answered, whatever the setting.
 
-What keeps it safe: the release is a small document signed by a key that is
-only good for launcher releases. It names, for each system, a GitHub release
-file with its size and SHA-256. The download must match both, the archive is
-unpacked with the same path and size limits as an app, and only the launcher's
-own programs (`remade`, `remade-launcher`, `remade-launcher-daemon`,
-`remade-launcher-mcp`) that already sit in the folder are replaced. The
-running program has to be among them. All files switch together or none do, and
-the previous ones are kept so `rollback` can put them back. An older document
-cannot replace a newer one, an expired one is ignored, and a launcher is never
-moved to an older version. A launcher installed by Homebrew, the Microsoft
-Store, an app bundle, Flatpak, an AppImage, or the system package manager is
-left alone and only told about new releases.
+**Who updates what**
+
+- **The desktop app** looks when it opens and switches when it closes.
+- **The command line** does the same after a successful command, but only for
+  a person at a terminal. A script, a pipe, `--json`, `--quiet`, `--offline`,
+  CI, or `REMADE_NO_SELF_UPDATE=1` never sees a new version arrive mid-run.
+- **The background updater and the assistant server** never update the
+  launcher themselves. They are replaced on disk with the rest, and run the
+  new version the next time they start: the updater at your next login or
+  restart, the assistant server the next time an assistant launches it. On
+  macOS both sit inside the app, so they move with it.
+
+**What gets replaced.** One update archive per system holds all four programs
+(`remade-launcher`, `remade`, `remade-launcher-daemon`,
+`remade-launcher-mcp`) and, on macOS, `Remade Launcher.app`. Each install
+replaces only what it already has:
+
+- a folder of programs (the Windows installer, an unpacked archive) has the
+  programs that are in the folder replaced, together or not at all;
+- a macOS app is replaced whole, because changing a file inside would break
+  its code signature.
+
+A launcher installed by Homebrew, the Microsoft Store, Flatpak, an AppImage,
+or the system package manager is left alone and only told about new releases.
+
+**What keeps it safe.** The release is a small document signed by a key that
+is only good for launcher releases. It names, for each system, a GitHub
+release file with its size and SHA-256. The download must match both, the
+archive is unpacked with the same path and size limits as an app, and the
+program that is running must be in it. The previous version is kept so
+`rollback` can put it back. An older document cannot replace a newer one, an
+expired one is ignored, and a launcher is never moved to an older version.
+The desktop app, the command line, and anything else on the machine take
+turns through a lock, so two never update at once.
 
 ## The command line
 

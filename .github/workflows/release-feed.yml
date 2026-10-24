@@ -1,0 +1,82 @@
+name: Release feed
+
+# Signs the document that tells installed launchers which version is current.
+#
+# It runs after a release is built, once a week (the document is only valid
+# for 60 days, and an expired one is ignored), and by hand. It publishes
+# launcher-release.json and launcher-release.sig as assets of a rolling
+# release tagged `launcher-feed`, which is where launchers look.
+#
+# The signing key lives in the "Release Signing" environment. Do not add
+# required reviewers to that environment, or the weekly run waits for one.
+
+on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-feed
+  cancel-in-progress: false
+
+jobs:
+  feed:
+    name: Sign and publish the feed
+    # Only after a release build for a version tag, never after a dry run.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    environment: Release Signing
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the signing library
+        run: python3 -m pip install cryptography
+      - name: Find the newest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release list --exclude-pre-releases --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName')"
+          if [[ -z "$tag" || "$tag" == "null" ]]; then
+            echo "::notice::There is no published release yet, so there is nothing to sign."
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          gh release view "$tag" --json assets > assets.json
+          gh release download "$tag" --pattern SHA256SUMS.txt
+      - name: Sign the feed
+        if: steps.release.outputs.tag != ''
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          python3 packaging/release/make-release-feed.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "${{ steps.release.outputs.tag }}" \
+            --assets assets.json \
+            --sums SHA256SUMS.txt \
+            --key-id remade-updater-2026 \
+            --seed-env RELEASE_SIGNING_KEY \
+            --out-dir feed
+      - name: Publish the feed
+        if: steps.release.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view launcher-feed > /dev/null 2>&1; then
+            gh release create launcher-feed --prerelease --target "$GITHUB_SHA" \
+              --title "Launcher release feed" \
+              --notes "The signed document installed launchers read to find the current version. It is replaced automatically; do not edit it."
+          fi
+          gh release upload launcher-feed feed/launcher-release.json feed/launcher-release.sig --clobber

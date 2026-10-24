@@ -68,9 +68,13 @@ pub struct ReleaseConfig {
 impl ReleaseConfig {
 	/// The official releases, trusted through the compiled-in release keys.
 	pub fn production() -> Self {
-		let base = |path: &str| {
-			Url::parse(&format!("https://remade.wiki/data/{path}"))
-				.expect("the release URLs are valid")
+		// The signed feed is an asset of a rolling release in the launcher's
+		// own repository, so publishing it never touches the website.
+		let base = |file: &str| {
+			Url::parse(&format!(
+				"https://github.com/replicraft/remade-launcher/releases/download/launcher-feed/{file}"
+			))
+			.expect("the release URLs are valid")
 		};
 
 		Self {

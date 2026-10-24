@@ -21,6 +21,9 @@ sha2.workspace = true
 thiserror.workspace = true
 time.workspace = true
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [features]
 # Lets tests and tools trust the test-only fixture keys. Never enable this
 # in an official build: `release_builds_exclude_test_keys` checks it.
