@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use launcher_model::{ErrorCode, LauncherError, product};
+use reqwest::header::{ACCEPT, HeaderMap, HeaderName, HeaderValue, IF_NONE_MATCH};
 use reqwest::{Client, Url, redirect};
 
 use crate::bounded::BoundedBuffer;
@@ -58,6 +59,121 @@ impl HttpClient {
 	}
 }
 
+/// A response whose status the caller interprets. Unlike
+/// [`HttpClient::get_bounded`], a 404 or 429 is data here, because a provider
+/// needs to tell "gone" from "rate limited" from "denied".
+#[derive(Clone, Debug)]
+pub struct HttpResponse {
+	pub status: u16,
+	pub etag: Option<String>,
+	pub retry_after_seconds: Option<u64>,
+	pub rate_limit_remaining: Option<u64>,
+	/// Unix seconds at which the rate-limit window resets.
+	pub rate_limit_reset: Option<u64>,
+	/// The `rel="next"` URL from a `Link` header, if any.
+	pub next_page: Option<Url>,
+	pub body: Vec<u8>,
+}
+
+/// Extra request details for a metadata call.
+#[derive(Clone, Debug, Default)]
+pub struct MetadataRequest {
+	pub accept: Option<&'static str>,
+	/// Sent as `If-None-Match` to revalidate a cached copy.
+	pub etag: Option<String>,
+	/// Additional fixed headers, such as an API version.
+	pub headers: Vec<(&'static str, &'static str)>,
+}
+
+impl HttpClient {
+	/// Fetches `url` and returns the response whatever its status, with the
+	/// body bounded to `max_bytes`.
+	pub async fn fetch(
+		&self,
+		url: Url,
+		request: &MetadataRequest,
+		max_bytes: usize,
+	) -> Result<HttpResponse, LauncherError> {
+		let mut headers = HeaderMap::new();
+
+		if let Some(accept) = request.accept {
+			headers.insert(ACCEPT, HeaderValue::from_static(accept));
+		}
+
+		if let Some(etag) = &request.etag
+			&& let Ok(value) = HeaderValue::from_str(etag)
+		{
+			headers.insert(IF_NONE_MATCH, value);
+		}
+
+		for (name, value) in &request.headers {
+			headers.insert(
+				HeaderName::from_static(name),
+				HeaderValue::from_static(value),
+			);
+		}
+
+		let response = self
+			.inner
+			.get(url)
+			.headers(headers)
+			.send()
+			.await
+			.map_err(request_failed)?;
+
+		let status = response.status().as_u16();
+		let header = |name: &str| {
+			response
+				.headers()
+				.get(name)
+				.and_then(|value| value.to_str().ok())
+				.map(str::to_owned)
+		};
+
+		let etag = header("etag");
+		let retry_after_seconds = header("retry-after").and_then(|value| value.parse().ok());
+		let rate_limit_remaining =
+			header("x-ratelimit-remaining").and_then(|value| value.parse().ok());
+		let rate_limit_reset = header("x-ratelimit-reset").and_then(|value| value.parse().ok());
+		let next_page = header("link").and_then(|link| next_link(&link));
+
+		let mut buffer = BoundedBuffer::new(max_bytes, response.content_length())?;
+		let mut stream = response.bytes_stream();
+
+		while let Some(chunk) = stream.next().await {
+			buffer.push(&chunk.map_err(request_failed)?)?;
+		}
+
+		Ok(HttpResponse {
+			status,
+			etag,
+			retry_after_seconds,
+			rate_limit_remaining,
+			rate_limit_reset,
+			next_page,
+			body: buffer.into_vec(),
+		})
+	}
+}
+
+/// Extracts the `rel="next"` target from an RFC 8288 `Link` header.
+fn next_link(header: &str) -> Option<Url> {
+	header.split(',').find_map(|part| {
+		let (target, parameters) = part.split_once(';')?;
+
+		if !parameters
+			.split(';')
+			.any(|p| p.trim().replace(' ', "") == "rel=\"next\"")
+		{
+			return None;
+		}
+
+		let target = target.trim().strip_prefix('<')?.strip_suffix('>')?;
+
+		Url::parse(target).ok()
+	})
+}
+
 /// The error text from `reqwest` includes the full URL, which can be private,
 /// so only the stable message is user-facing and the cause stays in the chain.
 fn request_failed(error: reqwest::Error) -> LauncherError {
@@ -71,6 +187,18 @@ fn request_failed(error: reqwest::Error) -> LauncherError {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn finds_the_next_page_link() {
+		let header = r#"<https://api.github.com/x?page=2>; rel="next", <https://api.github.com/x?page=9>; rel="last""#;
+
+		assert_eq!(
+			next_link(header).unwrap().as_str(),
+			"https://api.github.com/x?page=2"
+		);
+		assert!(next_link(r#"<https://a/b>; rel="last""#).is_none());
+		assert!(next_link("garbage").is_none());
+	}
 
 	#[test]
 	fn builds() {

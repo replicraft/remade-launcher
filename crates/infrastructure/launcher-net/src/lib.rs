@@ -8,5 +8,5 @@
 mod bounded;
 mod client;
 
-pub use client::HttpClient;
+pub use client::{HttpClient, HttpResponse, MetadataRequest};
 pub use reqwest::Url;

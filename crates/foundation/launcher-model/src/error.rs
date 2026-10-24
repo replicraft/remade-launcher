@@ -44,6 +44,12 @@ pub enum Retry {
 pub enum ErrorCode {
 	NetworkRequestFailed,
 	NetworkResponseTooLarge,
+	ProviderDenied,
+	ProviderRateLimited,
+	ProviderNotFound,
+	ProviderResponseMalformed,
+	SourceIdentityChanged,
+	InvalidSourceUrl,
 	StorageUnavailable,
 	StorageMigrationFailed,
 	StorageNewerThanApp,
@@ -56,6 +62,12 @@ impl ErrorCode {
 		match self {
 			Self::NetworkRequestFailed => "network.request_failed",
 			Self::NetworkResponseTooLarge => "network.response_too_large",
+			Self::ProviderDenied => "provider.denied",
+			Self::ProviderRateLimited => "provider.rate_limited",
+			Self::ProviderNotFound => "provider.not_found",
+			Self::ProviderResponseMalformed => "provider.response_malformed",
+			Self::SourceIdentityChanged => "provider.source_identity_changed",
+			Self::InvalidSourceUrl => "source.invalid_url",
 			Self::StorageUnavailable => "storage.unavailable",
 			Self::StorageMigrationFailed => "storage.migration_failed",
 			Self::StorageNewerThanApp => "storage.newer_than_app",
@@ -65,7 +77,14 @@ impl ErrorCode {
 
 	pub const fn category(self) -> ErrorCategory {
 		match self {
-			Self::NetworkRequestFailed | Self::NetworkResponseTooLarge => ErrorCategory::Network,
+			Self::NetworkRequestFailed
+			| Self::NetworkResponseTooLarge
+			| Self::ProviderDenied
+			| Self::ProviderRateLimited
+			| Self::ProviderNotFound
+			| Self::ProviderResponseMalformed => ErrorCategory::Network,
+			Self::SourceIdentityChanged => ErrorCategory::Trust,
+			Self::InvalidSourceUrl => ErrorCategory::Ambiguity,
 			Self::StorageUnavailable | Self::StorageMigrationFailed | Self::StorageNewerThanApp => {
 				ErrorCategory::Storage
 			}
@@ -75,8 +94,14 @@ impl ErrorCode {
 
 	pub const fn retry(self) -> Retry {
 		match self {
-			Self::NetworkRequestFailed => Retry::Later,
-			Self::NetworkResponseTooLarge | Self::StorageMigrationFailed => Retry::Never,
+			Self::NetworkRequestFailed | Self::ProviderRateLimited => Retry::Later,
+			Self::NetworkResponseTooLarge
+			| Self::StorageMigrationFailed
+			| Self::ProviderDenied
+			| Self::ProviderNotFound
+			| Self::ProviderResponseMalformed
+			| Self::SourceIdentityChanged => Retry::Never,
+			Self::InvalidSourceUrl => Retry::AfterUserAction,
 			Self::StorageUnavailable | Self::StorageNewerThanApp => Retry::AfterUserAction,
 			Self::InternalInvariant => Retry::Never,
 		}
