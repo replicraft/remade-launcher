@@ -77,6 +77,10 @@ fn validate_project(slug: &str, project: &Project) -> Result<(), CatalogError> {
 		return Err(schema("too many screenshots"));
 	}
 
+	if let Some(description) = &display.description {
+		check_long_text(description, 8_000, "description")?;
+	}
+
 	if display.languages.len() > 8 {
 		return Err(schema("too many languages"));
 	}
@@ -208,6 +212,20 @@ fn schema(detail: impl Into<String>) -> CatalogError {
 	CatalogError::new(ErrorKind::SchemaInvalid, detail)
 }
 
+/// Like [`check_text`], but newlines may separate paragraphs.
+fn check_long_text(text: &str, max: usize, what: &str) -> Result<(), CatalogError> {
+	if text.trim().is_empty()
+		|| text.chars().count() > max
+		|| text.chars().any(|c| c.is_control() && c != '\n')
+	{
+		return Err(schema(format!(
+			"{what} is empty, too long, or has control characters"
+		)));
+	}
+
+	Ok(())
+}
+
 fn check_text(text: &str, max: usize, what: &str) -> Result<(), CatalogError> {
 	// Counted in characters. The schema's limits are in characters too.
 	if text.is_empty() || text.chars().count() > max || text.chars().any(char::is_control) {
@@ -326,6 +344,15 @@ mod tests {
 			"a\nb", ".", "..",
 		] {
 			assert!(check_relative_path(path).is_err(), "{path:?}");
+		}
+	}
+
+	#[test]
+	fn long_text_allows_paragraph_breaks_but_no_other_control_characters() {
+		assert!(check_long_text("One.\n\nTwo.", 100, "description").is_ok());
+
+		for bad in ["", "   ", "tab\there", "bell\u{7}", &"x".repeat(101)] {
+			assert!(check_long_text(bad, 100, "description").is_err(), "{bad:?}");
 		}
 	}
 

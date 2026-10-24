@@ -406,3 +406,14 @@ pub(crate) fn notes(app: &str, version: &str) -> String {
 		"Demo notes for {app} {version}.\n\n• Faster startup\n• Fixes a crash when opening large files\n• Updated translations\n\nThese notes are made up."
 	)
 }
+
+/// A long description for a demo app. Made up, and the same shape as a real
+/// one: a few paragraphs separated by blank lines.
+pub(crate) fn description(name: &str) -> String {
+	format!(
+		"{name} is a made-up app, here so the interface has something to show. Its description is long on purpose: a real listing can run to several paragraphs, and this page should read well when it does.\n\n\
+		It opens quickly, keeps your files in ordinary folders you can back up or move, and never asks you to sign in. Everything it does happens on your own computer.\n\n\
+		Updates arrive as separate releases. The launcher checks each one before installing it, and you can pin the version you have if a newer one is not for you.\n\n\
+		This text is invented. If you are reading it in the launcher, you are looking at demo data."
+	)
+}

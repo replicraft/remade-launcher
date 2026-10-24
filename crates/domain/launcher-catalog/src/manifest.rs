@@ -53,6 +53,10 @@ pub struct Display {
 	pub icon_url: Option<String>,
 	#[serde(default)]
 	pub screenshots: Vec<String>,
+	/// A longer description than the summary: plain text, with a blank line
+	/// between paragraphs.
+	#[serde(default)]
+	pub description: Option<String>,
 	/// How finished the app is, as its authors describe it.
 	#[serde(default)]
 	pub maturity: Option<Maturity>,
@@ -418,6 +422,7 @@ mod tests {
 
 		assert!(plain.languages.is_empty());
 		assert_eq!(plain.maturity, None);
+		assert_eq!(plain.description, None);
 		assert!(!plain.featured);
 		assert_eq!(plain.added_at_unix(), None);
 	}

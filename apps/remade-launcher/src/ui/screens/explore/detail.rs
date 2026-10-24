@@ -20,6 +20,7 @@ struct Facts<'a> {
 	slug: &'a str,
 	name: &'a str,
 	summary: &'a str,
+	description: Option<String>,
 	kind: &'a str,
 	source: String,
 	categories: &'a [String],
@@ -65,6 +66,7 @@ pub(super) fn detail(
 			slug,
 			name: &display.name,
 			summary: &display.summary,
+			description: display.description.clone(),
 			kind: display.kind.label(),
 			source: project.source.display_name(),
 			categories: &display.categories,
@@ -111,6 +113,7 @@ pub(super) fn demo_detail(ui: &mut Ui, row: &ExploreRow) -> Option<Action> {
 			slug: &row.slug,
 			name: &row.name,
 			summary: &row.summary,
+			description: Some(crate::ui::demo::description(&row.name)),
 			kind: row.kind.label(),
 			source: row.repository.clone(),
 			categories: &row.categories,
@@ -163,6 +166,11 @@ fn page(ui: &mut Ui, facts: &Facts<'_>) -> Option<Action> {
 						ui.hyperlink_to(format!("{}  {label}", icons::ARROW_SQUARE_OUT), *url);
 					}
 				});
+			}
+
+			if let Some(description) = &facts.description {
+				ui.add_space(16.0);
+				card(ui, "Description", |ui| description_text(ui, description));
 			}
 
 			ui.add_space(16.0);
@@ -264,6 +272,22 @@ fn header(ui: &mut Ui, facts: &Facts<'_>, installable: bool, action: &mut Option
 			});
 		});
 	});
+}
+
+/// Paragraphs are separated by blank lines.
+fn description_text(ui: &mut Ui, text: &str) {
+	for (index, paragraph) in text
+		.split("\n\n")
+		.map(str::trim)
+		.filter(|p| !p.is_empty())
+		.enumerate()
+	{
+		if index > 0 {
+			ui.add_space(10.0);
+		}
+
+		ui.add(egui::Label::new(RichText::new(paragraph).size(15.0)).wrap());
+	}
 }
 
 fn details(ui: &mut Ui, facts: &Facts<'_>) {
@@ -432,6 +456,7 @@ mod tests {
 			slug: "lumen-notes",
 			name: "Lumen & Notes",
 			summary: "",
+			description: None,
 			kind: "Desktop app",
 			source: String::new(),
 			categories: &[],
