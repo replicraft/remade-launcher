@@ -1,0 +1,31 @@
+[package]
+name = "remade-launcher-cli"
+description = "The Remade command line: search the catalog, install, update, and remove apps."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "remade"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+indicatif.workspace = true
+launcher-core.workspace = true
+launcher-model.workspace = true
+launcher-resolver.workspace = true
+mimalloc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -20,6 +20,9 @@ pub use config::{CatalogConfig, EngineConfig};
 pub use engine::Engine;
 pub use events::{EngineEvent, OperationEvent, Stage};
 pub use explore::{Availability, ExploreQuery, ExploreRow};
+pub use launcher_catalog::{
+	Freshness, PackageFormat, Project, State, VerificationLevel, VerifiedCatalog,
+};
 pub use lifecycle::{
 	ArtifactSource, HttpArtifacts, InstallMeta, InstalledApp, LifecycleService, RecoveryReport,
 	RemovalReport,

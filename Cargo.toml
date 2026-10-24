@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
 	"apps/remade-launcher",
+	"apps/remade-launcher-cli",
 	"crates/domain/launcher-catalog",
 	"crates/domain/launcher-packages",
 	"crates/domain/launcher-providers",
@@ -94,6 +95,10 @@ url = "2"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "env-filter", "fmt"] }
+
+# Command line
+clap = { version = "4", features = ["derive", "env"] }
+indicatif = "0.18"
 
 # Platform
 directories = "6"
