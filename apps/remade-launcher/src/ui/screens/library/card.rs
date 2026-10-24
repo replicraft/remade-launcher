@@ -301,11 +301,9 @@ pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 		.color(theme::muted(&name)),
 	);
 
-	let actions_width = if item.app.curated && item.app.catalog_slug.is_some() {
-		440.0
-	} else {
-		320.0
-	};
+	// The same width for every row, so Open starts in the same place whether or
+	// not the app has Check, View listing, and settings beside it.
+	let actions_width = 440.0;
 	let actions_left = inner.right() - actions_width;
 	let status_left = title_left + TITLE_WIDTH + 12.0;
 	let status_width = (actions_left - 12.0 - status_left).max(80.0);
