@@ -22,7 +22,7 @@ edition = "2024"
 rust-version = "1.99"
 publish = false
 homepage = "https://remade.wiki"
-repository = "https://github.com/PixelSoftwareStudios/remade-launcher"
+repository = "https://github.com/replicraft/remade-launcher"
 license = "MIT"
 
 # ---------------------------------------------------------------------------
