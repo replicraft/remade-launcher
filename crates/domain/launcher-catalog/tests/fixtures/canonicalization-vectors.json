@@ -1,0 +1,74 @@
+{
+  "scope": "JCS-compatible integer/string fixture subset; not full floating-point RFC conformance.",
+  "vectors": [
+    {
+      "id": "empty-projects",
+      "input": {},
+      "canonical_utf8": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "key-order",
+      "input": {
+        "z": 1,
+        "a": 2
+      },
+      "canonical_utf8": "{\"a\":2,\"z\":1}",
+      "sha256": "c2985c5ba6f7d2a55e768f92490ca09388e95bc4cccb9fdf11b15f4d42f93e73"
+    },
+    {
+      "id": "unicode-order",
+      "input": {
+        "": "BMP",
+        "𐀀": "supplementary",
+        "A": "ascii"
+      },
+      "canonical_utf8": "{\"A\":\"ascii\",\"𐀀\":\"supplementary\",\"\":\"BMP\"}",
+      "sha256": "3504dcb6f9294fb9e7d7a18f77a144c0cc2b937ed6831ddae6e8628d72a8942b"
+    },
+    {
+      "id": "escaping",
+      "input": {
+        "x": "line\nquote\"tab\tbackslash\\",
+        "y": "é"
+      },
+      "canonical_utf8": "{\"x\":\"line\\nquote\\\"tab\\tbackslash\\\\\",\"y\":\"é\"}",
+      "sha256": "bd7971a2b385a6976b064f6353fecae257949a10c04409fe8cdc545d7ed61590"
+    },
+    {
+      "id": "no-unicode-normalization",
+      "input": {
+        "a": "é",
+        "b": "é"
+      },
+      "canonical_utf8": "{\"a\":\"é\",\"b\":\"é\"}",
+      "sha256": "f22b36490919217767bfdcc1a929138cfabb6d6f40539ea9165723e1a8cabcee"
+    },
+    {
+      "id": "integral-boundaries",
+      "input": {
+        "max": 9007199254740991,
+        "zero": 0,
+        "negative": -1
+      },
+      "canonical_utf8": "{\"max\":9007199254740991,\"negative\":-1,\"zero\":0}",
+      "sha256": "cdf9d20f6167a2da31b97d343fea91204b26f3aa2c20d7759958192b8a40b9d4"
+    },
+    {
+      "id": "nested",
+      "input": {
+        "b": [
+          true,
+          null,
+          {
+            "z": 2,
+            "a": 1
+          }
+        ],
+        "a": []
+      },
+      "canonical_utf8": "{\"a\":[],\"b\":[true,null,{\"a\":1,\"z\":2}]}",
+      "sha256": "ba952a22b260c935348f7d207364a3cfffd28e4a179ca3a72b33c2308b232f29"
+    }
+  ]
+}

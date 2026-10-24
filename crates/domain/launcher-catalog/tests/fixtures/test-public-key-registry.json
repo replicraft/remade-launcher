@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "test_only": true,
+  "feed_id": "test.remade.launcher-catalog",
+  "keys": [
+    {
+      "key_id": "test-catalog-a",
+      "algorithm": "ed25519",
+      "role": "catalog",
+      "status": "active",
+      "public_key": "1gcMX2LHyblding3+M4Rv+pwwzkoRDxsZM/PG4WMVhc="
+    },
+    {
+      "key_id": "test-catalog-b",
+      "algorithm": "ed25519",
+      "role": "catalog",
+      "status": "active",
+      "public_key": "RCTaU6I1b3g6fGhsdphl+Imj7T7/14f48cUSJU0GgPg="
+    }
+  ]
+}

@@ -1,0 +1,396 @@
+{
+  "schema_version": 1,
+  "test_only": true,
+  "cases": [
+    {
+      "id": "valid-new-revision",
+      "catalog": "cases/valid-new-revision/catalog.json",
+      "signature": "cases/valid-new-revision/catalog.sig",
+      "expected": "accept",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "valid-identical-revision",
+      "catalog": "cases/valid-identical-revision/catalog.json",
+      "signature": "cases/valid-identical-revision/catalog.sig",
+      "expected": "accept",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 10,
+        "highest_digest": "521ffb5bab28d4056708ecb4e174dba8ecd38026004d3ee322eb5e3e0dd03a4b",
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "valid-unknown-plus-known",
+      "catalog": "cases/valid-unknown-plus-known/catalog.json",
+      "signature": "cases/valid-unknown-plus-known/catalog.sig",
+      "expected": "accept",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "valid-overlap-signatures",
+      "catalog": "cases/valid-overlap-signatures/catalog.json",
+      "signature": "cases/valid-overlap-signatures/catalog.sig",
+      "expected": "accept",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "valid-invalid-plus-known",
+      "catalog": "cases/valid-invalid-plus-known/catalog.json",
+      "signature": "cases/valid-invalid-plus-known/catalog.sig",
+      "expected": "accept",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "altered-bytes",
+      "catalog": "cases/altered-bytes/catalog.json",
+      "signature": "cases/altered-bytes/catalog.sig",
+      "expected": "signature-invalid",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "added-newline",
+      "catalog": "cases/added-newline/catalog.json",
+      "signature": "cases/added-newline/catalog.sig",
+      "expected": "signature-invalid",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "wrong-projects-hash",
+      "catalog": "cases/wrong-projects-hash/catalog.json",
+      "signature": "cases/wrong-projects-hash/catalog.sig",
+      "expected": "hash-mismatch",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "wrong-feed",
+      "catalog": "cases/wrong-feed/catalog.json",
+      "signature": "cases/wrong-feed/catalog.sig",
+      "expected": "wrong-feed",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "rollback",
+      "catalog": "cases/rollback/catalog.json",
+      "signature": "cases/rollback/catalog.sig",
+      "expected": "rollback",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "same-revision-conflict",
+      "catalog": "cases/same-revision-conflict/catalog.json",
+      "signature": "cases/same-revision-conflict/catalog.sig",
+      "expected": "revision-conflict",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 10,
+        "highest_digest": "521ffb5bab28d4056708ecb4e174dba8ecd38026004d3ee322eb5e3e0dd03a4b",
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "expired",
+      "catalog": "cases/expired/catalog.json",
+      "signature": "cases/expired/catalog.sig",
+      "expected": "expired",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "future-issued",
+      "catalog": "cases/future-issued/catalog.json",
+      "signature": "cases/future-issued/catalog.sig",
+      "expected": "future-issued",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "zero-revision",
+      "catalog": "cases/zero-revision/catalog.json",
+      "signature": "cases/zero-revision/catalog.sig",
+      "expected": "schema-invalid",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "unknown-capability",
+      "catalog": "cases/unknown-capability/catalog.json",
+      "signature": "cases/unknown-capability/catalog.sig",
+      "expected": "unsupported-capability",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "forbidden-shell-field",
+      "catalog": "cases/forbidden-shell-field/catalog.json",
+      "signature": "cases/forbidden-shell-field/catalog.sig",
+      "expected": "schema-invalid",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "traversal-entry-point",
+      "catalog": "cases/traversal-entry-point/catalog.json",
+      "signature": "cases/traversal-entry-point/catalog.sig",
+      "expected": "schema-invalid",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "unknown-schema",
+      "catalog": "cases/unknown-schema/catalog.json",
+      "signature": "cases/unknown-schema/catalog.sig",
+      "expected": "schema-invalid",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "duplicate-variant-id",
+      "catalog": "cases/duplicate-variant-id/catalog.json",
+      "signature": "cases/duplicate-variant-id/catalog.sig",
+      "expected": "duplicate-variant",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "duplicate-json-key",
+      "catalog": "cases/duplicate-json-key/catalog.json",
+      "signature": "cases/duplicate-json-key/catalog.sig",
+      "expected": "duplicate-json-key",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "duplicate-signature-id",
+      "catalog": "cases/duplicate-signature-id/catalog.json",
+      "signature": "cases/duplicate-signature-id/catalog.sig",
+      "expected": "duplicate-key-id",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "unknown-algorithm",
+      "catalog": "cases/unknown-algorithm/catalog.json",
+      "signature": "cases/unknown-algorithm/catalog.sig",
+      "expected": "envelope-invalid",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "malformed-signature",
+      "catalog": "cases/malformed-signature/catalog.json",
+      "signature": "cases/malformed-signature/catalog.sig",
+      "expected": "envelope-invalid",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "unknown-key-only",
+      "catalog": "cases/unknown-key-only/catalog.json",
+      "signature": "cases/unknown-key-only/catalog.sig",
+      "expected": "no-trusted-signature",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "invalid-utf8",
+      "catalog": "cases/invalid-utf8/catalog.json",
+      "signature": "cases/invalid-utf8/catalog.sig",
+      "expected": "invalid-json",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    },
+    {
+      "id": "invalid-time-order",
+      "catalog": "cases/invalid-time-order/catalog.json",
+      "signature": "cases/invalid-time-order/catalog.sig",
+      "expected": "invalid-time-order",
+      "context": {
+        "feed_id": "test.remade.launcher-catalog",
+        "now": "2030-01-15T00:00:00Z",
+        "highest_revision": 9,
+        "highest_digest": null,
+        "supported_capabilities": [
+          "safe-archive-v1"
+        ]
+      }
+    }
+  ]
+}

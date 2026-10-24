@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
 	"apps/remade-launcher",
+	"crates/domain/launcher-catalog",
 	"crates/foundation/launcher-model",
 	"crates/foundation/launcher-core",
 	"crates/infrastructure/launcher-storage",
@@ -30,11 +31,15 @@ repository = "https://github.com/PixelSoftwareStudios/remade-launcher"
 [workspace.dependencies]
 
 # Internal crates
+launcher-catalog = { path = "crates/domain/launcher-catalog" }
 launcher-core = { path = "crates/foundation/launcher-core" }
 launcher-model = { path = "crates/foundation/launcher-model" }
 launcher-net = { path = "crates/infrastructure/launcher-net" }
 launcher-storage = { path = "crates/infrastructure/launcher-storage" }
 launcher-ui = { path = "crates/ui/launcher-ui" }
+
+# Parallelism for CPU-bound work
+rayon = "1"
 
 # Async runtime
 tokio = { version = "1", default-features = false, features = ["macros", "rt-multi-thread", "sync", "time"] }
@@ -54,7 +59,16 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 
 # Serialization and identifiers
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_json_canonicalizer = "0.4"
+time = { version = "0.3", default-features = false, features = ["parsing", "std"] }
 uuid = { version = "1", features = ["serde", "v7"] }
+
+# Cryptography
+base64 = "0.23"
+ed25519-dalek = { version = "3", default-features = false, features = ["fast"] }
+hex = "0.4"
+sha2 = "0.11"
 
 # Testing
 tempfile = "3"

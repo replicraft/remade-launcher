@@ -1,0 +1,28 @@
+[package]
+name = "launcher-catalog"
+description = "Verifies the signed Remade catalog and turns it into typed, trusted values."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+base64.workspace = true
+ed25519-dalek.workspace = true
+hex.workspace = true
+launcher-model.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_json_canonicalizer.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+time.workspace = true
+
+[features]
+# Lets tests and tools trust the test-only fixture keys. Never enable this
+# in an official build: `release_builds_exclude_test_keys` checks it.
+test-keys = []
+
+[lints]
+workspace = true
