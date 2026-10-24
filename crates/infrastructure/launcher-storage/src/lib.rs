@@ -8,9 +8,11 @@
 mod catalog_trust;
 mod database;
 mod error;
+mod lifecycle;
 mod migrations;
 mod pragmas;
 mod settings;
 
 pub use catalog_trust::StoredCatalog;
 pub use database::Database;
+pub use lifecycle::{InstallationRecord, OperationRecord};
