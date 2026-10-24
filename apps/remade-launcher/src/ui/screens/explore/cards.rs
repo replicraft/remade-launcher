@@ -1,7 +1,7 @@
 //! How a catalog app looks as a card, a list row, or a category tile.
 
 use egui::text::LayoutJob;
-use egui::{Align, Align2, FontId, Layout, Rect, RichText, Sense, Ui, UiBuilder, vec2};
+use egui::{Align, Align2, FontId, Layout, Rect, RichText, Sense, Ui, UiBuilder, pos2, vec2};
 use launcher_core::{Availability, ExploreRow};
 
 use super::filters::category_label;
@@ -9,7 +9,7 @@ use crate::ui::components::{app_tile, verified_badge};
 use crate::ui::theme;
 
 pub(super) const GRID_CARD_HEIGHT: f32 = 148.0;
-pub(super) const LIST_ROW_HEIGHT: f32 = 68.0;
+pub(super) const LIST_ROW_HEIGHT: f32 = 80.0;
 pub(super) const CATEGORY_TILE_HEIGHT: f32 = 64.0;
 
 /// A short phrase for the corner of a card.
@@ -135,45 +135,51 @@ pub(super) fn list_row(ui: &mut Ui, row: &ExploreRow, selected: bool) -> bool {
 	let palette = theme::palette(ui);
 	let rect = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), LIST_ROW_HEIGHT));
 	let response = surface(ui, rect, selected);
-	let inner = rect.shrink2(vec2(14.0, 10.0));
+	let inner = rect.shrink2(vec2(16.0, 0.0));
+	let middle = rect.center().y;
 
-	let mut content = ui.new_child(
+	// Both columns are placed on the row's midline by hand, so the text has
+	// the same room above and below.
+	let mut tile = ui.new_child(
 		UiBuilder::new()
-			.max_rect(inner)
-			.layout(egui::Layout::left_to_right(egui::Align::Center)),
+			.max_rect(Rect::from_min_size(
+				pos2(inner.left(), middle - 20.0),
+				vec2(40.0, 40.0),
+			))
+			.layout(Layout::top_down(Align::Min)),
+	);
+	app_tile(&mut tile, &row.name, 40.0);
+
+	let text_left = inner.left() + 40.0 + 14.0;
+	let text_area = Rect::from_min_size(
+		pos2(text_left, middle - 22.0),
+		vec2((inner.right() - text_left - 160.0).max(100.0), 44.0),
+	);
+	let mut text = ui.new_child(
+		UiBuilder::new()
+			.max_rect(text_area)
+			.layout(Layout::top_down(Align::Min)),
 	);
 
-	app_tile(&mut content, &row.name, 40.0);
+	text.spacing_mut().item_spacing.y = 2.0;
 
-	// Nested layouts do not centre themselves in a row, so give the block a
-	// definite size and let the row centre that.
-	content.allocate_ui_with_layout(
-		vec2((inner.width() - 260.0).max(100.0), 44.0),
-		Layout::top_down(Align::Min),
-		|ui| {
-			ui.spacing_mut().item_spacing.y = 1.0;
-
-			ui.horizontal(|ui| {
-				ui.add(
-					egui::Label::new(
-						RichText::new(&row.name)
-							.size(15.5)
-							.family(theme::semibold()),
-					)
-					.truncate(),
-				);
-				verified_badge(ui, true);
-				ui.label(
-					RichText::new(&row.repository)
-						.small()
-						.color(palette.text_muted),
-				);
-			});
-			ui.add(
-				egui::Label::new(RichText::new(&row.summary).color(palette.text_muted)).truncate(),
-			);
-		},
-	);
+	text.horizontal(|ui| {
+		ui.add(
+			egui::Label::new(
+				RichText::new(&row.name)
+					.size(15.5)
+					.family(theme::semibold()),
+			)
+			.truncate(),
+		);
+		verified_badge(ui, true);
+		ui.label(
+			RichText::new(&row.repository)
+				.small()
+				.color(palette.text_muted),
+		);
+	});
+	text.add(egui::Label::new(RichText::new(&row.summary).color(palette.text_muted)).truncate());
 
 	ui.painter().text(
 		inner.right_center(),
