@@ -94,6 +94,26 @@ impl Engine {
 			.collect())
 	}
 
+	/// Where the launcher keeps its data.
+	pub fn data_directory(&self) -> &DataDirectory {
+		&self.data
+	}
+
+	/// Launcher bookkeeping the background updater keeps between runs, such as
+	/// when it last scanned. These are plain values, never settings that grant
+	/// anything.
+	pub async fn state_value(&self, key: &'static str) -> Option<String> {
+		self.database.setting(key).await.ok().flatten()
+	}
+
+	pub async fn set_state_value(
+		&self,
+		key: &'static str,
+		value: String,
+	) -> Result<(), LauncherError> {
+		self.database.set_setting(key, value).await
+	}
+
 	/// The most recent installs, updates, and removals, newest first.
 	pub async fn history(&self, limit: u32) -> Result<Vec<OperationSummary>, LauncherError> {
 		Ok(self

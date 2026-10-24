@@ -26,7 +26,7 @@ pub use config::{CatalogConfig, EngineConfig};
 pub use engine::Engine;
 pub use events::{EngineEvent, OperationEvent, Stage};
 pub use explore::{Availability, ExploreQuery, ExploreRow};
-pub use inspect::{DoctorReport, VerifyReport};
+pub use inspect::{CacheStatus, DoctorReport, VerifyReport};
 pub use launcher_catalog::{
 	Freshness, PackageFormat, Project, State, VerificationLevel, VerifiedCatalog,
 };
@@ -40,6 +40,6 @@ pub use prepare::{CustomPreparation, Preparation, Ready, custom_plan};
 pub use saved_plans::{Applied, Approval, SavedPlan, UninstallPlan};
 pub use updates::{
 	AutoStatus, AvailableUpdate, CycleOutcome, CycleReport, CycleResult, Decision, Initiator,
-	LaunchOutcome, ModeConsent, Outlook, SkipReason, Trigger, UpdateSettings, UpdateState,
-	UpdateStatus, decide, effective_age,
+	LaunchOutcome, ModeConsent, OperatorUpdate, Outlook, SkipReason, Trigger, UpdateSettings,
+	UpdateState, UpdateStatus, decide, effective_age,
 };

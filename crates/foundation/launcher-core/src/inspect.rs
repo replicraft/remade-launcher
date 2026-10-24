@@ -55,7 +55,69 @@ impl DoctorReport {
 	}
 }
 
+/// What is in the launcher's scratch space.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CacheStatus {
+	pub folders: usize,
+	pub bytes: u64,
+}
+
 impl Engine {
+	/// How much scratch space operations have left behind. A finished
+	/// install cleans up after itself, so anything here is from a crash.
+	pub async fn cache_status(&self) -> Result<CacheStatus, LauncherError> {
+		let staging = self.data.staging_dir();
+
+		tokio::task::spawn_blocking(move || {
+			let mut status = CacheStatus::default();
+
+			let Ok(entries) = std::fs::read_dir(&staging) else {
+				return status;
+			};
+
+			for entry in entries.flatten() {
+				status.folders += 1;
+				status.bytes += folder_size(&entry.path());
+			}
+
+			status
+		})
+		.await
+		.map_err(|error| {
+			LauncherError::new(ErrorCode::InternalInvariant, "The check did not finish.")
+				.with_source(error)
+		})
+	}
+
+	/// Removes scratch folders. It takes the operation lock first, so nothing
+	/// in use can be removed: while it is held no install or removal is
+	/// running, and every folder is left over.
+	pub async fn prune_cache(&self) -> Result<usize, LauncherError> {
+		let _lock = crate::lifecycle::acquire_operation_lock(&self.data).await?;
+		let staging = self.data.staging_dir();
+
+		tokio::task::spawn_blocking(move || {
+			let Ok(entries) = std::fs::read_dir(&staging) else {
+				return 0;
+			};
+
+			entries
+				.flatten()
+				.filter(|entry| {
+					entry
+						.file_name()
+						.to_str()
+						.is_some_and(|name| crate::lifecycle::remove_staging_folder(&staging, name))
+				})
+				.count()
+		})
+		.await
+		.map_err(|error| {
+			LauncherError::new(ErrorCode::InternalInvariant, "The cleanup did not finish.")
+				.with_source(error)
+		})
+	}
+
 	/// Compares one installed app's files with its receipt.
 	pub async fn verify_installation(
 		&self,
@@ -121,6 +183,21 @@ impl Engine {
 			apps,
 		})
 	}
+}
+
+fn folder_size(path: &Path) -> u64 {
+	let Ok(entries) = std::fs::read_dir(path) else {
+		return std::fs::symlink_metadata(path).map_or(0, |meta| meta.len());
+	};
+
+	entries
+		.flatten()
+		.map(|entry| match entry.file_type() {
+			Ok(kind) if kind.is_dir() => folder_size(&entry.path()),
+			Ok(_) => entry.metadata().map_or(0, |meta| meta.len()),
+			Err(_) => 0,
+		})
+		.sum()
 }
 
 fn verify_blocking(apps: &std::path::Path, record: &InstallationRecord) -> VerifyReport {

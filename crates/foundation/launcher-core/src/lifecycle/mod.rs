@@ -24,6 +24,7 @@ pub use meta::{InstallMeta, InstalledApp, OperationSummary};
 pub use recover::RecoveryReport;
 pub use remove::RemovalReport;
 pub(crate) use remove::verify_ownership;
+pub(crate) use safe_delete::remove_staging_folder;
 
 #[cfg(test)]
 mod tests;

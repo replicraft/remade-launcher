@@ -112,6 +112,15 @@ impl Engine {
 		self.database.set_app_policy(installation, policy).await
 	}
 
+	/// Why recent automatic updates did or did not happen for one app.
+	pub async fn update_decisions(
+		&self,
+		installation: InstallationId,
+		limit: u32,
+	) -> Result<Vec<launcher_storage::DecisionRecord>, LauncherError> {
+		self.database.recent_decisions(installation, limit).await
+	}
+
 	/// Pins an app to the release it has. Pinned apps are not updated
 	/// automatically, and not by an operator run either until unpinned.
 	pub async fn pin(&self, installation: InstallationId) -> Result<(), LauncherError> {

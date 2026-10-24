@@ -61,6 +61,14 @@ pub struct UpdateStatus {
 	pub auto: AutoStatus,
 }
 
+/// An app's update status, with the plan to apply it when an operator run
+/// would.
+#[derive(Clone, Debug)]
+pub struct OperatorUpdate {
+	pub status: UpdateStatus,
+	pub ready: Option<crate::prepare::Ready>,
+}
+
 /// One app after the network lookup and the policy decision.
 pub(crate) struct Evaluated {
 	pub(crate) record: InstallationRecord,
@@ -94,6 +102,45 @@ impl Engine {
 			.await?;
 
 		Ok(evaluated.into_iter().map(status_of).collect())
+	}
+
+	/// What an operator-initiated update run would do, as plans ready to
+	/// approve. Nothing is applied here.
+	pub async fn plan_operator_updates(
+		&self,
+		only: Option<InstallationId>,
+	) -> Result<Vec<OperatorUpdate>, LauncherError> {
+		let provider = GithubProvider::new(self.http.clone());
+
+		self.plan_operator_updates_with(&provider, only, HostTarget::current(), now_unix())
+			.await
+	}
+
+	pub(crate) async fn plan_operator_updates_with<T: Transport>(
+		&self,
+		provider: &GithubProvider<T>,
+		only: Option<InstallationId>,
+		host: Option<HostTarget>,
+		now: i64,
+	) -> Result<Vec<OperatorUpdate>, LauncherError> {
+		let evaluated = self
+			.evaluate_apps(provider, only, Initiator::Operator, host, now)
+			.await?;
+
+		Ok(evaluated
+			.into_iter()
+			.map(|item| {
+				let ready = match (&item.decision, &item.outlook) {
+					(Decision::Apply, Outlook::Ready(ready)) => Some((**ready).clone()),
+					_ => None,
+				};
+
+				OperatorUpdate {
+					status: status_of(item),
+					ready,
+				}
+			})
+			.collect())
 	}
 
 	/// Looks up every installed app (or one) and decides, under the current

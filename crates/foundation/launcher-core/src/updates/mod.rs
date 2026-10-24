@@ -17,4 +17,4 @@ pub use decide::{Decision, Initiator, SkipReason, decide, effective_age};
 pub use launch::LaunchOutcome;
 pub use outlook::Outlook;
 pub use settings::{ModeConsent, UpdateSettings};
-pub use status::{AutoStatus, AvailableUpdate, UpdateState, UpdateStatus};
+pub use status::{AutoStatus, AvailableUpdate, OperatorUpdate, UpdateState, UpdateStatus};

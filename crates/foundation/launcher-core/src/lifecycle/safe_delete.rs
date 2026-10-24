@@ -43,6 +43,11 @@ pub(crate) fn remove_staging(staging_root: &Path, name: &str) -> std::io::Result
 	Ok(true)
 }
 
+/// [`remove_staging`] that reports only whether something was removed.
+pub(crate) fn remove_staging_folder(staging_root: &Path, name: &str) -> bool {
+	remove_staging(staging_root, name).unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

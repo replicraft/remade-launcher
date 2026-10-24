@@ -55,6 +55,23 @@ impl SkipReason {
 		}
 	}
 
+	/// A short stable word for status displays and JSON.
+	pub fn status(&self) -> &'static str {
+		match self {
+			Self::ModeManual => "manual_mode",
+			Self::Pinned => "pinned",
+			Self::AutoPaused => "auto_paused",
+			Self::SourceNotEnrolled => "source_not_enrolled",
+			Self::NotNewer => "up_to_date",
+			Self::RebuiltArtifact => "rebuilt_artifact",
+			Self::MinReleaseAgeNotMet { .. } => "waiting_for_release_age",
+			Self::ClockUncertain => "clock_uncertain",
+			Self::Unavailable(_) => "unavailable",
+			Self::Ambiguous => "ambiguous",
+			Self::CheckFailed(_) => "check_failed",
+		}
+	}
+
 	/// A sentence for a person.
 	pub fn message(&self) -> String {
 		match self {
