@@ -24,13 +24,14 @@ appimagetool="${APPIMAGETOOL:-$(command -v appimagetool || true)}"
 [[ -n "$appimagetool" ]] || { echo "appimagetool is missing: https://github.com/AppImage/appimagetool/releases" >&2; exit 1; }
 
 cd "$root"
-cargo build --release --locked -p remade-launcher
+cargo build --release --locked -p remade-launcher -p remade-launcher-daemon
 
 appdir="$dist/AppDir"
 rm -rf "$appdir"
 mkdir -p "$appdir/usr/bin" "$appdir/usr/share/applications" "$appdir/usr/share/metainfo"
 
 install -m 755 "target/release/$binary" "$appdir/usr/bin/$binary"
+install -m 755 "target/release/remade-launcher-daemon" "$appdir/usr/bin/remade-launcher-daemon"
 install -m 644 "$here/$app_id.desktop" "$appdir/usr/share/applications/$app_id.desktop"
 install -m 644 "$here/$app_id.metainfo.xml" "$appdir/usr/share/metainfo/$app_id.metainfo.xml"
 cp -R "$root/assets/linux/hicolor" "$appdir/usr/share/icons"

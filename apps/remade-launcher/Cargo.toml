@@ -32,6 +32,7 @@ extended-description = "Installs, updates, and removes apps from the Remade cata
 depends = "$auto, libgl1, libxkbcommon0"
 assets = [
 	["target/release/remade-launcher", "usr/bin/", "755"],
+	["target/release/remade-launcher-daemon", "usr/bin/", "755"],
 	["../../packaging/linux/wiki.remade.Launcher.desktop", "usr/share/applications/", "644"],
 	["../../packaging/linux/wiki.remade.Launcher.metainfo.xml", "usr/share/metainfo/", "644"],
 	["../../assets/linux/hicolor/**/*", "usr/share/icons/hicolor/", "644"],
@@ -43,6 +44,7 @@ summary = "The official launcher for unofficial apps."
 group = "Applications/System"
 assets = [
 	{ source = "target/release/remade-launcher", dest = "/usr/bin/remade-launcher", mode = "755" },
+	{ source = "target/release/remade-launcher-daemon", dest = "/usr/bin/remade-launcher-daemon", mode = "755" },
 	{ source = "packaging/linux/wiki.remade.Launcher.desktop", dest = "/usr/share/applications/wiki.remade.Launcher.desktop", mode = "644" },
 	{ source = "packaging/linux/wiki.remade.Launcher.metainfo.xml", dest = "/usr/share/metainfo/wiki.remade.Launcher.metainfo.xml", mode = "644" },
 	{ source = "assets/linux/hicolor/256x256/apps/wiki.remade.Launcher.png", dest = "/usr/share/icons/hicolor/256x256/apps/wiki.remade.Launcher.png", mode = "644" },

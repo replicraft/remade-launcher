@@ -5,8 +5,9 @@
 #   packaging/cli/build-archive.sh [rust-target-triple]
 #
 # Produces dist/remade-<version>-<target>.tar.gz (or .zip for Windows
-# targets) and a matching .sha256 file. The archive holds one binary, so the
-# CLI installs without the desktop app: unpack it and put `remade` on PATH.
+# targets) and a matching .sha256 file. The archive holds the command and the
+# optional background updater, so the CLI installs without the desktop app:
+# unpack it and put `remade` on PATH.
 
 set -euo pipefail
 
@@ -18,11 +19,11 @@ version="$(cargo metadata --no-deps --format-version 1 --manifest-path "$root/Ca
 	| python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "remade-launcher-cli"))')"
 
 cd "$root"
-cargo build --release --locked -p remade-launcher-cli --target "$target"
+cargo build --release --locked -p remade-launcher-cli -p remade-launcher-daemon --target "$target"
 
 case "$target" in
-	*windows*) binary="remade.exe" ;;
-	*) binary="remade" ;;
+	*windows*) binary="remade.exe"; daemon="remade-launcher-daemon.exe" ;;
+	*) binary="remade"; daemon="remade-launcher-daemon" ;;
 esac
 
 name="remade-$version-$target"
@@ -33,6 +34,8 @@ rm -rf "$stage"
 mkdir -p "$stage"
 
 install -m 755 "target/$target/release/$binary" "$stage/$binary"
+# `remade daemon register` looks for the updater beside the command.
+install -m 755 "target/$target/release/$daemon" "$stage/$daemon"
 install -m 644 "$root/LICENSE" "$stage/LICENSE"
 
 case "$target" in

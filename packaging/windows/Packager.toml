@@ -1,7 +1,7 @@
 # Windows installer, built with cargo-packager:
 #
 #   cargo install cargo-packager --locked
-#   cargo build --release --locked -p remade-launcher
+#   cargo build --release --locked -p remade-launcher -p remade-launcher-daemon
 #   cargo packager --config packaging/windows/Packager.toml --release
 #
 # Run from the repository root on Windows. Sign the result in a separate,
@@ -22,6 +22,9 @@ icons = ["assets/windows/remade-launcher.ico"]
 [[binaries]]
 path = "remade-launcher.exe"
 main = true
+
+[[binaries]]
+path = "remade-launcher-daemon.exe"
 
 [nsis]
 installer-icon = "assets/windows/remade-launcher.ico"

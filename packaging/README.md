@@ -18,6 +18,25 @@ by git.
 target OS. None of these may be published until a clean-machine install,
 launch, and uninstall has been recorded for them.
 
+## The background updater
+
+`remade-launcher-daemon` ships beside the desktop app and inside the CLI archive.
+It is never started unless the user turns on the background update mode, which
+registers it as a per-user login item. Package notes:
+
+- **macOS** uses a plain per-user LaunchAgent. Apple's preferred route for a
+  signed bundle is `SMAppService`, which needs the helper laid out inside the
+  signed app; that is not done yet.
+- **Linux** uses a systemd user service, or an XDG autostart entry without
+  systemd. **Windows** uses a per-user logon task.
+- **Flatpak** has no way to start at login without the Background portal, so
+  the background mode reports itself unavailable there for now.
+- The `remade-cli` deb and rpm do not include the updater. Use the CLI archive,
+  or install the desktop package, to use `remade daemon register`.
+- None of the login-item adapters has been run for real on any system. Their
+  behavior is tested against a fake command runner, and the updater itself was
+  run directly on macOS.
+
 ## Known gaps
 
 - The DMG layout is written with `dmgbuild`, not Finder scripting, so it needs no

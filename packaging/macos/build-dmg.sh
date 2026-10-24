@@ -21,6 +21,7 @@ dist="$root/dist"
 
 app_name="Remade Launcher"
 binary="remade-launcher"
+daemon="remade-launcher-daemon"
 version="$(cargo metadata --no-deps --format-version 1 --manifest-path "$root/Cargo.toml" \
 	| python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "remade-launcher"))')"
 
@@ -33,7 +34,7 @@ cd "$root"
 
 if [[ "${1:-}" == "--universal" ]]; then
 	for target in aarch64-apple-darwin x86_64-apple-darwin; do
-		cargo build --release --locked -p remade-launcher --target "$target"
+		cargo build --release --locked -p remade-launcher -p remade-launcher-daemon --target "$target"
 	done
 
 	executable="$dist/$binary-universal"
@@ -41,10 +42,16 @@ if [[ "${1:-}" == "--universal" ]]; then
 	lipo -create -output "$executable" \
 		"target/aarch64-apple-darwin/release/$binary" \
 		"target/x86_64-apple-darwin/release/$binary"
+
+	daemon_executable="$dist/$daemon-universal"
+	lipo -create -output "$daemon_executable" \
+		"target/aarch64-apple-darwin/release/$daemon" \
+		"target/x86_64-apple-darwin/release/$daemon"
 	arch_label="universal"
 else
-	cargo build --release --locked -p remade-launcher
+	cargo build --release --locked -p remade-launcher -p remade-launcher-daemon
 	executable="target/release/$binary"
+	daemon_executable="target/release/$daemon"
 	arch_label="$(uname -m)"
 fi
 
@@ -58,6 +65,8 @@ rm -rf "$staging"
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
 
 install -m 755 "$executable" "$bundle/Contents/MacOS/$binary"
+# The background updater ships beside the app and is only used if you turn it on.
+install -m 755 "$daemon_executable" "$bundle/Contents/MacOS/$daemon"
 install -m 644 "$root/assets/macos/RemadeLauncher.icns" "$bundle/Contents/Resources/RemadeLauncher.icns"
 sed "s/@VERSION@/$version/g" "$here/Info.plist" > "$bundle/Contents/Info.plist"
 

@@ -27,8 +27,9 @@ modules:
   - name: remade-launcher
     buildsystem: simple
     build-commands:
-      - cargo --offline build --release --locked -p remade-launcher
+      - cargo --offline build --release --locked -p remade-launcher -p remade-launcher-daemon
       - install -Dm755 target/release/remade-launcher /app/bin/remade-launcher
+      - install -Dm755 target/release/remade-launcher-daemon /app/bin/remade-launcher-daemon
       - install -Dm644 packaging/linux/wiki.remade.Launcher.desktop /app/share/applications/wiki.remade.Launcher.desktop
       - install -Dm644 packaging/linux/wiki.remade.Launcher.metainfo.xml /app/share/metainfo/wiki.remade.Launcher.metainfo.xml
       - cp -R assets/linux/hicolor/. /app/share/icons/hicolor/
