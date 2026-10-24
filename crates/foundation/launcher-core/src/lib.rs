@@ -28,7 +28,7 @@ pub use events::{EngineEvent, OperationEvent, Stage};
 pub use explore::{Availability, ExploreQuery, ExploreRow};
 pub use inspect::{CacheStatus, DoctorReport, VerifyReport};
 pub use launcher_catalog::{
-	Freshness, PackageFormat, Project, State, VerificationLevel, VerifiedCatalog,
+	Freshness, Maturity, PackageFormat, Project, State, VerificationLevel, VerifiedCatalog,
 };
 pub use launcher_resolver::{ReleaseStatus, ReleaseView};
 pub use lifecycle::{

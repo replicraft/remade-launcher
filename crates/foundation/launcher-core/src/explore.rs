@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use launcher_catalog::{Project, ProjectKind, State, VerifiedCatalog};
+use launcher_catalog::{Maturity, Project, ProjectKind, State, VerifiedCatalog};
 use launcher_model::{HostTarget, Os};
 use rayon::prelude::*;
 
@@ -43,6 +43,8 @@ pub struct ExploreRow {
 	pub repository: String,
 	pub categories: Vec<String>,
 	pub availability: Availability,
+	/// How finished the app is, if the catalog says.
+	pub maturity: Option<Maturity>,
 	/// Programming languages, as the catalog lists them.
 	pub languages: Vec<String>,
 	/// The systems it has a package for, in a steady order.
@@ -139,6 +141,7 @@ fn row(slug: &str, project: &Project, host: Option<HostTarget>, supported: &[&st
 		repository: project.source.display_name(),
 		categories: project.display.categories.clone(),
 		availability: availability(project, host, supported),
+		maturity: project.display.maturity,
 		languages: project.display.languages.clone(),
 		platforms: platforms(project),
 		featured: project.display.featured,

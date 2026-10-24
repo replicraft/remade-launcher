@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use launcher_catalog::{ProjectKind, State};
+use launcher_catalog::{Maturity, ProjectKind, State};
 use launcher_core::{
 	AutoStatus, Availability, AvailableUpdate, Decision, ExploreRow, InstalledApp,
 	OperationSummary, SkipReason, UpdateState, UpdateStatus,
@@ -46,6 +46,16 @@ pub(crate) fn glyph(slug: &str) -> Option<&'static str> {
 		"mosaic" => icons::IMAGE,
 		_ => return None,
 	})
+}
+
+/// How finished each demo app claims to be.
+fn maturity(slug: &str) -> Maturity {
+	match slug {
+		"lumen-notes" | "fathom-player" | "orbit-terminal" => Maturity::Stable,
+		"quill" | "harbor" | "tidepool" => Maturity::Beta,
+		"pixelforge" | "cinder" => Maturity::Alpha,
+		_ => Maturity::Experimental,
+	}
 }
 
 /// Languages and platforms for the demo apps.
@@ -266,6 +276,7 @@ fn catalog(now: i64) -> Vec<ExploreRow> {
 			.collect(),
 		availability,
 		featured,
+		maturity: None,
 		languages: Vec::new(),
 		platforms: Vec::new(),
 		added_at: days_ago.map(|days| now - days * day),
@@ -383,6 +394,7 @@ fn catalog(now: i64) -> Vec<ExploreRow> {
 			.map(|language| (*language).to_owned())
 			.collect();
 		row.platforms = platforms.to_vec();
+		row.maturity = Some(maturity(&row.slug));
 	}
 
 	rows

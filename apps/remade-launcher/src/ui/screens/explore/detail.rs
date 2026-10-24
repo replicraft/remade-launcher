@@ -4,7 +4,7 @@
 //! layout.
 
 use egui::{Align, Frame, Layout, Margin, RichText, ScrollArea, Ui, vec2};
-use launcher_catalog::{Project, State, VerificationLevel};
+use launcher_catalog::{Maturity, Project, State, VerificationLevel};
 use launcher_core::{Availability, ExploreRow};
 use launcher_model::Os;
 
@@ -21,6 +21,7 @@ struct Facts<'a> {
 	kind: &'a str,
 	source: String,
 	categories: &'a [String],
+	maturity: Option<Maturity>,
 	languages: &'a [String],
 	platforms: Vec<Os>,
 	license: Option<&'a str>,
@@ -65,6 +66,7 @@ pub(super) fn detail(
 			kind: display.kind.label(),
 			source: project.source.display_name(),
 			categories: &display.categories,
+			maturity: display.maturity,
 			languages: &display.languages,
 			platforms,
 			license: display.license.as_deref(),
@@ -110,6 +112,7 @@ pub(super) fn demo_detail(ui: &mut Ui, row: &ExploreRow) -> Option<Action> {
 			kind: row.kind.label(),
 			source: row.repository.clone(),
 			categories: &row.categories,
+			maturity: row.maturity,
 			languages: &row.languages,
 			platforms: row.platforms.clone(),
 			license: Some("MIT"),
@@ -148,20 +151,20 @@ fn page(ui: &mut Ui, facts: &Facts<'_>) -> Option<Action> {
 				ui.colored_label(ui.visuals().warn_fg_color, hold);
 			}
 
-			ui.add_space(16.0);
-			card(ui, "Details", |ui| details(ui, facts));
-
 			if !facts.links.is_empty() {
-				ui.add_space(14.0);
+				ui.add_space(16.0);
 
 				ui.horizontal_wrapped(|ui| {
-					ui.spacing_mut().item_spacing.x = 18.0;
+					ui.spacing_mut().item_spacing.x = 20.0;
 
 					for (label, url) in &facts.links {
 						ui.hyperlink_to(format!("{}  {label}", icons::ARROW_SQUARE_OUT), *url);
 					}
 				});
 			}
+
+			ui.add_space(16.0);
+			card(ui, "Details", |ui| details(ui, facts));
 
 			ui.add_space(14.0);
 			card(ui, "Packages", |ui| packages(ui, facts));
@@ -200,12 +203,12 @@ fn header(ui: &mut Ui, facts: &Facts<'_>, installable: bool, action: &mut Option
 			ui.horizontal_wrapped(|ui| {
 				tag(ui, facts.kind);
 
-				for category in facts.categories {
-					tag(ui, &category_label(category));
+				if let Some(maturity) = facts.maturity {
+					tag(ui, maturity.label());
 				}
 
-				if let Some(license) = facts.license {
-					tag(ui, license);
+				for category in facts.categories {
+					tag(ui, &category_label(category));
 				}
 			});
 		});
@@ -216,7 +219,7 @@ fn header(ui: &mut Ui, facts: &Facts<'_>, installable: bool, action: &mut Option
 
 				let label = format!("{}  Install", icons::DOWNLOAD);
 
-				if primary_button(ui, &label, installable, vec2(210.0, 54.0)).clicked() {
+				if primary_button(ui, &label, installable, vec2(240.0, 60.0)).clicked() {
 					*action = Some(Action::Install {
 						slug: facts.slug.to_owned(),
 					});
@@ -263,6 +266,12 @@ fn details(ui: &mut Ui, facts: &Facts<'_>) {
 							.collect::<Vec<_>>()
 							.join(", "),
 					);
+				});
+			}
+
+			if let Some(maturity) = facts.maturity {
+				row(ui, "Maturity", |ui| {
+					ui.label(maturity.label());
 				});
 			}
 

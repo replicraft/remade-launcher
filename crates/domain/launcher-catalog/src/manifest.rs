@@ -53,6 +53,9 @@ pub struct Display {
 	pub icon_url: Option<String>,
 	#[serde(default)]
 	pub screenshots: Vec<String>,
+	/// How finished the app is, as its authors describe it.
+	#[serde(default)]
+	pub maturity: Option<Maturity>,
 	/// Programming languages the app is written in, for display.
 	#[serde(default)]
 	pub languages: Vec<String>,
@@ -72,6 +75,31 @@ impl Display {
 			.as_deref()
 			.and_then(crate::timestamp::parse)
 			.map(|time| time.unix_timestamp())
+	}
+}
+
+/// How finished an app is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Maturity {
+	Planned,
+	Experimental,
+	Alpha,
+	Beta,
+	Stable,
+	Archived,
+}
+
+impl Maturity {
+	pub const fn label(self) -> &'static str {
+		match self {
+			Self::Planned => "Planned",
+			Self::Experimental => "Experimental",
+			Self::Alpha => "Alpha",
+			Self::Beta => "Beta",
+			Self::Stable => "Stable",
+			Self::Archived => "Archived",
+		}
 	}
 }
 
@@ -389,6 +417,7 @@ mod tests {
 		let plain = display("");
 
 		assert!(plain.languages.is_empty());
+		assert_eq!(plain.maturity, None);
 		assert!(!plain.featured);
 		assert_eq!(plain.added_at_unix(), None);
 	}
@@ -399,6 +428,15 @@ mod tests {
 
 		assert!(shown.featured);
 		assert_eq!(shown.added_at_unix(), Some(1_894_665_600));
+	}
+
+	#[test]
+	fn maturity_reads_from_its_lowercase_name() {
+		assert_eq!(
+			display(r#","maturity":"beta""#).maturity,
+			Some(Maturity::Beta)
+		);
+		assert_eq!(Maturity::Beta.label(), "Beta");
 	}
 
 	#[test]

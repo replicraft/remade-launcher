@@ -225,6 +225,7 @@ mod tests {
 			repository: format!("o/{name}"),
 			categories: categories.iter().map(|c| (*c).to_owned()).collect(),
 			availability: Availability::ThisDevice,
+			maturity: None,
 			languages: Vec::new(),
 			platforms: Vec::new(),
 			featured,

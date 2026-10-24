@@ -29,9 +29,9 @@ mod conformance;
 pub use error::{CatalogError, ErrorKind};
 pub use manifest::{
 	AssetSelector, Channel, Detection, Display, ExpectedIdentity, IdentityKind, Install,
-	InstallScope, Links, Manifest, PackageFormat, Project, ProjectKind, ProjectStatus, Provider,
-	PublisherFormat, PublisherPolicy, ReleasePolicy, Runtime, SignatureAssets, Source, State,
-	Tracking, Variant, Verification, VerificationLevel, VersionStrategy,
+	InstallScope, Links, Manifest, Maturity, PackageFormat, Project, ProjectKind, ProjectStatus,
+	Provider, PublisherFormat, PublisherPolicy, ReleasePolicy, Runtime, SignatureAssets, Source,
+	State, Tracking, Variant, Verification, VerificationLevel, VersionStrategy,
 };
 pub use registry::KeyRegistry;
 pub use verified::{Freshness, VerifiedCatalog};
