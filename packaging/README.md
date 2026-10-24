@@ -1,12 +1,13 @@
 # Packaging
 
-Every package is built from the same release binary (`cargo build --release`,
+Every package is built from a release binary (`cargo build --release`,
 fat LTO, `panic = "abort"`, stripped). Output goes to `dist/`, which is ignored
 by git.
 
 | Format | How | Verified |
 |---|---|---|
-| macOS `.dmg` (drag-to-install, arrow background) | `packaging/macos/build-dmg.sh` | Built on macOS arm64 |
+| macOS `.dmg` (drag-to-install, arrow background) | `packaging/macos/build-dmg.sh` (needs `pip install dmgbuild`) | Built on macOS arm64; opened and the layout checked by eye |
+| `remade` CLI archive (`.tar.gz`, `.zip` on Windows) | `packaging/cli/build-archive.sh [target]` | Built on macOS arm64; checksum and `--version` checked |
 | Linux AppImage | `packaging/linux/build-appimage.sh` | Not yet built |
 | Flatpak | `packaging/linux/build-flatpak.sh` | Not yet built |
 | `.deb` | `cargo deb -p remade-launcher` | Not yet built |
@@ -18,6 +19,12 @@ target OS. None of these may be published until a clean-machine install,
 launch, and uninstall has been recorded for them.
 
 ## Known gaps
+
+- The DMG layout is written with `dmgbuild`, not Finder scripting, so it needs no
+  desktop session or Automation permission. Its background is light on
+  purpose: Finder draws icon labels in dark text and cannot be told otherwise.
+- The CLI is a separate package from the desktop app (`remade-cli` for deb/rpm,
+  `remade-<version>-<target>` archives). Neither requires the other.
 
 - **macOS** artifacts are ad-hoc signed. Developer ID signing and notarization
   need the owner's Apple identity (`SIGN_IDENTITY`); notarization is not
