@@ -495,3 +495,37 @@ async fn bad_source_links_are_refused_before_any_request() {
 		assert_eq!(error.code(), ErrorCode::InvalidSourceUrl, "{url}");
 	}
 }
+
+#[tokio::test]
+async fn an_installed_app_stays_listed_and_removable_when_the_catalog_is_gone() {
+	let world = world().await;
+	let ready = ready(prepare(&world, "sample-editor").await.unwrap());
+	let id = world
+		.engine
+		.install(&ready, &consent(&ready.source_display, false))
+		.await
+		.unwrap();
+
+	// A fresh engine over the same data, with a build that trusts no catalog
+	// keys at all, as if the app had been delisted and the cache cleared.
+	let data = DataDirectory::at(world._directory.path().join("data"));
+	let bare = Engine::open_with(&data, EngineConfig::production())
+		.await
+		.unwrap();
+
+	assert!(bare.catalog().state().catalog.is_none());
+
+	let apps = bare.installed().await.unwrap();
+	assert_eq!(
+		apps.len(),
+		1,
+		"the Library comes from receipts, not from the catalog"
+	);
+	assert_eq!(apps[0].id, id);
+
+	let now = at(NOW).unix_timestamp();
+	let report = bare.lifecycle().uninstall(id, now).await.unwrap();
+
+	assert!(report.is_clean());
+	assert!(bare.installed().await.unwrap().is_empty());
+}
