@@ -13,7 +13,7 @@ mod filters;
 use egui::{RichText, ScrollArea, Ui};
 use launcher_core::{CatalogState, ExploreQuery, ExploreRow};
 
-use self::banner::banner;
+use self::banner::{banner, demo_banner};
 use self::cards::{CATEGORY_TILE_HEIGHT, GRID_CARD_HEIGHT, category_tile, grid_card, list_row};
 use self::detail::{demo_detail, detail};
 use self::filters::{
@@ -98,8 +98,10 @@ impl ExploreView {
 					RichText::new(
 						"Demo catalog. These apps are made up and nothing here installs.",
 					)
-					.color(ui.visuals().warn_fg_color),
+					.small()
+					.color(theme::muted(ui)),
 				);
+				demo_banner(ui, commands);
 			} else {
 				banner(ui, &state, commands);
 			}

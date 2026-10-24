@@ -152,7 +152,7 @@ pub(super) fn list_row(ui: &mut Ui, row: &ExploreRow, selected: bool) -> bool {
 
 	let text_left = inner.left() + 40.0 + 14.0;
 	let text_area = Rect::from_min_size(
-		pos2(text_left, middle - 22.0),
+		pos2(text_left, middle - 31.0),
 		vec2((inner.right() - text_left - 160.0).max(100.0), 44.0),
 	);
 	let mut text = ui.new_child(

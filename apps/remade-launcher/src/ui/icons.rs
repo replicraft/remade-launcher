@@ -23,6 +23,8 @@ pub(crate) const TRASH: &str = "\u{E4A6}";
 pub(crate) const PLAY: &str = "\u{E3D0}";
 pub(crate) const ARROW_CLOCKWISE: &str = "\u{E036}";
 pub(crate) const ARROW_RIGHT: &str = "\u{E06C}";
+pub(crate) const WIFI_SLASH: &str = "\u{E4F2}";
+pub(crate) const WARNING_CIRCLE: &str = "\u{E4E2}";
 pub(crate) const SIDEBAR: &str = "\u{EC24}";
 
 #[cfg(test)]
