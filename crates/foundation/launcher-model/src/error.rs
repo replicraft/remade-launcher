@@ -57,6 +57,7 @@ pub enum ErrorCode {
 	InstallationChanged,
 	LaunchFailed,
 	OperationInProgress,
+	ConfirmationRequired,
 	StorageUnavailable,
 	StorageMigrationFailed,
 	StorageNewerThanApp,
@@ -82,6 +83,7 @@ impl ErrorCode {
 			Self::InstallationChanged => "installation.changed",
 			Self::LaunchFailed => "installation.launch_failed",
 			Self::OperationInProgress => "operation.in_progress",
+			Self::ConfirmationRequired => "cli.confirmation_required",
 			Self::StorageUnavailable => "storage.unavailable",
 			Self::StorageMigrationFailed => "storage.migration_failed",
 			Self::StorageNewerThanApp => "storage.newer_than_app",
@@ -103,7 +105,7 @@ impl ErrorCode {
 			| Self::InstallationChanged
 			| Self::LaunchFailed
 			| Self::OperationInProgress => ErrorCategory::LocalOwnership,
-			Self::InvalidSourceUrl => ErrorCategory::Ambiguity,
+			Self::InvalidSourceUrl | Self::ConfirmationRequired => ErrorCategory::Ambiguity,
 			Self::StorageUnavailable | Self::StorageMigrationFailed | Self::StorageNewerThanApp => {
 				ErrorCategory::Storage
 			}
@@ -126,7 +128,7 @@ impl ErrorCode {
 			| Self::InstallationNotFound => Retry::Never,
 			Self::InstallationChanged | Self::LaunchFailed => Retry::AfterUserAction,
 			Self::OperationInProgress => Retry::Later,
-			Self::InvalidSourceUrl => Retry::AfterUserAction,
+			Self::InvalidSourceUrl | Self::ConfirmationRequired => Retry::AfterUserAction,
 			Self::StorageUnavailable | Self::StorageNewerThanApp => Retry::AfterUserAction,
 			Self::InternalInvariant => Retry::Never,
 		}

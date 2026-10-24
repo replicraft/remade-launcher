@@ -13,7 +13,7 @@ pub(crate) fn confirm(question: &str, assume_yes: bool) -> Result<bool, Launcher
 
 	if !std::io::stdin().is_terminal() {
 		return Err(LauncherError::new(
-			ErrorCode::InvalidSourceUrl,
+			ErrorCode::ConfirmationRequired,
 			"This needs your confirmation, and there is no terminal to ask on. Run it again with --yes to confirm.",
 		));
 	}
@@ -26,8 +26,11 @@ pub(crate) fn confirm(question: &str, assume_yes: bool) -> Result<bool, Launcher
 		.lock()
 		.read_line(&mut answer)
 		.map_err(|error| {
-			LauncherError::new(ErrorCode::InvalidSourceUrl, "The answer could not be read.")
-				.with_source(error)
+			LauncherError::new(
+				ErrorCode::ConfirmationRequired,
+				"The answer could not be read.",
+			)
+			.with_source(error)
 		})?;
 
 	Ok(matches!(answer.trim().to_lowercase().as_str(), "y" | "yes"))

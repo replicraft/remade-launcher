@@ -270,6 +270,7 @@ impl Database {
 		&self,
 		operation: OperationId,
 		record: InstallationRecord,
+		detail: String,
 		now: i64,
 	) -> Result<(), LauncherError> {
 		self.writer()
@@ -313,8 +314,10 @@ impl Database {
 					])?;
 
 				transaction
-					.prepare_cached("UPDATE operations SET state = 'completed', updated_at = ?2 WHERE id = ?1")?
-					.execute((operation.as_bytes().as_slice(), now))?;
+					.prepare_cached(
+						"UPDATE operations SET state = 'completed', detail = ?3, updated_at = ?2 WHERE id = ?1",
+					)?
+					.execute((operation.as_bytes().as_slice(), now, detail))?;
 
 				transaction.commit()
 			})
@@ -469,7 +472,7 @@ mod tests {
 			.unwrap();
 
 		database
-			.commit_installation(op, installation(app), 5)
+			.commit_installation(op, installation(app), "done".into(), 5)
 			.await
 			.unwrap();
 
@@ -499,7 +502,7 @@ mod tests {
 			.await
 			.unwrap();
 		database
-			.commit_installation(first, installation(app), 10)
+			.commit_installation(first, installation(app), "done".into(), 10)
 			.await
 			.unwrap();
 
@@ -513,7 +516,7 @@ mod tests {
 		newer.installed_at = 99;
 		newer.updated_at = 99;
 		database
-			.commit_installation(second, newer, 99)
+			.commit_installation(second, newer, "done".into(), 99)
 			.await
 			.unwrap();
 
@@ -532,7 +535,7 @@ mod tests {
 			.await
 			.unwrap();
 		database
-			.commit_installation(install_op, installation(app), 5)
+			.commit_installation(install_op, installation(app), "done".into(), 5)
 			.await
 			.unwrap();
 

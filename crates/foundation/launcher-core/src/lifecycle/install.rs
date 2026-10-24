@@ -292,7 +292,20 @@ impl Run<'_> {
 
 		service
 			.database
-			.commit_installation(self.operation, record, self.now)
+			.commit_installation(
+				self.operation,
+				record,
+				format!(
+					"{} {}",
+					if self.previous.is_some() {
+						"Updated to"
+					} else {
+						"Installed"
+					},
+					self.body.release.tag
+				),
+				self.now,
+			)
 			.await?;
 
 		if let Some(previous) = self.previous {
@@ -589,8 +602,8 @@ fn move_into_place(tree: &std::path::Path, root: &std::path::Path) -> Result<(),
 }
 
 /// A single top-level `.app` bundle, or the single executable at the top
-/// level. Anything less clear returns `None`, and the app is installed
-/// without a launch button instead of guessing.
+/// level or one folder down. Anything less clear returns `None`, and the app
+/// is installed without a launch button instead of guessing.
 pub(crate) fn detect_entry_point(inventory: &Inventory) -> Option<String> {
 	let mut bundles: Vec<&str> = inventory
 		.entries
@@ -606,13 +619,15 @@ pub(crate) fn detect_entry_point(inventory: &Inventory) -> Option<String> {
 		return Some((*only).to_owned());
 	}
 
+	// Archives usually either hold the program at the top, or wrap everything
+	// in one folder. Look at both levels, and only accept a single answer.
 	let executables: Vec<&str> = inventory
 		.entries
 		.iter()
 		.filter(|entry| {
 			entry.executable
 				&& entry.kind == launcher_packages::EntryKind::File
-				&& !entry.path.contains('/')
+				&& entry.path.matches('/').count() <= 1
 		})
 		.map(|entry| entry.path.as_str())
 		.collect();

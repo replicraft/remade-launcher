@@ -596,7 +596,7 @@ async fn a_tampered_manifest_path_cannot_delete_outside_the_app() {
 		.unwrap();
 	fixture
 		.database
-		.commit_installation(op, tampered, NOW)
+		.commit_installation(op, tampered, "test".into(), NOW)
 		.await
 		.unwrap();
 
@@ -935,5 +935,45 @@ async fn a_running_operation_in_another_process_blocks_recovery_and_new_installs
 			.install(&plan(&fixture, 1, None, None), &meta(), NOW)
 			.await
 			.is_ok()
+	);
+}
+
+#[tokio::test]
+async fn a_single_executable_one_folder_down_becomes_the_entry_point() {
+	let fixture = fixture_with(&[
+		("tool-1.0/tool", SCRIPT, 0o755),
+		("tool-1.0/README", b"x", 0o644),
+	])
+	.await;
+
+	let id = fixture
+		.service
+		.install(&plan(&fixture, 1, None, None), &meta(), NOW)
+		.await
+		.unwrap();
+
+	let record = fixture.database.installation(id).await.unwrap().unwrap();
+	assert_eq!(record.entry_point.as_deref(), Some("tool-1.0/tool"));
+}
+
+#[tokio::test]
+async fn several_executables_leave_the_entry_point_unset_instead_of_guessing() {
+	let fixture = fixture_with(&[("a", SCRIPT, 0o755), ("b", SCRIPT, 0o755)]).await;
+
+	let id = fixture
+		.service
+		.install(&plan(&fixture, 1, None, None), &meta(), NOW)
+		.await
+		.unwrap();
+
+	assert_eq!(
+		fixture
+			.database
+			.installation(id)
+			.await
+			.unwrap()
+			.unwrap()
+			.entry_point,
+		None
 	);
 }

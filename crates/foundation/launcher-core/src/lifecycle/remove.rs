@@ -51,9 +51,12 @@ impl LifecycleService {
 				kind: "uninstall".into(),
 				installation_id: Some(installation),
 				plan_digest: Sha256::digest(record.id.as_bytes()).into(),
-				plan:
-					serde_json::json!({ "uninstall": record.id.to_string(), "root": record.root })
-						.to_string(),
+				plan: serde_json::json!({
+					"uninstall": record.id.to_string(),
+					"root": record.root,
+					"source": { "display": record.repository },
+				})
+				.to_string(),
 				state: state::REMOVING.into(),
 				staging: None,
 				detail: None,
@@ -65,12 +68,15 @@ impl LifecycleService {
 
 		match self.remove_installed_files(&record).await {
 			Ok(report) => {
-				let detail = serde_json::json!({
-					"removed_files": report.removed_files,
-					"kept_modified": report.kept_modified,
-					"kept_unknown": report.kept_unknown,
-				})
-				.to_string();
+				let detail = if report.is_clean() {
+					format!("Removed {} files", report.removed_files)
+				} else {
+					format!(
+						"Removed {} files; kept {} that were edited or are not the launcher's",
+						report.removed_files,
+						report.kept_modified.len() + report.kept_unknown.len()
+					)
+				};
 
 				self.database
 					.commit_removal(operation, installation, detail, now)
