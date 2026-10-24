@@ -11,7 +11,7 @@ use crate::ui::screens::Action;
 use crate::ui::{icons, theme};
 
 pub(super) const CARD_HEIGHT: f32 = 212.0;
-pub(super) const ROW_HEIGHT: f32 = 92.0;
+pub(super) const ROW_HEIGHT: f32 = 106.0;
 
 /// Everything one app's card or row needs.
 pub(super) struct Item<'a> {
@@ -207,7 +207,7 @@ pub(super) fn grid_card(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 /// nothing depends on how tall a nested layout happens to come out.
 pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	const TITLE_WIDTH: f32 = 250.0;
-	const BLOCK_HEIGHT: f32 = 60.0;
+	const BLOCK_HEIGHT: f32 = 66.0;
 	const BUTTON_HEIGHT: f32 = 32.0;
 
 	let rect = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), ROW_HEIGHT));

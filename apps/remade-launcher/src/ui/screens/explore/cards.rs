@@ -9,7 +9,7 @@ use crate::ui::components::{app_tile, verified_badge};
 use crate::ui::theme;
 
 pub(super) const GRID_CARD_HEIGHT: f32 = 160.0;
-pub(super) const LIST_ROW_HEIGHT: f32 = 80.0;
+pub(super) const LIST_ROW_HEIGHT: f32 = 88.0;
 pub(super) const CATEGORY_TILE_HEIGHT: f32 = 64.0;
 
 /// A short phrase for the corner of a card.
