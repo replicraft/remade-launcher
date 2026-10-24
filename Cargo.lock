@@ -2330,6 +2330,7 @@ dependencies = [
 name = "launcher-background"
 version = "0.1.0"
 dependencies = [
+ "launcher-core",
  "launcher-model",
  "serde",
  "serde_json",
@@ -2472,10 +2473,12 @@ dependencies = [
  "eframe",
  "egui",
  "image",
+ "launcher-background",
  "launcher-catalog",
  "launcher-core",
  "launcher-model",
  "launcher-resolver",
+ "launcher-storage",
  "time",
  "tokio",
  "tracing",
