@@ -71,6 +71,16 @@ fn asset_url(tag: &str) -> String {
 }
 
 fn release_json(id: u64, tag: &str, bytes: &[u8], with_digest: bool) -> String {
+	release_json_at(
+		id,
+		tag,
+		bytes,
+		with_digest,
+		&format!("2030-01-0{id}T00:00:00Z"),
+	)
+}
+
+fn release_json_at(id: u64, tag: &str, bytes: &[u8], with_digest: bool, published: &str) -> String {
 	let digest = if with_digest {
 		format!("\"sha256:{}\"", hex::encode(Sha256::digest(bytes)))
 	} else {
@@ -78,10 +88,10 @@ fn release_json(id: u64, tag: &str, bytes: &[u8], with_digest: bool) -> String {
 	};
 
 	format!(
-		r#"{{"id":{id},"tag_name":"{tag}","draft":false,"prerelease":false,"published_at":"2030-01-0{id}T00:00:00Z",
+		r#"{{"id":{id},"tag_name":"{tag}","draft":false,"prerelease":false,"published_at":"{published}",
 		"html_url":"https://github.com/fixture-owner/fixture-editor/releases/tag/{tag}","assets":[{{
 			"id":{id}0,"name":"sample-editor-{version}-linux-x64.tar.gz","size":{size},"content_type":"application/gzip","state":"uploaded",
-			"digest":{digest},"browser_download_url":"{url}"}}]}}"#,
+			"digest":{digest},"created_at":"{published}","updated_at":"{published}","browser_download_url":"{url}"}}]}}"#,
 		version = &tag[1..],
 		size = bytes.len(),
 		url = asset_url(tag),
@@ -93,6 +103,8 @@ fn release_json(id: u64, tag: &str, bytes: &[u8], with_digest: bool) -> String {
 struct FakeGithub {
 	repo: String,
 	releases: Arc<Mutex<String>>,
+	/// While true, GitHub answers every request with a server error.
+	down: Arc<Mutex<bool>>,
 }
 
 impl Transport for FakeGithub {
@@ -102,6 +114,18 @@ impl Transport for FakeGithub {
 		_: MetadataRequest,
 		_: usize,
 	) -> Result<HttpResponse, LauncherError> {
+		if *self.down.lock().unwrap() {
+			return Ok(HttpResponse {
+				status: 500,
+				etag: None,
+				retry_after_seconds: None,
+				rate_limit_remaining: None,
+				rate_limit_reset: None,
+				next_page: None,
+				body: Vec::new(),
+			});
+		}
+
 		let body = match url.path() {
 			"/repositories/100001" | "/repos/fixture-owner/fixture-editor" => self.repo.clone(),
 			"/repositories/100001/releases" => self.releases.lock().unwrap().clone(),
@@ -175,6 +199,7 @@ async fn world() -> World {
 			"[{}]",
 			release_json(1, "v1.0.0", &v1, true)
 		))),
+		down: Arc::new(Mutex::new(false)),
 	};
 
 	let config = EngineConfig {
@@ -297,6 +322,7 @@ async fn a_repository_that_no_longer_matches_the_catalog_is_refused() {
 	let provider = GithubProvider::new(FakeGithub {
 		repo: REPO.replace("\"id\":100002", "\"id\":999999"),
 		releases: Arc::new(Mutex::new("[]".into())),
+		down: Arc::new(Mutex::new(false)),
 	});
 
 	let error = world
@@ -528,4 +554,497 @@ async fn an_installed_app_stays_listed_and_removable_when_the_catalog_is_gone() 
 
 	assert!(report.is_clean());
 	assert!(bare.installed().await.unwrap().is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// Automatic updates
+// ---------------------------------------------------------------------------
+
+use launcher_model::{InstallationId, MinimumAge, UpdateMode};
+use launcher_storage::AppPolicy;
+
+use crate::updates::{
+	CycleResult, Decision, LaunchOutcome, ModeConsent, SkipReason, Trigger, UpdateState,
+};
+
+const MATURE: &str = "2030-01-01T00:00:00Z";
+
+fn consent_to_automatic() -> ModeConsent {
+	ModeConsent {
+		actor: "test".into(),
+		acknowledged_risks: true,
+	}
+}
+
+/// An installed v1.0.0, with GitHub now offering v1.1.0 published at
+/// `published`.
+async fn world_with_update_published(published: &str) -> (World, InstallationId) {
+	let world = world().await;
+	let first = ready(prepare(&world, "sample-editor").await.unwrap());
+	let id = world
+		.engine
+		.install(&first, &consent(&first.source_display, false))
+		.await
+		.unwrap();
+
+	offer(&world, "v1.1.0", 2, published, &tarball("1.1.0"));
+
+	(world, id)
+}
+
+/// Makes GitHub list v1.0.0 and a release `tag`, with `bytes` as its file.
+fn offer(world: &World, tag: &str, id: u64, published: &str, bytes: &[u8]) {
+	world
+		.artifacts
+		.0
+		.lock()
+		.unwrap()
+		.insert(asset_url(tag), bytes.to_vec());
+	*world.github.releases.lock().unwrap() = format!(
+		"[{},{}]",
+		release_json_at(id, tag, bytes, true, published),
+		release_json(1, "v1.0.0", &tarball("1.0.0"), true)
+	);
+}
+
+async fn cycle(world: &World, trigger: Trigger, now: &str) -> crate::updates::CycleReport {
+	let provider = GithubProvider::new(world.github.clone());
+
+	world
+		.engine
+		.run_update_cycle_with(&provider, trigger, Some(LINUX), at(now).unix_timestamp())
+		.await
+		.unwrap()
+}
+
+async fn statuses(world: &World, now: &str) -> Vec<crate::updates::UpdateStatus> {
+	let provider = GithubProvider::new(world.github.clone());
+
+	world
+		.engine
+		.check_updates_with(&provider, None, Some(LINUX), at(now).unix_timestamp())
+		.await
+		.unwrap()
+}
+
+async fn installed_version(world: &World) -> String {
+	world.engine.installed().await.unwrap()[0].version.clone()
+}
+
+fn only_skip(report: &crate::updates::CycleReport) -> &SkipReason {
+	match &report.outcomes[0].result {
+		CycleResult::Skipped(reason) => reason,
+		other => panic!("expected a skip, got {other:?}"),
+	}
+}
+
+#[tokio::test]
+async fn checking_for_updates_reports_but_never_installs() {
+	let (world, _) = world_with_update_published(MATURE).await;
+
+	let found = statuses(&world, NOW).await;
+
+	assert!(matches!(found[0].state, UpdateState::Available));
+	assert_eq!(found[0].available.as_ref().unwrap().version, "v1.1.0");
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+	assert_eq!(
+		found[0].auto.decision,
+		Decision::Skip(SkipReason::ModeManual)
+	);
+}
+
+#[tokio::test]
+async fn manual_mode_blocks_every_automatic_trigger() {
+	let (world, _) = world_with_update_published(MATURE).await;
+
+	for trigger in [Trigger::OnLaunch, Trigger::Daemon] {
+		let report = cycle(&world, trigger, NOW).await;
+
+		assert!(report.mode_blocked && report.outcomes.is_empty());
+	}
+
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+}
+
+#[tokio::test]
+async fn on_launch_mode_installs_a_mature_update_and_records_why() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	let report = cycle(&world, Trigger::OnLaunch, NOW).await;
+
+	assert_eq!(report.updated(), 1);
+	assert_eq!(installed_version(&world).await, "v1.1.0");
+
+	let decisions = world.engine.database.recent_decisions(id, 5).await.unwrap();
+	assert_eq!(decisions[0].outcome, "applied");
+	assert_eq!(decisions[0].trigger, "on-launch");
+
+	let approvals = world
+		.engine
+		.database
+		.consents("plan", &hex::encode(decisions[0].plan_digest.unwrap()))
+		.await
+		.unwrap();
+	assert_eq!(approvals.len(), 1, "the automatic approval is recorded");
+	assert_eq!(approvals[0].actor, "automatic:on-launch");
+}
+
+#[tokio::test]
+async fn a_release_younger_than_the_minimum_age_waits_then_installs() {
+	// Published thirty minutes before NOW, with the one-hour default.
+	let (world, id) = world_with_update_published("2030-01-14T23:30:00Z").await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	let early = cycle(&world, Trigger::OnLaunch, NOW).await;
+	assert!(matches!(
+		only_skip(&early),
+		SkipReason::MinReleaseAgeNotMet { .. }
+	));
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+
+	// The status says when it becomes eligible.
+	let waiting = statuses(&world, NOW).await;
+	assert_eq!(
+		waiting[0].auto.eligible_at,
+		Some(at("2030-01-15T00:30:00Z").unix_timestamp())
+	);
+
+	// A person can still update by hand, since the age only governs automatic updates.
+	let provider = GithubProvider::new(world.github.clone());
+	let manual = ready(
+		world
+			.engine
+			.prepare_update_with(&provider, id, Some(LINUX), at(NOW).unix_timestamp())
+			.await
+			.unwrap(),
+	);
+	assert_eq!(manual.candidate.release.tag, "v1.1.0");
+
+	let later = cycle(&world, Trigger::OnLaunch, "2030-01-15T00:31:00Z").await;
+	assert_eq!(later.updated(), 1);
+	assert_eq!(installed_version(&world).await, "v1.1.0");
+}
+
+#[tokio::test]
+async fn a_per_app_age_overrides_the_global_one() {
+	let (world, id) = world_with_update_published("2030-01-14T22:00:00Z").await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	// Three hours old: fine for the one-hour default, too young for a day.
+	world
+		.engine
+		.set_app_update_policy(
+			id,
+			AppPolicy {
+				min_age_seconds: Some(86_400),
+				..AppPolicy::default()
+			},
+		)
+		.await
+		.unwrap();
+	assert!(matches!(
+		only_skip(&cycle(&world, Trigger::OnLaunch, NOW).await),
+		SkipReason::MinReleaseAgeNotMet { .. }
+	));
+
+	let status = statuses(&world, NOW).await;
+	assert!(status[0].auto.age_is_per_app);
+	assert_eq!(
+		status[0].auto.minimum_age,
+		MinimumAge::from_seconds(86_400).unwrap()
+	);
+
+	// A visible, deliberate zero delay.
+	world
+		.engine
+		.set_app_update_policy(
+			id,
+			AppPolicy {
+				min_age_seconds: Some(0),
+				..AppPolicy::default()
+			},
+		)
+		.await
+		.unwrap();
+	assert_eq!(cycle(&world, Trigger::OnLaunch, NOW).await.updated(), 1);
+}
+
+#[tokio::test]
+async fn a_replaced_file_restarts_the_clock_even_on_an_old_release() {
+	let (world, _) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	// First look: old and unchanged, so eligible. Do not apply yet.
+	let first = statuses(&world, NOW).await;
+	assert_eq!(first[0].auto.decision, Decision::Apply);
+
+	// Same release and asset ID, different bytes: someone swapped the file.
+	offer(&world, "v1.1.0", 2, MATURE, &tarball("1.1.0-swapped"));
+
+	let report = cycle(&world, Trigger::OnLaunch, "2030-01-15T00:10:00Z").await;
+
+	assert!(
+		matches!(only_skip(&report), SkipReason::MinReleaseAgeNotMet { .. }),
+		"the release's old age must not carry over to a swapped file"
+	);
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+}
+
+#[tokio::test]
+async fn pinned_and_paused_apps_are_held_and_an_operator_run_respects_only_the_pin() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	world.engine.pin(id).await.unwrap();
+	assert_eq!(
+		*only_skip(&cycle(&world, Trigger::OnLaunch, NOW).await),
+		SkipReason::Pinned
+	);
+	assert_eq!(
+		*only_skip(&cycle(&world, Trigger::Operator, NOW).await),
+		SkipReason::Pinned
+	);
+	assert!(matches!(
+		statuses(&world, NOW).await[0].state,
+		UpdateState::Pinned
+	));
+
+	world.engine.unpin(id).await.unwrap();
+	world
+		.engine
+		.set_app_update_policy(
+			id,
+			AppPolicy {
+				auto_paused: true,
+				..AppPolicy::default()
+			},
+		)
+		.await
+		.unwrap();
+	assert_eq!(
+		*only_skip(&cycle(&world, Trigger::OnLaunch, NOW).await),
+		SkipReason::AutoPaused
+	);
+
+	assert_eq!(
+		cycle(&world, Trigger::Operator, NOW).await.updated(),
+		1,
+		"a person's own run is not held by a pause"
+	);
+}
+
+#[tokio::test]
+async fn a_rebuilt_file_with_the_same_version_is_never_applied_unattended() {
+	let (world, _) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	// v1.0.0 is republished with a different file (a different asset ID).
+	let rebuilt = tarball("1.0.0-rebuilt");
+	world
+		.artifacts
+		.0
+		.lock()
+		.unwrap()
+		.insert(asset_url("v1.0.0"), rebuilt.clone());
+	let json = release_json(1, "v1.0.0", &rebuilt, true).replace("\"id\":10,", "\"id\":11,");
+	*world.github.releases.lock().unwrap() = format!("[{json}]");
+
+	let report = cycle(&world, Trigger::OnLaunch, NOW).await;
+
+	assert_eq!(*only_skip(&report), SkipReason::RebuiltArtifact);
+
+	let found = statuses(&world, NOW).await;
+	assert!(
+		found[0].available.as_ref().unwrap().rebuilt,
+		"it is still shown to a person"
+	);
+}
+
+#[tokio::test]
+async fn a_failed_lookup_is_never_reported_as_up_to_date() {
+	let (world, _) = world_with_update_published(MATURE).await;
+	*world.github.down.lock().unwrap() = true;
+
+	let found = statuses(&world, NOW).await;
+
+	assert!(
+		matches!(found[0].state, UpdateState::CheckFailed(_)),
+		"{:?}",
+		found[0].state
+	);
+}
+
+#[tokio::test]
+async fn a_catalog_that_has_expired_holds_automatic_updates() {
+	let (world, _) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	let report = cycle(&world, Trigger::OnLaunch, "2030-03-01T00:00:00Z").await;
+
+	assert!(matches!(only_skip(&report), SkipReason::Unavailable(why) if why.contains("expired")));
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+}
+
+#[tokio::test]
+async fn apps_the_user_added_themselves_are_not_updated_unattended() {
+	let world = world().await;
+	let provider = GithubProvider::new(world.github.clone());
+	let prepared = world
+		.engine
+		.prepare_custom_with(
+			&provider,
+			"https://github.com/fixture-owner/fixture-editor",
+			Some(LINUX),
+		)
+		.await
+		.unwrap();
+	let ready = custom_plan(
+		&prepared,
+		prepared.options[0].asset.id,
+		at(NOW).unix_timestamp(),
+	)
+	.unwrap();
+	world
+		.engine
+		.install(&ready, &consent(&ready.source_display, true))
+		.await
+		.unwrap();
+
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	let report = cycle(&world, Trigger::OnLaunch, NOW).await;
+
+	assert_eq!(*only_skip(&report), SkipReason::SourceNotEnrolled);
+}
+
+#[tokio::test]
+async fn changing_the_mode_starts_nothing_and_a_launch_acts_once() {
+	let (world, _) = world_with_update_published(MATURE).await;
+
+	// Switching modes is only a setting.
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+	assert!(
+		world
+			.engine
+			.database
+			.setting("updates.last_cycle_started")
+			.await
+			.unwrap()
+			.is_none()
+	);
+
+	// A genuine launcher start, in on-launch mode, runs one cycle.
+	let provider = GithubProvider::new(world.github.clone());
+	let _ = &provider;
+	let first = world.engine.launcher_started().await.unwrap();
+	assert!(matches!(first, LaunchOutcome::Cycle(_)));
+
+	// Anything else in the same process (a focus change, a second window) is not a start.
+	assert!(matches!(
+		world.engine.launcher_started().await.unwrap(),
+		LaunchOutcome::AlreadyHandled
+	));
+	assert!(matches!(
+		world.engine.launcher_started().await.unwrap(),
+		LaunchOutcome::AlreadyHandled
+	));
+}
+
+#[tokio::test]
+async fn a_second_cycle_does_nothing_while_one_is_running_elsewhere() {
+	let (world, _) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	let held = crate::lifecycle::cycle_lock(&world.engine.data).expect("the lock is free");
+	let report = cycle(&world, Trigger::OnLaunch, NOW).await;
+	drop(held);
+
+	assert!(report.already_running && report.outcomes.is_empty());
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+	assert_eq!(cycle(&world, Trigger::OnLaunch, NOW).await.updated(), 1);
+}
+
+#[tokio::test]
+async fn prerelease_opt_in_is_per_app_and_off_by_default() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	let beta = tarball("2.0.0-rc.1");
+	world
+		.artifacts
+		.0
+		.lock()
+		.unwrap()
+		.insert(asset_url("v2.0.0-rc.1"), beta.clone());
+	let rc = release_json_at(3, "v2.0.0-rc.1", &beta, true, MATURE)
+		.replace("\"prerelease\":false", "\"prerelease\":true");
+	let stable = release_json_at(2, "v1.1.0", &tarball("1.1.0"), true, MATURE);
+	*world.github.releases.lock().unwrap() = format!(
+		"[{rc},{stable},{}]",
+		release_json(1, "v1.0.0", &tarball("1.0.0"), true)
+	);
+
+	let found = statuses(&world, NOW).await;
+	assert_eq!(found[0].available.as_ref().unwrap().version, "v1.1.0");
+
+	world
+		.engine
+		.set_app_update_policy(
+			id,
+			AppPolicy {
+				allow_prerelease: true,
+				..AppPolicy::default()
+			},
+		)
+		.await
+		.unwrap();
+
+	let found = statuses(&world, NOW).await;
+	assert_eq!(found[0].available.as_ref().unwrap().version, "v2.0.0-rc.1");
 }

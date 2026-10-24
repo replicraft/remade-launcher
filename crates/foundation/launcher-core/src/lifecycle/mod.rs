@@ -17,6 +17,7 @@ mod safe_delete;
 
 pub use artifact::{ArtifactSource, HttpArtifacts};
 pub use install::LifecycleService;
+pub(crate) use lock::try_acquire_cycle as cycle_lock;
 pub use meta::{InstallMeta, InstalledApp, OperationSummary};
 pub use recover::RecoveryReport;
 pub use remove::RemovalReport;

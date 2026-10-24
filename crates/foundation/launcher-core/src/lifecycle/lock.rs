@@ -32,6 +32,19 @@ fn open(data: &DataDirectory) -> Result<File, LauncherError> {
 		})
 }
 
+/// The lock for one update cycle, separate from the per-operation lock so a
+/// cycle can hold it while the operations it starts take their own.
+pub(crate) fn try_acquire_cycle(data: &DataDirectory) -> Option<OperationLock> {
+	let file = OpenOptions::new()
+		.create(true)
+		.truncate(false)
+		.write(true)
+		.open(data.root().join("cycle.lock"))
+		.ok()?;
+
+	file.try_lock().ok().map(|()| OperationLock { _file: file })
+}
+
 /// Takes the lock, or reports that another install or removal is running.
 pub(crate) fn acquire(data: &DataDirectory) -> Result<OperationLock, LauncherError> {
 	let file = open(data)?;

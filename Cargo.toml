@@ -53,7 +53,7 @@ tokio = { version = "1", default-features = false, features = ["fs", "io-util", 
 
 # Networking
 reqwest = { version = "0.13", default-features = false, features = ["brotli", "gzip", "http2", "rustls", "stream"] }
-futures-util = { version = "0.3", default-features = false }
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
 
 # Storage
 rusqlite = { version = "0.40", features = ["bundled"] }

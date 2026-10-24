@@ -22,6 +22,30 @@ impl Database {
 			.map_err(unavailable)
 	}
 
+	/// Sets `key` to `value` only if it holds something else, and says whether
+	/// it changed. Two processes racing to claim the same value cannot both
+	/// win, which is how "once per launch" is enforced.
+	pub async fn claim_setting(
+		&self,
+		key: &'static str,
+		value: String,
+	) -> Result<bool, LauncherError> {
+		self.writer()
+			.call(move |connection| -> DbResult<bool> {
+				let changed = connection
+					.prepare_cached(
+						"INSERT INTO settings (key, value) VALUES (?1, ?2)
+						 ON CONFLICT (key) DO UPDATE SET value = excluded.value
+						 WHERE settings.value != excluded.value",
+					)?
+					.execute((key, value))?;
+
+				Ok(changed > 0)
+			})
+			.await
+			.map_err(unavailable)
+	}
+
 	/// Saves a setting, replacing any previous value.
 	pub async fn set_setting(&self, key: &'static str, value: String) -> Result<(), LauncherError> {
 		self.writer()
@@ -90,6 +114,19 @@ mod tests {
 		assert_eq!(
 			second.setting("theme").await.unwrap().as_deref(),
 			Some("dark")
+		);
+	}
+
+	#[tokio::test]
+	async fn a_value_can_be_claimed_only_once() {
+		let (_directory, database) = open_temporary().await;
+
+		assert!(database.claim_setting("session", "a".into()).await.unwrap());
+		assert!(!database.claim_setting("session", "a".into()).await.unwrap());
+		assert!(database.claim_setting("session", "b".into()).await.unwrap());
+		assert_eq!(
+			database.setting("session").await.unwrap().as_deref(),
+			Some("b")
 		);
 	}
 

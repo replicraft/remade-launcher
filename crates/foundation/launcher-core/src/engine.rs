@@ -23,8 +23,12 @@ const THEME_KEY: &str = "theme";
 /// Share it behind an `Arc`. Every method is async and none block, so it is
 /// safe to call from a task spawned by the interface.
 pub struct Engine {
+	pub(crate) data: DataDirectory,
 	pub(crate) database: Arc<Database>,
 	pub(crate) http: HttpClient,
+	/// Identifies this process, so "once per launch" can be told apart from
+	/// "once per day".
+	pub(crate) session_id: String,
 	catalog: CatalogService,
 	lifecycle: LifecycleService,
 	pub(crate) events: EventBus,
@@ -69,8 +73,10 @@ impl Engine {
 		}
 
 		Ok(Self {
+			data: data.clone(),
 			database,
 			http,
+			session_id: launcher_model::OperationId::new().to_string(),
 			catalog,
 			lifecycle,
 			events,

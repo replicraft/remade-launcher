@@ -12,6 +12,7 @@ mod explore;
 mod lifecycle;
 mod paths;
 mod prepare;
+mod updates;
 
 #[cfg(test)]
 mod flow_tests;
@@ -30,3 +31,8 @@ pub use lifecycle::{
 };
 pub use paths::DataDirectory;
 pub use prepare::{CustomPreparation, Preparation, Ready, custom_plan};
+pub use updates::{
+	AutoStatus, AvailableUpdate, CycleOutcome, CycleReport, CycleResult, Decision, Initiator,
+	LaunchOutcome, ModeConsent, Outlook, SkipReason, Trigger, UpdateSettings, UpdateState,
+	UpdateStatus, decide, effective_age,
+};

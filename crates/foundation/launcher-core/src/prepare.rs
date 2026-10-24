@@ -14,7 +14,7 @@ use launcher_providers::{
 };
 use launcher_resolver::{
 	Candidate, Consent, CustomOption, EvidenceLevel, InstallBinding, NoCompatible, Operation,
-	Origin, Outcome, Plan, SourceBinding, custom_candidates, resolve_curated,
+	Origin, Outcome, Plan, SourceBinding, custom_candidates, resolve_curated_on,
 };
 
 use time::OffsetDateTime;
@@ -34,6 +34,9 @@ pub struct Ready {
 	pub unreviewed: bool,
 	/// Things the user should know that are not errors.
 	pub notes: Vec<String>,
+	/// Same version label as what is installed, but a different file. Worth
+	/// a person's attention before it is applied.
+	pub rebuilt: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -140,6 +143,20 @@ impl Engine {
 		host: Option<HostTarget>,
 		now: i64,
 	) -> Result<Preparation, LauncherError> {
+		self.prepare_curated_on(provider, slug, update, None, host, now)
+			.await
+	}
+
+	/// [`Self::prepare_curated`] with the user's own channel choice.
+	pub(crate) async fn prepare_curated_on<T: Transport>(
+		&self,
+		provider: &GithubProvider<T>,
+		slug: &str,
+		update: Option<(InstallationId, &str)>,
+		channel: Option<launcher_catalog::Channel>,
+		host: Option<HostTarget>,
+		now: i64,
+	) -> Result<Preparation, LauncherError> {
 		let state = self.catalog().state();
 		let unavailable = |why: &str| Ok(Preparation::Unavailable(why.to_owned()));
 
@@ -180,7 +197,7 @@ impl Engine {
 
 		let observation = provider.releases(identity.clone()).await?;
 		let supported = self.catalog().config().supported_capabilities;
-		let resolution = resolve_curated(project, &observation, host, supported);
+		let resolution = resolve_curated_on(project, &observation, host, supported, channel);
 
 		let mut notes = Vec::new();
 
@@ -280,6 +297,7 @@ impl Engine {
 			source_display: identity.display_name(),
 			unreviewed: false,
 			notes,
+			rebuilt: false,
 		})))
 	}
 
@@ -427,6 +445,7 @@ pub fn custom_plan(
 		},
 		source_display,
 		unreviewed: true,
+		rebuilt: false,
 		notes: vec!["Remade has not reviewed this source. A checksum can show the file is intact; it cannot show who made it or that it is safe.".into()],
 	})
 }

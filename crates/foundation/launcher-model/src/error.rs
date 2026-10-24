@@ -58,6 +58,9 @@ pub enum ErrorCode {
 	LaunchFailed,
 	OperationInProgress,
 	ConfirmationRequired,
+	ConsentRequired,
+	PlanExpired,
+	AppPinned,
 	StorageUnavailable,
 	StorageMigrationFailed,
 	StorageNewerThanApp,
@@ -84,6 +87,9 @@ impl ErrorCode {
 			Self::LaunchFailed => "installation.launch_failed",
 			Self::OperationInProgress => "operation.in_progress",
 			Self::ConfirmationRequired => "cli.confirmation_required",
+			Self::ConsentRequired => "policy.consent_required",
+			Self::PlanExpired => "plan.expired",
+			Self::AppPinned => "installation.pinned",
 			Self::StorageUnavailable => "storage.unavailable",
 			Self::StorageMigrationFailed => "storage.migration_failed",
 			Self::StorageNewerThanApp => "storage.newer_than_app",
@@ -105,7 +111,11 @@ impl ErrorCode {
 			| Self::InstallationChanged
 			| Self::LaunchFailed
 			| Self::OperationInProgress => ErrorCategory::LocalOwnership,
-			Self::InvalidSourceUrl | Self::ConfirmationRequired => ErrorCategory::Ambiguity,
+			Self::InvalidSourceUrl | Self::ConfirmationRequired | Self::ConsentRequired => {
+				ErrorCategory::Ambiguity
+			}
+			Self::PlanExpired => ErrorCategory::Trust,
+			Self::AppPinned => ErrorCategory::LocalOwnership,
 			Self::StorageUnavailable | Self::StorageMigrationFailed | Self::StorageNewerThanApp => {
 				ErrorCategory::Storage
 			}
@@ -128,7 +138,11 @@ impl ErrorCode {
 			| Self::InstallationNotFound => Retry::Never,
 			Self::InstallationChanged | Self::LaunchFailed => Retry::AfterUserAction,
 			Self::OperationInProgress => Retry::Later,
-			Self::InvalidSourceUrl | Self::ConfirmationRequired => Retry::AfterUserAction,
+			Self::InvalidSourceUrl | Self::ConfirmationRequired | Self::ConsentRequired => {
+				Retry::AfterUserAction
+			}
+			Self::PlanExpired => Retry::AfterUserAction,
+			Self::AppPinned => Retry::AfterUserAction,
 			Self::StorageUnavailable | Self::StorageNewerThanApp => Retry::AfterUserAction,
 			Self::InternalInvariant => Retry::Never,
 		}
