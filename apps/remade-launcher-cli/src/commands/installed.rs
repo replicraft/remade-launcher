@@ -6,7 +6,9 @@ use std::sync::Arc;
 use launcher_core::{Engine, UpdateState, UpdateStatus};
 use serde_json::{Value, json};
 
-use super::shared::{app_json, ensure_catalog, find_app, status_json, status_line};
+use super::shared::{
+	Found, app_json, ensure_catalog, find_any, find_app, status_json, status_line,
+};
 use crate::cli::{
 	AppArgs, CheckArgs, HistoryArgs, OperationsAction, OptionalAppArgs, OutdatedArgs,
 };
@@ -17,12 +19,15 @@ use crate::output::{iso, print_table, refuse, truncate, when};
 
 pub(crate) async fn list(ctx: &Ctx, engine: &Arc<Engine>) -> Result<ExitStatus, CliError> {
 	let apps = engine.installed().await?;
+	let watched = engine.adopted_apps().await?;
 
 	if ctx.machine() {
 		ctx.emit(json!({
 			"managed": apps.iter().map(app_json).collect::<Vec<_>>(),
-			// Apps installed by other tools are not looked for yet, so this is
-			// honestly empty rather than missing.
+			// Apps the launcher only watches: it did not install them and will
+			// not change them.
+			"watched": watched.iter().map(super::adopt::adopted_json).collect::<Vec<_>>(),
+			// Apps installed by other package managers are not searched for.
 			"externally_managed": [],
 			"externally_managed_detection": "not_available",
 		}));
@@ -30,7 +35,7 @@ pub(crate) async fn list(ctx: &Ctx, engine: &Arc<Engine>) -> Result<ExitStatus, 
 		return Ok(ExitStatus::Success);
 	}
 
-	if apps.is_empty() {
+	if apps.is_empty() && watched.is_empty() {
 		ctx.note("Nothing is installed. Try `remade search`.");
 
 		return Ok(ExitStatus::Success);
@@ -54,7 +59,33 @@ pub(crate) async fn list(ctx: &Ctx, engine: &Arc<Engine>) -> Result<ExitStatus, 
 		})
 		.collect();
 
-	print_table(&["ID", "NAME", "VERSION", "SOURCE", "ORIGIN"], &rows);
+	if !rows.is_empty() {
+		print_table(&["ID", "NAME", "VERSION", "SOURCE", "ORIGIN"], &rows);
+	}
+
+	if !watched.is_empty() {
+		println!();
+		println!("Watched, not managed by Remade:");
+
+		let rows: Vec<Vec<String>> = watched
+			.iter()
+			.map(|app| {
+				vec![
+					app.id.short(),
+					app.name.clone(),
+					app.path.display().to_string(),
+					if app.present {
+						"present"
+					} else {
+						"not there now"
+					}
+					.to_owned(),
+				]
+			})
+			.collect();
+
+		print_table(&["ID", "NAME", "FOLDER", "STATE"], &rows);
+	}
 
 	Ok(ExitStatus::Success)
 }
@@ -338,7 +369,10 @@ pub(crate) async fn verify(
 	args: &AppArgs,
 ) -> Result<ExitStatus, CliError> {
 	let apps = engine.installed().await?;
-	let app = find_app(&apps, &args.app)?;
+	let app = match find_any(engine, &apps, &args.app).await? {
+		Found::Managed(app) => app,
+		Found::Watched(watched) => return Ok(super::adopt::check(ctx, &watched)),
+	};
 	let report = engine.verify_installation(app.id).await?;
 
 	if ctx.machine() {
@@ -434,7 +468,20 @@ pub(crate) async fn path(
 	args: &AppArgs,
 ) -> Result<ExitStatus, CliError> {
 	let apps = engine.installed().await?;
-	let app = find_app(&apps, &args.app)?;
+	let app = match find_any(engine, &apps, &args.app).await? {
+		Found::Managed(app) => app,
+		Found::Watched(watched) => {
+			if ctx.machine() {
+				ctx.emit(
+					json!({ "app": watched.name, "folder": watched.path.display().to_string(), "watched": true }),
+				);
+			} else {
+				println!("{}", watched.path.display());
+			}
+
+			return Ok(ExitStatus::Success);
+		}
+	};
 
 	if ctx.machine() {
 		ctx.emit(json!({ "app": app.name, "folder": app.root }));

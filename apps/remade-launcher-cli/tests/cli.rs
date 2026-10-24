@@ -524,3 +524,101 @@ fn repairing_something_that_is_not_installed_is_a_typed_failure() {
 		);
 	}
 }
+
+#[cfg(unix)]
+#[test]
+fn a_watched_app_is_listed_launched_and_forgotten_but_never_removed() {
+	use std::os::unix::fs::PermissionsExt;
+
+	let run = run();
+	let folder = run._data.path().join("tools/quill");
+
+	std::fs::create_dir_all(&folder).unwrap();
+	std::fs::write(folder.join("quill"), "#!/bin/sh\necho ran > ran.txt\n").unwrap();
+	std::fs::set_permissions(folder.join("quill"), std::fs::Permissions::from_mode(0o755)).unwrap();
+
+	let path = folder.to_str().unwrap();
+
+	// Looking changes nothing.
+	let (code, preview, _) = run.json(&["adopt", path, "--preview"]);
+
+	assert_eq!(code, 0);
+	assert_eq!(preview["data"]["effect"], "watch_only");
+	assert!(
+		run.json(&["list"]).1["data"]["watched"]
+			.as_array()
+			.unwrap()
+			.is_empty()
+	);
+
+	// Without approval nothing is recorded.
+	let (code, refused, _) = run.json(&["--no-input", "adopt", path]);
+
+	assert_ne!(code, 0, "{refused}");
+	assert!(
+		run.json(&["list"]).1["data"]["watched"]
+			.as_array()
+			.unwrap()
+			.is_empty()
+	);
+
+	let (code, adopted, _) = run.json(&["adopt", path, "--yes", "--name", "Quill"]);
+
+	assert_eq!(code, 0, "{adopted}");
+	assert_eq!(adopted["data"]["managed_by_remade"], false);
+
+	let watched = run.json(&["list"]).1["data"]["watched"].clone();
+
+	assert_eq!(watched[0]["name"], "Quill");
+	assert_eq!(run.json(&["verify", "quill"]).0, 0);
+
+	// It starts, and cannot be uninstalled or adopted twice.
+	assert_eq!(run.json(&["launch", "quill"]).0, 0);
+
+	for _ in 0..100 {
+		if folder.join("ran.txt").exists() {
+			break;
+		}
+
+		std::thread::sleep(std::time::Duration::from_millis(50));
+	}
+
+	assert!(folder.join("ran.txt").exists());
+
+	let (code, error, _) = run.json(&["uninstall", "quill", "--yes"]);
+
+	assert_eq!(
+		(code, error["error"]["code"].as_str()),
+		(7, Some("NOT_MANAGED"))
+	);
+
+	let (code, error, _) = run.json(&["adopt", path, "--yes"]);
+
+	assert_eq!(
+		(code, error["error"]["code"].as_str()),
+		(7, Some("ADOPTION_REFUSED"))
+	);
+
+	// Forgetting drops the record and leaves every file.
+	assert_eq!(run.json(&["forget", "quill", "--yes"]).0, 0);
+	assert!(
+		run.json(&["list"]).1["data"]["watched"]
+			.as_array()
+			.unwrap()
+			.is_empty()
+	);
+	assert!(folder.join("quill").exists());
+}
+
+#[test]
+fn broad_folders_cannot_be_adopted() {
+	for folder in ["/", "/usr", "/etc"] {
+		let (code, error, _) = run().json(&["adopt", folder, "--preview"]);
+
+		assert_eq!(
+			(code, error["error"]["code"].as_str()),
+			(7, Some("ADOPTION_REFUSED")),
+			"{folder}"
+		);
+	}
+}

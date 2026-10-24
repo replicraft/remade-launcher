@@ -92,6 +92,31 @@ pub(crate) fn find_app<'a>(
 	crate::app_ref::find(apps, reference).map_err(CliError::from)
 }
 
+/// What a reference named: an app the launcher manages, or one it only watches.
+pub(crate) enum Found<'a> {
+	Managed(&'a InstalledApp),
+	Watched(launcher_core::AdoptedApp),
+}
+
+/// Looks among managed apps first, then watched ones, so every command that
+/// takes an app also understands the ones that were adopted.
+pub(crate) async fn find_any<'a>(
+	engine: &std::sync::Arc<launcher_core::Engine>,
+	apps: &'a [InstalledApp],
+	reference: &str,
+) -> Result<Found<'a>, CliError> {
+	match find_app(apps, reference) {
+		Ok(app) => Ok(Found::Managed(app)),
+		Err(error) if error.code == "INSTALLATION_NOT_FOUND" => {
+			match super::adopt::find(engine, reference).await? {
+				Some(watched) => Ok(Found::Watched(watched)),
+				None => Err(error),
+			}
+		}
+		Err(error) => Err(error),
+	}
+}
+
 pub(crate) fn app_json(app: &InstalledApp) -> Value {
 	json!({
 		"id": app.id.to_string(),

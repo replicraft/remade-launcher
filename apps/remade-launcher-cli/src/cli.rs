@@ -119,6 +119,8 @@ pub(crate) enum Command {
 	Forget(ForgetArgs),
 	/// Look for damage, and put the app back if there is some.
 	Repair(RepairArgs),
+	/// Watch an app that is already on this computer. It is never changed.
+	Adopt(AdoptArgs),
 	/// Hold an app at its current version.
 	Pin(AppArgs),
 	/// Let a pinned app update again.
@@ -215,6 +217,33 @@ pub(crate) struct AppArgs {
 #[derive(Debug, Args)]
 pub(crate) struct OptionalAppArgs {
 	pub(crate) app: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct AdoptArgs {
+	/// The app's own folder, such as /opt/quill or a folder holding its .app.
+	pub(crate) path: String,
+
+	/// A name to list it under. The folder's name is used if you leave it out.
+	#[arg(long)]
+	pub(crate) name: Option<String>,
+
+	/// The catalog entry you say this is. A claim only: nothing is updated or
+	/// removed because of it.
+	#[arg(long = "as", value_name = "CATALOG-NAME")]
+	pub(crate) catalog_name: Option<String>,
+
+	/// The file that starts it, relative to the folder.
+	#[arg(long, value_name = "FILE")]
+	pub(crate) entry: Option<String>,
+
+	/// Show what would be watched and stop.
+	#[arg(long)]
+	pub(crate) preview: bool,
+
+	/// Approve without asking.
+	#[arg(short, long)]
+	pub(crate) yes: bool,
 }
 
 #[derive(Debug, Args)]

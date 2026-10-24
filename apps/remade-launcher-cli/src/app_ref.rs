@@ -1,6 +1,6 @@
 //! Finding an installed app from what a person typed.
 
-use launcher_core::InstalledApp;
+use launcher_core::{AdoptedApp, InstalledApp};
 use launcher_model::{ErrorCode, LauncherError};
 
 /// Matches `reference` against an app's ID, catalog name, or display
@@ -50,6 +50,42 @@ pub(crate) fn find<'a>(
 		ErrorCode::InstallationNotFound,
 		format!("No installed app matches \"{reference}\". See `remade list`."),
 	))
+}
+
+/// Matches `reference` against watched apps the same way, or finds nothing.
+pub(crate) fn find_adopted<'a>(
+	apps: &'a [AdoptedApp],
+	reference: &str,
+) -> Result<Option<&'a AdoptedApp>, LauncherError> {
+	let wanted = reference.trim().to_lowercase();
+	let attempts: [Vec<&AdoptedApp>; 3] = [
+		apps.iter().filter(|app| app.id.matches(&wanted)).collect(),
+		apps.iter()
+			.filter(|app| {
+				app.catalog_slug
+					.as_deref()
+					.is_some_and(|slug| slug.eq_ignore_ascii_case(&wanted))
+			})
+			.collect(),
+		apps.iter()
+			.filter(|app| app.name.to_lowercase() == wanted)
+			.collect(),
+	];
+
+	for matches in attempts {
+		match matches.as_slice() {
+			[] => continue,
+			[only] => return Ok(Some(only)),
+			_ => {
+				return Err(LauncherError::new(
+					ErrorCode::InvalidSourceUrl,
+					format!("\"{reference}\" matches more than one watched app. Use the ID."),
+				));
+			}
+		}
+	}
+
+	Ok(None)
 }
 
 /// The short form of the ID, enough to tell apps apart.

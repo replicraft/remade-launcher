@@ -16,7 +16,7 @@ use launcher_resolver::{EvidenceLevel, Fit};
 use serde_json::{Value, json};
 
 use super::installed::{print_verify, verify_json};
-use super::shared::{app_json, ensure_catalog, find_app};
+use super::shared::{Found, app_json, ensure_catalog, find_any, find_app};
 use crate::cli::{
 	AppArgs, ApplyArgs, ForgetArgs, InstallArgs, PlanAction, PlanInstallArgs, RepairArgs,
 	UninstallArgs, UpdateArgs,
@@ -1067,7 +1067,10 @@ pub(crate) async fn uninstall(
 	args: &UninstallArgs,
 ) -> Result<ExitStatus, CliError> {
 	let apps = engine.installed().await?;
-	let app = find_app(&apps, &args.app)?;
+	let app = match find_any(engine, &apps, &args.app).await? {
+		Found::Managed(app) => app,
+		Found::Watched(watched) => return Ok(super::adopt::not_managed(ctx, &watched, "remove")),
+	};
 	let plan = engine.plan_uninstall(app.id).await?;
 
 	ctx.note(format!(
@@ -1105,7 +1108,10 @@ pub(crate) async fn launch(
 	args: &AppArgs,
 ) -> Result<ExitStatus, CliError> {
 	let apps = engine.installed().await?;
-	let app = find_app(&apps, &args.app)?;
+	let app = match find_any(engine, &apps, &args.app).await? {
+		Found::Managed(app) => app,
+		Found::Watched(watched) => return super::adopt::launch(ctx, engine, &watched).await,
+	};
 
 	engine.lifecycle().launch(app.id).await?;
 
@@ -1124,7 +1130,12 @@ pub(crate) async fn forget(
 	args: &ForgetArgs,
 ) -> Result<ExitStatus, CliError> {
 	let apps = engine.installed().await?;
-	let app = find_app(&apps, &args.app)?;
+	let app = match find_any(engine, &apps, &args.app).await? {
+		Found::Managed(app) => app,
+		Found::Watched(watched) => {
+			return super::adopt::forget(ctx, engine, &watched, args.yes).await;
+		}
+	};
 
 	ctx.note(format!(
 		"The launcher will stop managing {}. Its files stay where they are.",

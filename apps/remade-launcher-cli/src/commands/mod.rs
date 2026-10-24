@@ -1,3 +1,4 @@
+mod adopt;
 mod browse;
 mod catalog;
 mod daemon;
@@ -47,6 +48,7 @@ pub(crate) fn name(command: &Command) -> &'static str {
 		Command::Doctor(_) => "doctor",
 		Command::Forget(_) => "forget",
 		Command::Repair(_) => "repair",
+		Command::Adopt(_) => "adopt",
 		Command::Pin(_) => "pin",
 		Command::Unpin(_) => "unpin",
 		Command::Pins => "pins",
@@ -91,6 +93,7 @@ pub(crate) async fn dispatch(
 		Command::Doctor(args) => installed::doctor(ctx, engine, args).await,
 		Command::Forget(args) => lifecycle::forget(ctx, engine, args).await,
 		Command::Repair(args) => lifecycle::repair(ctx, engine, args).await,
+		Command::Adopt(args) => adopt::adopt(ctx, engine, args).await,
 		Command::Pin(args) => lifecycle::pin(ctx, engine, args, true).await,
 		Command::Unpin(args) => lifecycle::pin(ctx, engine, args, false).await,
 		Command::Pins => installed::pins(ctx, engine).await,
