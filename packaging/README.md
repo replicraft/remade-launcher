@@ -14,6 +14,20 @@ by git.
 | `.rpm` | `cargo generate-rpm -p apps/remade-launcher` | Not yet built |
 | Windows NSIS installer | `cargo packager --config packaging/windows/Packager.toml --release` | Not yet built |
 
+## Releases
+
+`.github/workflows/build.yml` builds every package above on its own platform
+and publishes them. Push a tag that matches the workspace version (for example
+`v0.2.0`) and it builds the macOS disk image, the Linux AppImage, `.deb` and
+`.rpm` packages for x86-64 and arm64, the Windows installer, and the `remade`
+archives. Only if all of them succeed does it assemble `SHA256SUMS.txt`, check
+every file against it, and publish the release. A tag that does not match the
+version, or a release that is already published, stops the run. Changes to the
+packaging files run the same builds without publishing.
+
+The workflow has not run yet, so none of it is verified on a runner. The
+Flatpak is not built there: it needs its vendored Cargo sources set up first.
+
 "Not yet built" means the configuration is written but has not been run on its
 target OS. None of these may be published until a clean-machine install,
 launch, and uninstall has been recorded for them.

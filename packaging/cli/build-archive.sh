@@ -43,7 +43,12 @@ install -m 644 "$root/LICENSE" "$stage/LICENSE"
 
 case "$target" in
 	*windows*)
-		(cd "$dist" && zip -qr "$name.zip" "$name")
+		# Windows runners have no `zip`, but they do have 7-Zip.
+		if command -v zip >/dev/null; then
+			(cd "$dist" && zip -qr "$name.zip" "$name")
+		else
+			(cd "$dist" && 7z a -tzip -bso0 "$name.zip" "$name")
+		fi
 		archive="$name.zip"
 		;;
 	*)
@@ -54,6 +59,10 @@ esac
 
 rm -rf "$stage"
 
-(cd "$dist" && shasum -a 256 "$archive" > "$archive.sha256")
+if command -v sha256sum >/dev/null; then
+	(cd "$dist" && sha256sum "$archive" > "$archive.sha256")
+else
+	(cd "$dist" && shasum -a 256 "$archive" > "$archive.sha256")
+fi
 
 echo "Built $dist/$archive"

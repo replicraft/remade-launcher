@@ -1,0 +1,238 @@
+name: Build
+
+# Packages the launcher and publishes a GitHub release.
+#
+#   Push a tag such as v0.2.0 that matches the workspace version, and every
+#   platform is built. The release is published only if all of them succeed.
+#   Changes to the packaging files build everything without publishing.
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - '.github/workflows/build.yml'
+      - 'packaging/**'
+      - 'assets/**'
+      - 'apps/*/Cargo.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    name: Check the release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: version
+        name: Require a tag that matches Cargo.toml
+        env:
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          set -euo pipefail
+          version="$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "remade-launcher") | .version')"
+          if [[ -n "$TAG" && "$TAG" != "v$version" ]]; then
+            echo "::error::The tag $TAG does not match the version $version in Cargo.toml."
+            exit 1
+          fi
+          if [[ "$version" != "$(grep -m1 '^version' packaging/windows/Packager.toml | cut -d'"' -f2)" ]]; then
+            echo "::error::packaging/windows/Packager.toml has a different version than Cargo.toml."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: macOS (Apple silicon)
+    needs: version
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: build-macos
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install the disk image layout tool
+        run: python -m pip install dmgbuild==1.6.7
+      - name: Disk image
+        run: packaging/macos/build-dmg.sh
+      - name: Command-line archive
+        run: packaging/cli/build-archive.sh aarch64-apple-darwin
+      - name: Checksums
+        working-directory: dist
+        run: shasum -a 256 *.dmg > "$(ls *.dmg).sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: remade-${{ needs.version.outputs.version }}-macos-arm64
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  linux:
+    name: Linux ${{ matrix.arch }}
+    needs: version
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            arch: x86_64
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04-arm
+            arch: aarch64
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: build-linux-${{ matrix.arch }}
+      - name: Install packaging tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y desktop-file-utils appstream file rpm
+          cargo install cargo-deb --version 3.8.0 --locked
+          cargo install cargo-generate-rpm --version 0.21.0 --locked
+          curl -fsSL -o appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage"
+          chmod +x appimagetool
+      - name: Check the desktop metadata
+        run: |
+          desktop-file-validate packaging/linux/wiki.remade.Launcher.desktop
+          appstreamcli validate --no-net packaging/linux/wiki.remade.Launcher.metainfo.xml
+      - name: Build the programs
+        run: cargo build --release --locked -p remade-launcher -p remade-launcher-daemon -p remade-launcher-cli -p remade-launcher-mcp
+      - name: AppImage
+        env:
+          APPIMAGETOOL: ${{ github.workspace }}/appimagetool
+          # Runners have no FUSE, so the tool unpacks itself and runs.
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: packaging/linux/build-appimage.sh
+      - name: Debian and RPM packages
+        run: |
+          set -euo pipefail
+          cargo deb -p remade-launcher --no-build --output dist/
+          cargo deb -p remade-launcher-cli --no-build --output dist/
+          cargo generate-rpm -p apps/remade-launcher --output dist/
+          cargo generate-rpm -p apps/remade-launcher-cli --output dist/
+      - name: Command-line archive
+        run: packaging/cli/build-archive.sh ${{ matrix.target }}
+      - name: Inspect the packages
+        run: |
+          set -euo pipefail
+          for deb in dist/*.deb; do dpkg-deb --info "$deb"; dpkg-deb --contents "$deb"; done
+          for rpm in dist/*.rpm; do rpm -qip "$rpm"; rpm -qlp "$rpm"; done
+      - name: Checksums
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          for file in *.AppImage *.deb *.rpm; do sha256sum "$file" > "$file.sha256"; done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: remade-${{ needs.version.outputs.version }}-linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Windows x86-64
+    needs: version
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: build-windows
+      - name: Install the installer builder
+        run: cargo install cargo-packager --version 0.11.8 --locked
+      - name: Build the programs
+        run: cargo build --release --locked -p remade-launcher -p remade-launcher-daemon
+      - name: Installer
+        run: cargo packager --config packaging/windows/Packager.toml --release
+      - name: Command-line archive
+        run: packaging/cli/build-archive.sh x86_64-pc-windows-msvc
+      - name: Name and checksum the installer
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          installer="$(ls *-setup.exe | head -n 1)"
+          mv "$installer" "RemadeLauncher-${{ needs.version.outputs.version }}-windows-x86_64-setup.exe"
+          sha256sum RemadeLauncher-*-setup.exe > "RemadeLauncher-${{ needs.version.outputs.version }}-windows-x86_64-setup.exe.sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: remade-${{ needs.version.outputs.version }}-windows-x86_64
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish the GitHub release
+    needs: [version, macos, linux, windows]
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: remade-${{ needs.version.outputs.version }}-*
+          path: dist
+          merge-multiple: true
+      - name: Check every file against its checksum
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          ls -l
+          sha256sum --check *.sha256
+          cat *.sha256 > SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
+          rm -- *.sha256
+      - name: Publish only after every platform succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --json isDraft > release.json; then
+            if ! jq -e '.isDraft == true' release.json > /dev/null; then
+              echo "::error::This release is already published. Use a new version tag."
+              exit 1
+            fi
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --draft --generate-notes --title "Remade Launcher $RELEASE_TAG"
+          fi
+          gh release upload "$RELEASE_TAG" dist/* --clobber
+          prerelease=false
+          if [[ "$RELEASE_VERSION" == *-* ]]; then prerelease=true; fi
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$prerelease"

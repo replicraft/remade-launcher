@@ -49,8 +49,6 @@ pub(super) fn launcher(
 
 	let muted = theme::muted(ui);
 
-	ui.label(RichText::new(format!("Version {}", report.current)).color(muted));
-
 	if let Some(at) = report.checked_at {
 		ui.label(
 			RichText::new(format!("Last checked {}", local_time::date_time(at)))
@@ -86,11 +84,6 @@ pub(super) fn launcher(
 			.small()
 			.color(muted),
 		);
-	}
-
-	if let Some(blocker) = &report.blocker {
-		ui.add_space(4.0);
-		ui.label(RichText::new(blocker.message()).small().color(muted));
 	}
 
 	ui.add_space(8.0);
