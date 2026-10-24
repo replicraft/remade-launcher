@@ -5,7 +5,7 @@
 //! has not checked.
 
 use egui::{Id, Modal, RichText, Ui};
-use launcher_core::{InstalledApp, Ready, RemovalReport};
+use launcher_core::{InstalledApp, OperatorUpdate, Ready, RemovalReport};
 use launcher_model::{InstallationId, UpdateMode};
 use launcher_resolver::{Candidate, EvidenceLevel};
 
@@ -33,6 +33,14 @@ pub(crate) enum Sheet {
 		name: String,
 		report: RemovalReport,
 	},
+	/// Several updates, reviewed together.
+	ConfirmUpdateAll(Vec<OperatorUpdate>),
+	Notes {
+		app: String,
+		version: String,
+		text: String,
+	},
+	ConfirmRestore,
 }
 
 pub(crate) enum Outcome {
@@ -48,6 +56,8 @@ pub(crate) enum Outcome {
 		mode: UpdateMode,
 		acknowledged: bool,
 	},
+	UpdateAll(Vec<OperatorUpdate>),
+	RestoreDefaults,
 }
 
 pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
@@ -136,6 +146,61 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 					}
 				});
 			}
+			Sheet::ConfirmUpdateAll(updates) => {
+				ui.heading("Update everything?");
+
+				for update in updates.iter() {
+					let to = update
+						.status
+						.available
+						.as_ref()
+						.map_or("?", |available| available.version.as_str());
+
+					ui.label(format!("• {}: {} to {to}", update.status.name, update.status.installed_version));
+				}
+
+				ui.add_space(6.0);
+				ui.label(RichText::new("Each app is checked and replaced one at a time. A failure in one does not stop the others.").small().color(theme::muted(ui)));
+
+				ui.horizontal(|ui| {
+					if ui.button("Cancel").clicked() {
+						outcome = Outcome::Close;
+					}
+
+					if ui.button("Update all").clicked() {
+						outcome = Outcome::UpdateAll(std::mem::take(updates));
+					}
+				});
+			}
+			Sheet::Notes { app, version, text } => {
+				ui.heading(format!("{app} {version}"));
+
+				egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+					ui.label(if text.trim().is_empty() { "This release has no notes." } else { text.as_str() });
+				});
+
+				if ui.button("Close").clicked() {
+					outcome = Outcome::Close;
+				}
+			}
+			Sheet::ConfirmRestore => {
+				ui.heading("Restore defaults?");
+				ui.label("Appearance goes back to the system setting, updates go back to manual with a one-hour minimum age, and every app's own update settings are cleared. A background updater is turned off.");
+				ui.label(RichText::new("Your installed apps are not touched.").color(theme::muted(ui)));
+
+				ui.horizontal(|ui| {
+					if ui.button("Cancel").clicked() {
+						outcome = Outcome::Close;
+					}
+
+					let danger = theme::palette(ui).danger;
+					let button = egui::Button::new(RichText::new("Restore defaults").color(egui::Color32::WHITE)).fill(danger);
+
+					if ui.add(button).clicked() {
+						outcome = Outcome::RestoreDefaults;
+					}
+				});
+			}
 			Sheet::Removed { name, report } => {
 				ui.heading(format!("{name} was uninstalled"));
 				ui.label(format!("{} files removed.", report.removed_files));
@@ -191,7 +256,7 @@ fn review(
 	// The signed or looked-up repository identity, never a description.
 	ui.horizontal(|ui| {
 		ui.label(RichText::new("Source").color(theme::muted(ui)));
-		ui.label(RichText::new(&ready.source_display).strong());
+		ui.label(RichText::new(&ready.source_display).family(crate::theme::semibold()));
 	});
 
 	if ready.unreviewed {

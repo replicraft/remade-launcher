@@ -14,8 +14,7 @@ pub(crate) enum SettingsAction {
 	/// The person picked an update mode. Automatic ones ask first.
 	PickMode(UpdateMode),
 	SetMinimumAge(MinimumAge),
-	/// What was typed for a custom age is not a duration.
-	BadAge(String),
+	RestoreDefaults,
 	StopBackground,
 }
 
@@ -23,10 +22,6 @@ pub(crate) struct SettingsView<'a> {
 	pub(crate) theme: ThemePreference,
 	pub(crate) updates: UpdateSettings,
 	pub(crate) background: Option<&'a BackgroundStatus>,
-	/// Text typed for a custom minimum age.
-	pub(crate) custom_age: &'a mut String,
-	/// A problem with what was typed.
-	pub(crate) age_error: Option<&'a str>,
 }
 
 pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
@@ -38,14 +33,7 @@ pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
 			.show(ui, |ui| {
 				appearance(ui, view.theme, &mut action);
 				ui.add_space(16.0);
-				updates(
-					ui,
-					&view.updates,
-					view.background,
-					view.custom_age,
-					view.age_error,
-					&mut action,
-				);
+				updates(ui, &view.updates, view.background, &mut action);
 				ui.add_space(16.0);
 				about(ui, &mut action);
 			});
@@ -55,7 +43,11 @@ pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
 }
 
 fn appearance(ui: &mut Ui, current: ThemePreference, action: &mut SettingsAction) {
-	ui.label(RichText::new("Appearance").size(18.0).strong());
+	ui.label(
+		RichText::new("Appearance")
+			.size(18.0)
+			.family(theme::semibold()),
+	);
 
 	ui.horizontal(|ui| {
 		for theme in ThemePreference::ALL {
@@ -70,11 +62,13 @@ fn updates(
 	ui: &mut Ui,
 	settings: &UpdateSettings,
 	background: Option<&BackgroundStatus>,
-	custom_age: &mut String,
-	age_error: Option<&str>,
 	action: &mut SettingsAction,
 ) {
-	ui.label(RichText::new("Updates").size(18.0).strong());
+	ui.label(
+		RichText::new("Updates")
+			.size(18.0)
+			.family(theme::semibold()),
+	);
 	ui.label(
 		RichText::new(
 			"How installed apps are updated. This does not affect updates to the Launcher itself.",
@@ -91,7 +85,7 @@ fn updates(
 			}
 
 			ui.vertical(|ui| {
-				let title = RichText::new(mode.label()).strong();
+				let title = RichText::new(mode.label()).family(theme::semibold());
 				let title = if mode == UpdateMode::Daemon {
 					title.color(ui.visuals().warn_fg_color)
 				} else {
@@ -111,7 +105,7 @@ fn updates(
 	}
 
 	ui.add_space(8.0);
-	minimum_age(ui, settings, custom_age, age_error, action);
+	minimum_age(ui, settings, action);
 
 	if settings.mode == UpdateMode::Daemon
 		|| background.is_some_and(|status| status.running.is_some())
@@ -121,14 +115,8 @@ fn updates(
 	}
 }
 
-fn minimum_age(
-	ui: &mut Ui,
-	settings: &UpdateSettings,
-	custom_age: &mut String,
-	age_error: Option<&str>,
-	action: &mut SettingsAction,
-) {
-	ui.label(RichText::new("Auto-update Default Minimum Release Age").strong());
+fn minimum_age(ui: &mut Ui, settings: &UpdateSettings, action: &mut SettingsAction) {
+	ui.label(RichText::new("Auto-update Default Minimum Release Age").family(theme::semibold()));
 	ui.label(
 		RichText::new(if settings.mode.is_automatic() {
 			"A release must be at least this old before an automatic update installs it. Each app can use its own."
@@ -139,51 +127,33 @@ fn minimum_age(
 		.color(theme::muted(ui)),
 	);
 
-	ui.horizontal(|ui| {
-		let current = MinimumAge::PRESETS
-			.iter()
-			.find(|(_, age)| *age == settings.minimum_age)
-			.map_or_else(
-				|| settings.minimum_age.short(),
-				|(label, _)| (*label).to_owned(),
-			);
-
-		ComboBox::from_id_salt("minimum-age")
-			.selected_text(current)
-			.show_ui(ui, |ui| {
-				for (label, age) in MinimumAge::PRESETS {
-					if ui
-						.selectable_label(settings.minimum_age == age, label)
-						.clicked()
-					{
-						*action = SettingsAction::SetMinimumAge(age);
-					}
-				}
-			});
-
-		ui.add(
-			egui::TextEdit::singleline(custom_age)
-				.hint_text("custom, such as 90m")
-				.desired_width(140.0),
+	// Only the presets: a free-form duration is one more thing to get wrong.
+	let current = MinimumAge::PRESETS
+		.iter()
+		.find(|(_, age)| *age == settings.minimum_age)
+		.map_or_else(
+			|| settings.minimum_age.short(),
+			|(label, _)| (*label).to_owned(),
 		);
 
-		if ui.button("Set").clicked() {
-			*action = match custom_age.parse::<MinimumAge>() {
-				Ok(age) => SettingsAction::SetMinimumAge(age),
-				Err(error) => SettingsAction::BadAge(error.to_string()),
-			};
-		}
-	});
+	ComboBox::from_id_salt("minimum-age")
+		.selected_text(current)
+		.show_ui(ui, |ui| {
+			for (label, age) in MinimumAge::PRESETS {
+				if ui
+					.selectable_label(settings.minimum_age == age, label)
+					.clicked()
+				{
+					*action = SettingsAction::SetMinimumAge(age);
+				}
+			}
+		});
 
 	if settings.minimum_age == MinimumAge::NONE {
 		ui.colored_label(
 			ui.visuals().warn_fg_color,
 			"No delay installs a release the moment it is published. That is riskier.",
 		);
-	}
-
-	if let Some(error) = age_error {
-		ui.colored_label(ui.visuals().error_fg_color, error);
 	}
 }
 
@@ -194,7 +164,7 @@ fn background_status(
 	background: Option<&BackgroundStatus>,
 	action: &mut SettingsAction,
 ) {
-	ui.label(RichText::new("Background updater").strong());
+	ui.label(RichText::new("Background updater").family(theme::semibold()));
 
 	let Some(status) = background else {
 		ui.label(RichText::new("Checking…").color(theme::muted(ui)));
@@ -258,11 +228,9 @@ fn background_status(
 }
 
 fn about(ui: &mut Ui, action: &mut SettingsAction) {
-	ui.label(RichText::new("About").size(18.0).strong());
-	ui.label(format!("{} {}", product::NAME, product::VERSION));
-	ui.label(RichText::new(product::TAGLINE).color(theme::muted(ui)));
+	ui.label(RichText::new("About").size(18.0).family(theme::semibold()));
 
-	ui.add_space(8.0);
+	ui.add_space(4.0);
 
 	if ui.button("Copy support report").clicked() {
 		*action = SettingsAction::CopyDiagnostics;
@@ -274,5 +242,44 @@ fn about(ui: &mut Ui, action: &mut SettingsAction) {
 		)
 		.small()
 		.color(theme::muted(ui)),
+	);
+
+	ui.add_space(20.0);
+	ui.separator();
+
+	let palette = theme::palette(ui);
+
+	ui.horizontal(|ui| {
+		ui.vertical(|ui| {
+			ui.spacing_mut().item_spacing.y = 2.0;
+			ui.label(
+				RichText::new(format!("{} by Replicraft", product::NAME)).family(theme::semibold()),
+			);
+			ui.label(
+				RichText::new(format!("Version {}", product::VERSION))
+					.small()
+					.color(palette.text_muted),
+			);
+		});
+
+		ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+			let button = egui::Button::new(
+				RichText::new("Restore defaults")
+					.color(egui::Color32::WHITE)
+					.family(theme::semibold()),
+			)
+			.fill(palette.danger)
+			.stroke(egui::Stroke::NONE);
+
+			if ui.add(button).clicked() {
+				*action = SettingsAction::RestoreDefaults;
+			}
+		});
+	});
+
+	ui.label(
+		RichText::new("Restore defaults resets appearance, update settings, and each app's update preferences. Your installed apps are not touched.")
+			.small()
+			.color(palette.text_muted),
 	);
 }

@@ -67,7 +67,7 @@ impl AddView {
 			ui.add_space(8.0);
 			ui.label(
 				RichText::new(lookup.identity.display_name())
-					.strong()
+					.family(crate::theme::semibold())
 					.size(18.0),
 			);
 			ui.label(RichText::new(format!("Release {}", lookup.tag)).color(theme::muted(ui)));
@@ -88,11 +88,14 @@ impl AddView {
 			ui.add_space(6.0);
 
 			ScrollArea::vertical()
-				.auto_shrink([false, false])
+				.max_height(260.0)
+				.auto_shrink([false, true])
 				.show(ui, |ui| {
 					for option in &lookup.options {
 						ui.horizontal_wrapped(|ui| {
-							ui.label(RichText::new(&option.asset.name).strong());
+							ui.label(
+								RichText::new(&option.asset.name).family(crate::theme::semibold()),
+							);
 							ui.label(
 								RichText::new(bytes(option.asset.size)).color(theme::muted(ui)),
 							);

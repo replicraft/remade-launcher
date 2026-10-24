@@ -56,23 +56,47 @@ impl ExploreView {
 		}
 	}
 
-	pub(crate) fn show(&mut self, ui: &mut Ui, commands: &Commands) -> Option<Action> {
+	/// Shows the catalog. `query` is the sidebar's search text, and `installed`
+	/// the installed apps that match it, so one search covers both.
+	pub(crate) fn show(
+		&mut self,
+		ui: &mut Ui,
+		commands: &Commands,
+		query: &str,
+		installed: &[launcher_core::InstalledApp],
+	) -> Option<Action> {
 		let mut action = None;
 		let state = commands.catalog_state();
+
+		query.clone_into(&mut self.query);
 
 		self.search_if_changed(&state, commands);
 
 		page(ui, "Explore", |ui| {
 			banner(ui, &state, commands);
 
-			ui.horizontal(|ui| {
-				let field = egui::TextEdit::singleline(&mut self.query)
-					.hint_text("Search apps")
-					.desired_width(320.0);
+			ui.checkbox(&mut self.compatible_only, "Only apps for this device");
 
-				ui.add(field);
-				ui.checkbox(&mut self.compatible_only, "Only apps for this device");
-			});
+			if !installed.is_empty() {
+				ui.label(
+					RichText::new("In your Library")
+						.size(15.0)
+						.family(crate::theme::semibold()),
+				);
+
+				for app in installed {
+					ui.horizontal(|ui| {
+						ui.label(&app.name);
+						ui.label(RichText::new(&app.version).color(theme::muted(ui)));
+
+						if ui.small_button("Show").clicked() {
+							action = Some(Action::ShowInLibrary);
+						}
+					});
+				}
+
+				ui.separator();
+			}
 
 			if state.catalog.is_none() {
 				return;
@@ -207,7 +231,11 @@ fn card(ui: &mut Ui, row: &ExploreRow, selected: bool) -> bool {
 			ui.set_height(ROW_HEIGHT - 20.0);
 
 			ui.horizontal(|ui| {
-				ui.label(RichText::new(&row.name).strong().size(16.0));
+				ui.label(
+					RichText::new(&row.name)
+						.family(crate::theme::semibold())
+						.size(16.0),
+				);
 				// The signed repository identity sits beside the name so an
 				// unsigned description can never stand in for it.
 				ui.label(
@@ -290,7 +318,11 @@ fn detail(
 			}
 
 			ui.add_space(12.0);
-			ui.label(RichText::new("Packages").strong().size(16.0));
+			ui.label(
+				RichText::new("Packages")
+					.family(crate::theme::semibold())
+					.size(16.0),
+			);
 
 			if project.variants.is_empty() {
 				ui.label(RichText::new("This app has no managed package.").color(theme::muted(ui)));

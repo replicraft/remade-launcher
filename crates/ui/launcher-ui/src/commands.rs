@@ -11,8 +11,8 @@ use std::sync::mpsc::Sender;
 use launcher_background::control::{self, BackgroundStatus};
 use launcher_core::{
 	CatalogState, CustomPreparation, Engine, EngineEvent, ExploreQuery, ExploreRow, InstalledApp,
-	LaunchOutcome, ModeConsent, Preparation, Ready, RemovalReport, UpdateSettings, UpdateStatus,
-	custom_plan,
+	LaunchOutcome, ModeConsent, OperationSummary, OperatorUpdate, Preparation, Ready,
+	RemovalReport, UpdateSettings, UpdateStatus, custom_plan,
 };
 use launcher_model::{InstallationId, MinimumAge, ThemePreference, UpdateMode};
 use launcher_resolver::Consent;
@@ -46,6 +46,17 @@ pub(crate) enum Message {
 	Policies(HashMap<InstallationId, AppPolicy>),
 	/// A sentence about what an automatic update pass did.
 	Notice(String),
+	History(Vec<OperationSummary>),
+	/// Release notes for one app's available version.
+	Notes {
+		app: String,
+		version: String,
+		text: String,
+	},
+	/// Updates that can be applied together, awaiting the person's go-ahead.
+	UpdatesPlanned(Vec<OperatorUpdate>),
+	/// Preferences are back to their defaults.
+	Restored(Box<UpdateSettings>, Box<BackgroundStatus>),
 }
 
 /// A handle for submitting commands.
@@ -232,6 +243,76 @@ impl Commands {
 					Message::Notice(text)
 				}
 			})
+		});
+	}
+
+	pub(crate) fn refresh_history(&self) {
+		self.spawn_result(|engine| async move { engine.history(30).await.map(Message::History) });
+	}
+
+	pub(crate) fn release_notes(&self, slug: String, tag: String, app: String) {
+		self.spawn_result(move |engine| async move {
+			let notes = engine.changelog(&slug, Some(&tag)).await?;
+
+			Ok(Message::Notes {
+				app,
+				version: notes.version,
+				text: notes.text,
+			})
+		});
+	}
+
+	/// Looks up what updating everything would do. Applies nothing.
+	pub(crate) fn plan_all_updates(&self) {
+		self.spawn_result(|engine| async move {
+			engine
+				.plan_operator_updates(None)
+				.await
+				.map(Message::UpdatesPlanned)
+		});
+	}
+
+	/// Applies the updates the person just reviewed, one after another.
+	pub(crate) fn apply_updates(&self, updates: Vec<OperatorUpdate>) {
+		self.spawn_result(|engine| async move {
+			for update in updates {
+				let Some(ready) = update.ready else {
+					continue;
+				};
+
+				let consent = Consent {
+					source_shown: ready.source_display.clone(),
+					acknowledged_unreviewed: false,
+				};
+
+				if let Err(error) = engine
+					.update(update.status.installation, &ready, &consent)
+					.await
+				{
+					tracing::warn!(%error, "an update in a batch failed");
+				}
+			}
+
+			engine.installed().await.map(Message::Installed)
+		});
+	}
+
+	/// Resets preferences. A background updater registered with the system is
+	/// removed first, so no login item is left behind.
+	pub(crate) fn restore_defaults(&self) {
+		self.spawn_result(|engine| async move {
+			let consent = ModeConsent {
+				actor: "desktop".into(),
+				acknowledged_risks: false,
+			};
+
+			let _ = control::apply_mode(&engine, UpdateMode::Manual, &consent, None).await;
+			engine.restore_defaults().await?;
+
+			let settings = engine.update_settings().await;
+			let background = control::status(&engine).await;
+
+			Ok(Message::Restored(Box::new(settings), Box::new(background)))
 		});
 	}
 

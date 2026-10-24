@@ -37,17 +37,11 @@ pub(crate) fn library(ui: &mut Ui, view: &LibraryView<'_>) -> Option<Action> {
 			return;
 		}
 
-		ui.horizontal(|ui| {
-			if ui.button("Check for updates").clicked() {
-				action = Some(Action::CheckUpdates);
-			}
-
-			ui.label(
-				RichText::new(view.mode.label())
-					.small()
-					.color(theme::muted(ui)),
-			);
-		});
+		ui.label(
+			RichText::new(view.mode.label())
+				.small()
+				.color(theme::muted(ui)),
+		);
 
 		ScrollArea::vertical()
 			.auto_shrink([false, false])
@@ -117,7 +111,11 @@ fn row(ui: &mut Ui, app: &InstalledApp, view: &LibraryView<'_>) -> Option<Action
 			ui.set_width(ui.available_width());
 
 			ui.horizontal(|ui| {
-				ui.label(RichText::new(&app.name).strong().size(16.0));
+				ui.label(
+					RichText::new(&app.name)
+						.family(crate::theme::semibold())
+						.size(16.0),
+				);
 				ui.label(RichText::new(&app.version).color(theme::muted(ui)));
 				ui.label(
 					RichText::new(&app.repository)

@@ -2,19 +2,22 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 
-use egui::{Context, Panel, TextureHandle, TextureOptions};
+use egui::{Context, Key, Modifiers, Panel, TextureHandle, TextureOptions};
 use launcher_background::control::BackgroundStatus;
 use launcher_core::{
-	Engine, EngineEvent, InstalledApp, Preparation, Stage, UpdateSettings, UpdateStatus,
+	Engine, EngineEvent, InstalledApp, OperationSummary, Preparation, Stage, UpdateSettings,
+	UpdateStatus,
 };
 use launcher_model::{InstallationId, ThemePreference, UpdateMode};
 use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
 
 use crate::commands::{Commands, Message};
+use crate::screens::navigation::{self, NavAction, Sidebar};
 use crate::screens::sheet::{self, Outcome, Sheet};
 use crate::screens::{
 	self, Action, AddView, ExploreView, LibraryView, Screen, SettingsAction, SettingsView,
+	UpdatesView,
 };
 use crate::{branding, theme};
 
@@ -27,6 +30,13 @@ pub(crate) struct LauncherApp {
 	screen: Screen,
 	explore: ExploreView,
 	add: AddView,
+	/// The Add from GitHub dialog is showing.
+	adding: bool,
+	/// What the sidebar search holds.
+	search: String,
+	history: Vec<OperationSummary>,
+	/// An update check has finished this session.
+	checked: bool,
 	installed: Vec<InstalledApp>,
 	progress: HashMap<InstallationId, screens::library::Progress>,
 	sheet: Option<Sheet>,
@@ -38,8 +48,6 @@ pub(crate) struct LauncherApp {
 	background: Option<BackgroundStatus>,
 	statuses: HashMap<InstallationId, UpdateStatus>,
 	policies: HashMap<InstallationId, AppPolicy>,
-	custom_age: String,
-	age_error: Option<String>,
 }
 
 impl LauncherApp {
@@ -65,6 +73,10 @@ impl LauncherApp {
 			screen: Screen::Explore,
 			explore: ExploreView::new(),
 			add: AddView::default(),
+			adding: false,
+			search: String::new(),
+			history: Vec::new(),
+			checked: false,
 			installed: Vec::new(),
 			progress: HashMap::new(),
 			sheet: None,
@@ -78,8 +90,6 @@ impl LauncherApp {
 			background: None,
 			statuses: HashMap::new(),
 			policies: HashMap::new(),
-			custom_age: String::new(),
-			age_error: None,
 		}
 	}
 
@@ -117,12 +127,47 @@ impl LauncherApp {
 					self.background = Some(*background);
 				}
 				Message::Statuses(statuses) => {
+					self.checked = true;
 					self.statuses = statuses
 						.into_iter()
 						.map(|status| (status.installation, status))
 						.collect();
 				}
 				Message::Policies(policies) => self.policies = policies,
+				Message::History(history) => self.history = history,
+				Message::Notes { app, version, text } => {
+					self.sheet = Some(Sheet::Notes { app, version, text });
+				}
+				Message::UpdatesPlanned(planned) => {
+					let ready: Vec<_> = planned
+						.into_iter()
+						.filter(|item| item.ready.is_some())
+						.collect();
+
+					self.sheet =
+						Some(if ready.is_empty() {
+							Sheet::Message {
+			title: "Nothing to update".into(),
+			lines: vec!["No installed app has an update that can be installed right now.".into()],
+		}
+						} else {
+							Sheet::ConfirmUpdateAll(ready)
+						});
+				}
+				Message::Restored(settings, background) => {
+					self.update_settings = *settings;
+					self.background = Some(*background);
+					self.policies.clear();
+					self.statuses.clear();
+					self.change_theme(&self.context.clone(), ThemePreference::default());
+					self.notice = None;
+					self.sheet = Some(Sheet::Message {
+						title: "Defaults restored".into(),
+						lines: vec![
+							"Appearance and update settings are back to their defaults.".into(),
+						],
+					});
+				}
 				Message::Notice(text) => {
 					if !text.is_empty() {
 						self.notice = Some(text);
@@ -175,6 +220,7 @@ impl LauncherApp {
 				// What was true before this operation no longer is.
 				self.statuses.remove(&event.installation);
 				self.commands.refresh_installed();
+				self.commands.refresh_history();
 
 				if let Stage::Failed { message } | Stage::RecoveryRequired { message } =
 					&event.stage
@@ -208,6 +254,18 @@ impl LauncherApp {
 			Action::SetPolicy(id, policy) => self.commands.set_app_policy(id, policy),
 			Action::Pin(id, pinned) => self.commands.set_pinned(id, pinned),
 			Action::CheckUpdates => self.commands.check_updates(),
+			Action::UpdateAll => {
+				self.sheet = Some(Sheet::Working("Checking what can be updated…".into()));
+				self.commands.plan_all_updates();
+			}
+			Action::ReleaseNotes { slug, tag, app } => {
+				self.sheet = Some(Sheet::Working("Loading release notes…".into()));
+				self.commands.release_notes(slug, tag, app);
+			}
+			Action::ShowInLibrary => {
+				self.search.clear();
+				self.screen = Screen::Library;
+			}
 			Action::Uninstall(app) => self.sheet = Some(Sheet::ConfirmUninstall(app)),
 			Action::LookUp(url) => self.commands.look_up_custom(url),
 			Action::ChooseFile {
@@ -244,6 +302,73 @@ impl LauncherApp {
 				self.sheet = None;
 				self.commands.set_update_mode(mode, acknowledged);
 			}
+			Outcome::UpdateAll(updates) => {
+				self.sheet = None;
+				self.commands.apply_updates(updates);
+			}
+			Outcome::RestoreDefaults => {
+				self.sheet = None;
+				self.commands.restore_defaults();
+			}
+		}
+	}
+
+	/// Installed apps whose name or repository contains the search text.
+	fn installed_matches(&self) -> Vec<InstalledApp> {
+		let needle = self.search.trim().to_lowercase();
+
+		if needle.is_empty() {
+			return Vec::new();
+		}
+
+		self.installed
+			.iter()
+			.filter(|app| {
+				app.name.to_lowercase().contains(&needle)
+					|| app.repository.to_lowercase().contains(&needle)
+			})
+			.cloned()
+			.collect()
+	}
+
+	fn go(&mut self, screen: Screen) {
+		if screen == Screen::Updates {
+			self.commands.refresh_history();
+		}
+
+		self.screen = screen;
+	}
+
+	/// The Add from GitHub dialog.
+	fn show_add(&mut self, context: &Context) {
+		if !self.adding {
+			return;
+		}
+
+		let mut action = None;
+		let mut close = false;
+
+		let response = egui::Modal::new(egui::Id::unique("add-dialog")).show(context, |ui| {
+			ui.set_width(520.0);
+
+			action = self.add.show(ui);
+
+			if ui.button("Close").clicked() {
+				close = true;
+			}
+		});
+
+		if close || response.should_close() {
+			self.adding = false;
+		}
+
+		if let Some(action) = action {
+			// Choosing a file hands over to the review sheet.
+			if matches!(action, Action::ChooseFile { .. }) {
+				self.adding = false;
+			}
+
+			self.perform(action);
 		}
 	}
 
@@ -274,14 +399,46 @@ impl eframe::App for LauncherApp {
 
 		self.drain_messages();
 
+		// Cmd/Ctrl+K jumps to the search field from anywhere.
+		if context.input_mut(|input| input.consume_key(Modifiers::COMMAND, Key::K)) {
+			context.memory_mut(|memory| memory.request_focus(navigation::search_id()));
+		}
+
+		let waiting = screens::updates::available(&self.statuses).len();
+		let mut go = None;
+
+		let sidebar_fill = theme::palette_for(&context).sidebar;
+
 		Panel::left("navigation")
+			.frame(egui::Frame::new().fill(sidebar_fill))
 			.resizable(false)
 			.exact_size(theme::SIDEBAR_WIDTH)
 			.show(ui, |ui| {
-				screens::navigation(ui, &self.logo, &mut self.screen)
+				let sidebar = Sidebar {
+					logo: &self.logo,
+					current: self.screen,
+					updates: waiting,
+					search: &mut self.search,
+				};
+
+				match screens::navigation(ui, sidebar) {
+					NavAction::None => {}
+					NavAction::Go(screen) => go = Some(screen),
+					NavAction::AddFromGithub => self.adding = true,
+					NavAction::Searched => {
+						if !self.search.trim().is_empty() {
+							go = Some(Screen::Explore);
+						}
+					}
+				}
 			});
 
+		if let Some(screen) = go {
+			self.go(screen);
+		}
+
 		let mut action = None;
+		let matches = self.installed_matches();
 
 		egui::CentralPanel::default().show(ui, |ui| {
 			if let Some(notice) = self.notice.clone() {
@@ -295,7 +452,11 @@ impl eframe::App for LauncherApp {
 			}
 
 			match self.screen {
-				Screen::Explore => action = self.explore.show(ui, &self.commands),
+				Screen::Explore => {
+					action = self
+						.explore
+						.show(ui, &self.commands, &self.search, &matches);
+				}
 				Screen::Library => {
 					action = screens::library(
 						ui,
@@ -309,14 +470,23 @@ impl eframe::App for LauncherApp {
 						},
 					);
 				}
-				Screen::Add => action = self.add.show(ui),
+				Screen::Updates => {
+					action = screens::updates(
+						ui,
+						&UpdatesView {
+							statuses: &self.statuses,
+							busy: &self.progress,
+							history: &self.history,
+							mode: self.update_settings.mode,
+							checked: self.checked,
+						},
+					);
+				}
 				Screen::Settings => {
 					let view = SettingsView {
 						theme: self.theme,
 						updates: self.update_settings,
 						background: self.background.as_ref(),
-						custom_age: &mut self.custom_age,
-						age_error: self.age_error.as_deref(),
 					};
 
 					match screens::settings(ui, view) {
@@ -324,11 +494,8 @@ impl eframe::App for LauncherApp {
 						SettingsAction::Theme(theme) => self.change_theme(&context, theme),
 						SettingsAction::CopyDiagnostics => self.commands.diagnostics(),
 						SettingsAction::PickMode(mode) => self.pick_mode(mode),
-						SettingsAction::SetMinimumAge(age) => {
-							self.age_error = None;
-							self.commands.set_minimum_age(age);
-						}
-						SettingsAction::BadAge(why) => self.age_error = Some(why),
+						SettingsAction::SetMinimumAge(age) => self.commands.set_minimum_age(age),
+						SettingsAction::RestoreDefaults => self.sheet = Some(Sheet::ConfirmRestore),
 						SettingsAction::StopBackground => self.commands.stop_background_updates(),
 					}
 				}
@@ -339,6 +506,7 @@ impl eframe::App for LauncherApp {
 			self.perform(action);
 		}
 
+		self.show_add(&context);
 		self.show_sheet(&context);
 	}
 }

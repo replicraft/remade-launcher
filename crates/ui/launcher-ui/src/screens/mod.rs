@@ -1,17 +1,19 @@
 //! The screens. Each one is a plain function or small struct over `egui::Ui`.
 
-mod add;
+pub(crate) mod add;
 mod explore;
 pub(crate) mod library;
-mod navigation;
+pub(crate) mod navigation;
 mod settings;
 pub(crate) mod sheet;
+pub(crate) mod updates;
 
 pub(crate) use add::AddView;
 pub(crate) use explore::ExploreView;
 pub(crate) use library::{LibraryView, library};
 pub(crate) use navigation::navigation;
 pub(crate) use settings::{SettingsAction, SettingsView, settings};
+pub(crate) use updates::{UpdatesView, updates};
 
 use egui::{Frame, Margin, RichText, Ui};
 use launcher_core::{CustomPreparation, InstalledApp};
@@ -23,18 +25,16 @@ use crate::theme;
 pub(crate) enum Screen {
 	Explore,
 	Library,
-	Add,
+	Updates,
 	Settings,
 }
 
 impl Screen {
-	pub(crate) const ALL: [Self; 4] = [Self::Explore, Self::Library, Self::Add, Self::Settings];
-
 	pub(crate) const fn title(self) -> &'static str {
 		match self {
 			Self::Explore => "Explore",
 			Self::Library => "Library",
-			Self::Add => "Add from GitHub",
+			Self::Updates => "Updates",
 			Self::Settings => "Settings",
 		}
 	}
@@ -59,6 +59,14 @@ pub(crate) enum Action {
 	Pin(InstallationId, bool),
 	/// A read-only look for updates to everything installed.
 	CheckUpdates,
+	UpdateAll,
+	ReleaseNotes {
+		slug: String,
+		tag: String,
+		app: String,
+	},
+	/// Show an installed app in the Library.
+	ShowInLibrary,
 }
 
 /// A screen title with consistent margins.
@@ -77,6 +85,10 @@ fn page(ui: &mut Ui, title: &str, contents: impl FnOnce(&mut Ui)) {
 /// pretends something is loading.
 fn unavailable(ui: &mut Ui, headline: &str, explanation: &str) {
 	ui.add_space(24.0);
-	ui.label(RichText::new(headline).size(18.0).strong());
+	ui.label(
+		RichText::new(headline)
+			.size(18.0)
+			.family(crate::theme::semibold()),
+	);
 	ui.label(RichText::new(explanation).color(theme::muted(ui)));
 }
