@@ -35,7 +35,7 @@ pub use collection::{
 	Collection, CollectionProblem, Entry as CollectionEntry, EntryOutcome, EntryPreview,
 	collection_max_bytes,
 };
-pub use config::{CatalogConfig, EngineConfig};
+pub use config::{CatalogConfig, EngineConfig, UpdatesFeedConfig};
 pub use credentials::{Keychain, MemorySecret, SecretError, SecretStore, TokenState};
 pub use download::DownloadedFile;
 pub use engine::Engine;

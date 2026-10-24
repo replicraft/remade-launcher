@@ -41,6 +41,8 @@ pub struct Engine {
 	pub(crate) releases: ReleaseConfig,
 	/// One launcher download at a time.
 	pub(crate) launcher_update: tokio::sync::Mutex<()>,
+	/// The website's daily release snapshot, once it has been read.
+	pub(crate) observations: crate::updates::ObservationsCache,
 }
 
 impl Engine {
@@ -119,6 +121,7 @@ impl Engine {
 			events,
 			releases: config.releases,
 			launcher_update: tokio::sync::Mutex::new(()),
+			observations: crate::updates::ObservationsCache::default(),
 		})
 	}
 

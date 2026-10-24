@@ -211,6 +211,7 @@ async fn world() -> World {
 			envelope_url: url,
 			registry: Arc::new(registry),
 			supported_capabilities: &["safe-archive-v1"],
+			updates_feed: None,
 		},
 		artifacts: Some(artifacts.clone()),
 		secrets: Some(Arc::new(crate::MemorySecret::default())),
@@ -1866,4 +1867,170 @@ async fn a_download_that_does_not_match_its_checksum_leaves_nothing() {
 		0,
 		"neither the file nor a partial one remains"
 	);
+}
+
+fn observed_release(id: u64, tag: &str, assets: &[u64]) -> launcher_catalog::ObservedRelease {
+	launcher_catalog::ObservedRelease {
+		id,
+		tag: tag.to_owned(),
+		prerelease: tag.contains('-'),
+		published_at: Some("2030-01-01T00:00:00Z".into()),
+		asset_ids: assets.to_vec(),
+	}
+}
+
+/// What the website's daily note says about the sample app.
+fn note_of(
+	newest: launcher_catalog::ObservedRelease,
+	newest_stable: Option<launcher_catalog::ObservedRelease>,
+	owner_id: &str,
+	valid_until: &str,
+) -> launcher_catalog::VerifiedObservations {
+	launcher_catalog::VerifiedObservations::for_test(
+		vec![(
+			"sample-editor".to_owned(),
+			launcher_catalog::ObservedProject {
+				repository_id: "100001".into(),
+				owner_id: owner_id.into(),
+				newest: Some(newest),
+				newest_stable,
+			},
+		)],
+		at(valid_until),
+	)
+}
+
+/// The note for the installed release (ID 1, file 10) being the newest.
+fn current_note(owner_id: &str, valid_until: &str) -> launcher_catalog::VerifiedObservations {
+	let installed = observed_release(1, "v1.0.0", &[10]);
+
+	note_of(installed.clone(), Some(installed), owner_id, valid_until)
+}
+
+#[tokio::test]
+async fn a_note_that_says_current_answers_without_asking_github() {
+	let (world, _) = world_with_update_published(MATURE).await;
+
+	// GitHub is unreachable, which would normally make the check fail.
+	*world.github.down.lock().unwrap() = true;
+	world
+		.engine
+		.observations
+		.set_for_test(current_note("100002", "2099-01-01T00:00:00Z"));
+
+	let found = statuses(&world, NOW).await;
+
+	assert!(
+		matches!(found[0].state, UpdateState::UpToDate),
+		"{:?}",
+		found[0].state
+	);
+}
+
+#[tokio::test]
+async fn a_note_never_offers_an_update_so_a_newer_release_is_looked_up_live() {
+	let (world, _) = world_with_update_published(MATURE).await;
+	let newer = observed_release(2, "v1.1.0", &[20]);
+
+	world.engine.observations.set_for_test(note_of(
+		newer.clone(),
+		Some(newer),
+		"100002",
+		"2099-01-01T00:00:00Z",
+	));
+
+	// With GitHub down, "an update exists" is not taken from the note.
+	*world.github.down.lock().unwrap() = true;
+
+	let found = statuses(&world, NOW).await;
+
+	assert!(
+		matches!(found[0].state, UpdateState::CheckFailed(_)),
+		"{:?}",
+		found[0].state
+	);
+
+	// With GitHub up, the offer comes from GitHub's own release.
+	*world.github.down.lock().unwrap() = false;
+
+	let found = statuses(&world, NOW).await;
+
+	assert!(matches!(found[0].state, UpdateState::Available));
+	assert_eq!(found[0].available.as_ref().unwrap().version, "v1.1.0");
+}
+
+#[tokio::test]
+async fn a_replaced_file_or_a_doubtful_note_means_a_live_look() {
+	let installed = observed_release(1, "v1.0.0", &[10]);
+	let replaced = observed_release(1, "v1.0.0", &[11]);
+
+	let notes = [
+		// The installed file is no longer in the release.
+		note_of(
+			replaced.clone(),
+			Some(replaced),
+			"100002",
+			"2099-01-01T00:00:00Z",
+		),
+		// The note is about another repository than the catalog approved.
+		current_note("999", "2099-01-01T00:00:00Z"),
+		// The note has expired.
+		current_note("100002", "2000-01-01T00:00:00Z"),
+		// The note has no stable release to compare with.
+		note_of(installed, None, "100002", "2099-01-01T00:00:00Z"),
+	];
+
+	for (index, note) in notes.into_iter().enumerate() {
+		let (world, _) = world_with_update_published(MATURE).await;
+
+		*world.github.down.lock().unwrap() = true;
+		world.engine.observations.set_for_test(note);
+
+		let found = statuses(&world, NOW).await;
+
+		assert!(
+			matches!(found[0].state, UpdateState::CheckFailed(_)),
+			"case {index}: {:?}",
+			found[0].state
+		);
+	}
+}
+
+#[tokio::test]
+async fn someone_who_follows_pre_releases_is_not_told_up_to_date_by_the_stable_line() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	let installed = observed_release(1, "v1.0.0", &[10]);
+	let beta = observed_release(3, "v2.0.0-rc.1", &[30]);
+
+	*world.github.down.lock().unwrap() = true;
+	world.engine.observations.set_for_test(note_of(
+		beta,
+		Some(installed),
+		"100002",
+		"2099-01-01T00:00:00Z",
+	));
+
+	// The stable line is current, so the default check is satisfied.
+	assert!(matches!(
+		statuses(&world, NOW).await[0].state,
+		UpdateState::UpToDate
+	));
+
+	world
+		.engine
+		.set_app_update_policy(
+			id,
+			AppPolicy {
+				allow_prerelease: true,
+				..AppPolicy::default()
+			},
+		)
+		.await
+		.unwrap();
+
+	// A newer pre-release exists, so an opted-in app has to look.
+	assert!(matches!(
+		statuses(&world, NOW).await[0].state,
+		UpdateState::CheckFailed(_)
+	));
 }

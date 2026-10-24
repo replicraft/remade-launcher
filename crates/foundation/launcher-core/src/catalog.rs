@@ -491,6 +491,7 @@ mod tests {
 			envelope_url: url,
 			registry: Arc::new(registry),
 			supported_capabilities: &["safe-archive-v1"],
+			updates_feed: None,
 		}
 	}
 

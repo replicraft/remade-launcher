@@ -14,6 +14,7 @@
 mod envelope;
 mod error;
 mod manifest;
+mod observations;
 mod registry;
 mod release;
 mod semantic;
@@ -33,6 +34,10 @@ pub use manifest::{
 	InstallScope, Links, Manifest, Maturity, PackageFormat, Project, ProjectKind, ProjectStatus,
 	Provider, PublisherFormat, PublisherPolicy, ReleasePolicy, Runtime, SignatureAssets, Source,
 	State, Tracking, Variant, Verification, VerificationLevel, VersionStrategy,
+};
+pub use observations::{
+	MAX_OBSERVATIONS_BYTES, ObservationsContext, ObservedProject, ObservedRelease,
+	VerifiedObservations, verify_observations,
 };
 pub use registry::KeyRegistry;
 pub use release::{

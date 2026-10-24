@@ -39,6 +39,22 @@ pinned, paused, or allowed pre-releases. Apps you added yourself are never
 updated unattended. Every skip has a stable reason code, shown by
 `remade updates check` and `remade updates decisions`.
 
+## Checking apps for updates without GitHub's limit
+
+GitHub allows 60 anonymous requests an hour, and checking a hundred apps would
+spend them all. The website writes one small signed file a day,
+`https://remade.wiki/data/launcher-catalog-updates-daily.json` (with a `.sig`
+beside it), naming the newest release of every catalog app. A launcher reads
+that file first: if an app's newest release is the one installed, with the same
+file, nothing newer exists and GitHub is not asked.
+
+The file is only ever a hint that nothing is newer. Anything that could be
+installed is looked up live from GitHub and checked against the signed
+catalog, so a stale or hostile file can delay an update for the days it stays
+valid (at most 14) and cannot cause an install. It is signed with the catalog
+key so it expires and an older one cannot replace a newer one. If it is
+missing, expired, or refused, checks go to GitHub as before.
+
 ## Launcher updates
 
 The launcher keeps itself current under a setting of its own, apart from how

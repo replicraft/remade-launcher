@@ -7,6 +7,7 @@
 
 mod cycle;
 mod decide;
+mod feed;
 mod launch;
 mod outlook;
 mod settings;
@@ -14,6 +15,7 @@ mod status;
 
 pub use cycle::{CycleOutcome, CycleReport, CycleResult, Trigger};
 pub use decide::{Decision, Initiator, SkipReason, decide, effective_age};
+pub(crate) use feed::ObservationsCache;
 pub use launch::LaunchOutcome;
 pub use outlook::Outlook;
 pub use settings::{ModeConsent, UpdateSettings};

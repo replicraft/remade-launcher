@@ -25,7 +25,73 @@ pub enum Outlook {
 }
 
 impl Engine {
+	/// What an installed app's update looks like right now.
+	///
+	/// The website's daily note is tried first, and it can only ever say "up
+	/// to date", which saves the GitHub requests. Anything else is looked up
+	/// live, so what could be installed always comes from GitHub itself.
 	pub(crate) async fn outlook_with<T: Transport>(
+		&self,
+		provider: &GithubProvider<T>,
+		record: &InstallationRecord,
+		policy: &AppPolicy,
+		host: Option<HostTarget>,
+		now: i64,
+	) -> Outlook {
+		if self.snapshot_says_current(record, policy).await {
+			return Outlook::UpToDate;
+		}
+
+		self.outlook_on(provider, record, policy, host, now).await
+	}
+
+	/// Whether the daily note proves nothing newer exists: the newest release
+	/// it lists is the one that is installed, with the same file. It never
+	/// proves anything else, and any doubt means "no".
+	async fn snapshot_says_current(&self, record: &InstallationRecord, policy: &AppPolicy) -> bool {
+		let Some(slug) = record
+			.catalog_slug
+			.as_deref()
+			.filter(|_| record.origin == "curated")
+		else {
+			return false;
+		};
+		let Some(snapshot) = self.observations().await else {
+			return false;
+		};
+		let Some(observed) = snapshot.project(slug) else {
+			return false;
+		};
+		let catalog = self.catalog().state().catalog.clone();
+		let Some(project) = catalog.as_ref().and_then(|catalog| catalog.project(slug)) else {
+			return false;
+		};
+
+		// It has to describe the repository the catalog approved.
+		if observed.repository_id != project.source.repository_id
+			|| observed.owner_id != project.source.owner_id
+		{
+			return false;
+		}
+
+		// Someone who follows pre-releases, or an app that ships on a beta or
+		// nightly channel, cares about the newest release of any kind.
+		let follows_prereleases =
+			policy.allow_prerelease || project.release_policy.channel != Channel::Stable;
+		let newest = if follows_prereleases {
+			observed.newest.as_ref()
+		} else {
+			observed.newest_stable.as_ref()
+		};
+
+		// A replaced file gets a new ID, so the installed file has to still be
+		// among the release's files.
+		newest.is_some_and(|release| {
+			release.id == record.release_id && release.asset_ids.contains(&record.asset_id)
+		})
+	}
+
+	async fn outlook_on<T: Transport>(
 		&self,
 		provider: &GithubProvider<T>,
 		record: &InstallationRecord,

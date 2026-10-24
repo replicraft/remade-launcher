@@ -16,6 +16,16 @@ pub struct CatalogConfig {
 	pub envelope_url: Url,
 	pub registry: Arc<KeyRegistry>,
 	pub supported_capabilities: &'static [&'static str],
+	/// The website's daily snapshot of every catalog app's releases, signed
+	/// with the catalog key. `None` turns the shortcut off.
+	pub updates_feed: Option<UpdatesFeedConfig>,
+}
+
+/// Where the daily release snapshot is.
+#[derive(Clone)]
+pub struct UpdatesFeedConfig {
+	pub manifest_url: Url,
+	pub envelope_url: Url,
 }
 
 impl CatalogConfig {
@@ -32,6 +42,10 @@ impl CatalogConfig {
 			envelope_url: base("launcher-catalog.sig"),
 			registry: Arc::new(KeyRegistry::production()),
 			supported_capabilities: SUPPORTED_CAPABILITIES,
+			updates_feed: Some(UpdatesFeedConfig {
+				manifest_url: base("launcher-catalog-updates-daily.json"),
+				envelope_url: base("launcher-catalog-updates-daily.sig"),
+			}),
 		}
 	}
 }
