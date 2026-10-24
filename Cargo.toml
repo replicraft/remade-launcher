@@ -102,6 +102,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["a
 # Command line
 clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"
+comfy-table = "8"
 indicatif = "0.18"
 
 # Platform

@@ -283,17 +283,15 @@ mod tests {
 		scans: AtomicUsize,
 		saved: Mutex<SavedSchedule>,
 		outcomes: Mutex<Vec<CycleSummary>>,
-		clock: Arc<ManualClock>,
 	}
 
 	impl FakeBackend {
-		fn new(clock: Arc<ManualClock>) -> Arc<Self> {
+		fn new(_clock: Arc<ManualClock>) -> Arc<Self> {
 			Arc::new(Self {
 				mode_ok: AtomicBool::new(true),
 				scans: AtomicUsize::new(0),
 				saved: Mutex::new(SavedSchedule::default()),
 				outcomes: Mutex::new(Vec::new()),
-				clock,
 			})
 		}
 

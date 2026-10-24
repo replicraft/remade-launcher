@@ -1,27 +1,50 @@
-//! Showing install progress from engine events.
+//! Progress from engine events: a bar for people, NDJSON for programs.
 
 use std::io::IsTerminal;
 use std::sync::Arc;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use launcher_core::{Engine, EngineEvent, Stage};
+use serde_json::json;
 use tokio::task::JoinHandle;
+
+use crate::context::{Ctx, Format};
 
 pub(crate) struct Printer {
 	task: JoinHandle<()>,
 }
 
+/// The phase name used in NDJSON events.
+fn phase(stage: &Stage) -> &'static str {
+	match stage {
+		Stage::Accepted => "accepted",
+		Stage::Downloading { .. } => "downloading",
+		Stage::Verifying => "verifying",
+		Stage::Inspecting => "inspecting",
+		Stage::Extracting => "extracting",
+		Stage::Applying => "applying",
+		Stage::Removing => "removing",
+		Stage::Completed => "completed",
+		Stage::Failed { .. } => "failed",
+		Stage::RecoveryRequired { .. } => "recovery_required",
+	}
+}
+
 impl Printer {
-	/// Starts printing events for operations on this engine. Progress goes to
-	/// stderr, so stdout stays clean for results.
-	pub(crate) fn start(engine: &Arc<Engine>) -> Self {
+	/// Starts reporting events for operations on this engine.
+	pub(crate) fn start(engine: &Arc<Engine>, ctx: &Arc<Ctx>) -> Self {
 		let mut events = engine.subscribe();
-		let interactive = std::io::stderr().is_terminal();
+		let ctx = Arc::clone(ctx);
+		let draw_bar = ctx.format == Format::Text
+			&& !ctx.quiet
+			&& !ctx.no_progress
+			&& std::io::stderr().is_terminal();
+		let ndjson = ctx.format == Format::Ndjson;
 
 		let task = tokio::spawn(async move {
 			let bar = ProgressBar::hidden();
 
-			if interactive {
+			if draw_bar {
 				bar.set_draw_target(indicatif::ProgressDrawTarget::stderr());
 				bar.set_style(
 					ProgressStyle::with_template("{msg:<24} [{bar:30}] {bytes}/{total_bytes}")
@@ -30,43 +53,67 @@ impl Printer {
 				);
 			}
 
-			let mut last_label = "";
+			let mut last_phase = "";
+			let mut last_percent = u64::MAX;
 
 			while let Ok(event) = events.recv().await {
 				let EngineEvent::Operation(event) = event else {
 					continue;
 				};
 
-				let label = match &event.stage {
-					Stage::Accepted => "Starting",
-					Stage::Downloading { received, total } => {
-						if let Some(total) = total {
-							bar.set_length(*total);
+				let name = phase(&event.stage);
+
+				if let Stage::Downloading { received, total } = &event.stage {
+					bar.set_length(total.unwrap_or(0));
+					bar.set_position(*received);
+
+					let percent =
+						total.map_or(*received >> 22, |total| received * 100 / total.max(1));
+
+					if ndjson && percent != last_percent {
+						last_percent = percent;
+						ctx.event(json!({
+							"operation_id": event.operation.to_string(),
+							"installation_id": event.installation.to_string(),
+							"phase": name,
+							"current": received,
+							"total": total,
+						}));
+					}
+				} else if ndjson && name != last_phase {
+					let message = match &event.stage {
+						Stage::Failed { message } | Stage::RecoveryRequired { message } => {
+							Some(message.clone())
 						}
+						_ => None,
+					};
 
-						bar.set_position(*received);
-						"Downloading"
-					}
-					Stage::Verifying => "Checking the download",
-					Stage::Inspecting => "Inspecting the package",
-					Stage::Extracting => "Unpacking",
-					Stage::Applying => "Finishing",
-					Stage::Removing => "Removing",
-					Stage::Completed | Stage::Failed { .. } | Stage::RecoveryRequired { .. } => {
-						bar.finish_and_clear();
-
-						break;
-					}
-				};
-
-				bar.set_message(label);
-
-				// Without a terminal, print each stage once instead of redrawing.
-				if !interactive && label != last_label {
-					eprintln!("{label}…");
+					ctx.event(json!({
+						"operation_id": event.operation.to_string(),
+						"installation_id": event.installation.to_string(),
+						"phase": name,
+						"message": message,
+					}));
 				}
 
-				last_label = label;
+				if event.stage.is_terminal() {
+					bar.finish_and_clear();
+
+					break;
+				}
+
+				bar.set_message(name.to_owned());
+
+				// With no terminal, a person reading a log gets each phase once.
+				if ctx.format == Format::Text
+					&& !draw_bar && !ctx.quiet
+					&& !ctx.no_progress
+					&& name != last_phase
+				{
+					eprintln!("{name}…");
+				}
+
+				last_phase = name;
 			}
 		});
 
@@ -78,5 +125,36 @@ impl Printer {
 		// emitting one, stop waiting.
 		self.task.abort();
 		let _ = self.task.await;
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn every_stage_has_a_distinct_phase_name() {
+		let stages = [
+			Stage::Accepted,
+			Stage::Downloading {
+				received: 0,
+				total: None,
+			},
+			Stage::Verifying,
+			Stage::Inspecting,
+			Stage::Extracting,
+			Stage::Applying,
+			Stage::Removing,
+			Stage::Completed,
+			Stage::Failed {
+				message: String::new(),
+			},
+			Stage::RecoveryRequired {
+				message: String::new(),
+			},
+		];
+		let names: std::collections::HashSet<_> = stages.iter().map(phase).collect();
+
+		assert_eq!(names.len(), stages.len());
 	}
 }
