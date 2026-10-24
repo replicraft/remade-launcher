@@ -73,7 +73,6 @@ the exact `owner/repository`. `--no-input` makes any question an error.
 | `crates/platform/launcher-background` | Login registration, the updater's socket protocol, and its schedule |
 | `crates/infrastructure/launcher-storage` | SQLite: settings, trust state, receipts, journal |
 | `crates/infrastructure/launcher-net` | The HTTPS client |
-| `crates/ui/launcher-ui` | The egui interface |
 | `packaging/` | DMG, AppImage, Flatpak, deb, rpm, Windows, and CLI archives |
 
 ## Build and test

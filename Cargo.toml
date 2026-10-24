@@ -13,7 +13,6 @@ members = [
 	"crates/foundation/launcher-core",
 	"crates/infrastructure/launcher-storage",
 	"crates/infrastructure/launcher-net",
-	"crates/ui/launcher-ui",
 ]
 default-members = ["apps/remade-launcher"]
 
@@ -45,7 +44,6 @@ launcher-resolver = { path = "crates/domain/launcher-resolver" }
 launcher-model = { path = "crates/foundation/launcher-model" }
 launcher-net = { path = "crates/infrastructure/launcher-net" }
 launcher-storage = { path = "crates/infrastructure/launcher-storage" }
-launcher-ui = { path = "crates/ui/launcher-ui" }
 
 # Parallelism for CPU-bound work
 rayon = "1"

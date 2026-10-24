@@ -9,7 +9,7 @@ use launcher_model::{InstallationId, UpdateMode};
 use super::library::{Progress, status_text};
 use super::sheet::{bytes, when};
 use super::{Action, page};
-use crate::theme;
+use crate::ui::theme;
 
 pub(crate) struct UpdatesView<'a> {
 	pub(crate) statuses: &'a HashMap<InstallationId, UpdateStatus>,

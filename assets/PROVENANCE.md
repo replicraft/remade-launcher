@@ -35,4 +35,4 @@ desktop app, each with its license text beside it.
 The OFL permits bundling and redistribution with software. The font is not
 sold on its own, and its reserved font name is not used for a modified font.
 The icon codepoints used by the app are listed in
-`crates/ui/launcher-ui/src/icons.rs`.
+`apps/remade-launcher/src/ui/icons.rs`.

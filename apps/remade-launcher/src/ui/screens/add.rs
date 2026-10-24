@@ -9,7 +9,7 @@ use launcher_resolver::Fit;
 
 use super::sheet::bytes;
 use super::{Action, page};
-use crate::theme;
+use crate::ui::theme;
 
 #[derive(Default)]
 pub(crate) struct AddView {
@@ -67,7 +67,7 @@ impl AddView {
 			ui.add_space(8.0);
 			ui.label(
 				RichText::new(lookup.identity.display_name())
-					.family(crate::theme::semibold())
+					.family(crate::ui::theme::semibold())
 					.size(18.0),
 			);
 			ui.label(RichText::new(format!("Release {}", lookup.tag)).color(theme::muted(ui)));
@@ -94,7 +94,8 @@ impl AddView {
 					for option in &lookup.options {
 						ui.horizontal_wrapped(|ui| {
 							ui.label(
-								RichText::new(&option.asset.name).family(crate::theme::semibold()),
+								RichText::new(&option.asset.name)
+									.family(crate::ui::theme::semibold()),
 							);
 							ui.label(
 								RichText::new(bytes(option.asset.size)).color(theme::muted(ui)),

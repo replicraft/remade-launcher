@@ -19,7 +19,7 @@ use egui::{Frame, Margin, RichText, Ui};
 use launcher_core::{CustomPreparation, InstalledApp};
 use launcher_model::InstallationId;
 
-use crate::theme;
+use crate::ui::theme;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Screen {
@@ -67,8 +67,6 @@ pub(crate) enum Action {
 		tag: String,
 		app: String,
 	},
-	/// Show an installed app in the Library.
-	ShowInLibrary,
 }
 
 /// A screen title with consistent margins.
@@ -90,7 +88,7 @@ fn unavailable(ui: &mut Ui, headline: &str, explanation: &str) {
 	ui.label(
 		RichText::new(headline)
 			.size(18.0)
-			.family(crate::theme::semibold()),
+			.family(crate::ui::theme::semibold()),
 	);
 	ui.label(RichText::new(explanation).color(theme::muted(ui)));
 }

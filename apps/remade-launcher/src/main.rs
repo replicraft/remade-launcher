@@ -1,5 +1,7 @@
 //! Remade Launcher: the official launcher for unofficial apps.
 
+mod ui;
+
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -45,7 +47,7 @@ fn run() -> Result<(), String> {
 		.map(Arc::new)
 		.map_err(|error| error.to_string())?;
 
-	launcher_ui::run(Arc::clone(&engine), runtime.handle().clone())
+	ui::run(Arc::clone(&engine), runtime.handle().clone())
 		.map_err(|error| format!("the window failed: {error}"))?;
 
 	// The window is gone, so the interface has dropped its engine handle.

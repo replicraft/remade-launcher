@@ -9,7 +9,8 @@ use launcher_core::{InstalledApp, OperatorUpdate, Ready, RemovalReport};
 use launcher_model::{InstallationId, UpdateMode};
 use launcher_resolver::{Candidate, EvidenceLevel};
 
-use crate::theme;
+use crate::ui::components::danger_button;
+use crate::ui::theme;
 
 pub(crate) enum Sheet {
 	Working(String),
@@ -186,17 +187,14 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 			Sheet::ConfirmRestore => {
 				ui.heading("Restore defaults?");
 				ui.label("Appearance goes back to the system setting, updates go back to manual with a one-hour minimum age, and every app's own update settings are cleared. A background updater is turned off.");
-				ui.label(RichText::new("Your installed apps are not touched.").color(theme::muted(ui)));
+				ui.label(RichText::new("Your installed apps and their files are not touched. This cannot be undone.").color(theme::muted(ui)));
 
 				ui.horizontal(|ui| {
 					if ui.button("Cancel").clicked() {
 						outcome = Outcome::Close;
 					}
 
-					let danger = theme::palette(ui).danger;
-					let button = egui::Button::new(RichText::new("Restore defaults").color(egui::Color32::WHITE)).fill(danger);
-
-					if ui.add(button).clicked() {
+					if danger_button(ui, "Restore defaults").clicked() {
 						outcome = Outcome::RestoreDefaults;
 					}
 				});
@@ -256,7 +254,7 @@ fn review(
 	// The signed or looked-up repository identity, never a description.
 	ui.horizontal(|ui| {
 		ui.label(RichText::new("Source").color(theme::muted(ui)));
-		ui.label(RichText::new(&ready.source_display).family(crate::theme::semibold()));
+		ui.label(RichText::new(&ready.source_display).family(crate::ui::theme::semibold()));
 	});
 
 	if ready.unreviewed {

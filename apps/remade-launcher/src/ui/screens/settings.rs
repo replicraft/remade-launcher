@@ -5,7 +5,8 @@ use launcher_core::UpdateSettings;
 use launcher_model::{MinimumAge, ThemePreference, UpdateMode, product};
 
 use super::page;
-use crate::theme;
+use crate::ui::components::danger_button;
+use crate::ui::theme;
 
 pub(crate) enum SettingsAction {
 	None,
@@ -34,6 +35,8 @@ pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
 				appearance(ui, view.theme, &mut action);
 				ui.add_space(16.0);
 				updates(ui, &view.updates, view.background, &mut action);
+				ui.add_space(16.0);
+				support(ui, &mut action);
 				ui.add_space(16.0);
 				about(ui, &mut action);
 			});
@@ -199,9 +202,12 @@ fn background_status(
 	if let Some(info) = &status.running {
 		if let Some(at) = info.last_completed.or(info.last_attempted) {
 			ui.label(
-				RichText::new(format!("Last check: {}", crate::screens::sheet::when(at)))
-					.small()
-					.color(theme::muted(ui)),
+				RichText::new(format!(
+					"Last check: {}",
+					crate::ui::screens::sheet::when(at)
+				))
+				.small()
+				.color(theme::muted(ui)),
 			);
 		}
 
@@ -215,9 +221,12 @@ fn background_status(
 
 		if let Some(next) = info.next_due {
 			ui.label(
-				RichText::new(format!("Next check: {}", crate::screens::sheet::when(next)))
-					.small()
-					.color(theme::muted(ui)),
+				RichText::new(format!(
+					"Next check: {}",
+					crate::ui::screens::sheet::when(next)
+				))
+				.small()
+				.color(theme::muted(ui)),
 			);
 		}
 
@@ -227,9 +236,12 @@ fn background_status(
 	}
 }
 
-fn about(ui: &mut Ui, action: &mut SettingsAction) {
-	ui.label(RichText::new("About").size(18.0).family(theme::semibold()));
-
+fn support(ui: &mut Ui, action: &mut SettingsAction) {
+	ui.label(
+		RichText::new("Support")
+			.size(18.0)
+			.family(theme::semibold()),
+	);
 	ui.add_space(4.0);
 
 	if ui.button("Copy support report").clicked() {
@@ -243,43 +255,23 @@ fn about(ui: &mut Ui, action: &mut SettingsAction) {
 		.small()
 		.color(theme::muted(ui)),
 	);
+}
 
-	ui.add_space(20.0);
-	ui.separator();
+fn about(ui: &mut Ui, action: &mut SettingsAction) {
+	ui.label(RichText::new("About").size(18.0).family(theme::semibold()));
+	ui.add_space(4.0);
 
-	let palette = theme::palette(ui);
-
-	ui.horizontal(|ui| {
-		ui.vertical(|ui| {
-			ui.spacing_mut().item_spacing.y = 2.0;
-			ui.label(
-				RichText::new(format!("{} by Replicraft", product::NAME)).family(theme::semibold()),
-			);
-			ui.label(
-				RichText::new(format!("Version {}", product::VERSION))
-					.small()
-					.color(palette.text_muted),
-			);
-		});
-
-		ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-			let button = egui::Button::new(
-				RichText::new("Restore defaults")
-					.color(egui::Color32::WHITE)
-					.family(theme::semibold()),
-			)
-			.fill(palette.danger)
-			.stroke(egui::Stroke::NONE);
-
-			if ui.add(button).clicked() {
-				*action = SettingsAction::RestoreDefaults;
-			}
-		});
-	});
-
+	ui.label(RichText::new(format!("{} by Replicraft", product::NAME)).family(theme::semibold()));
 	ui.label(
-		RichText::new("Restore defaults resets appearance, update settings, and each app's update preferences. Your installed apps are not touched.")
+		RichText::new(format!("Version {}", product::VERSION))
 			.small()
-			.color(palette.text_muted),
+			.color(theme::muted(ui)),
 	);
+
+	ui.add_space(12.0);
+
+	// The consequences are spelled out in the confirmation that follows.
+	if danger_button(ui, "Restore defaults").clicked() {
+		*action = SettingsAction::RestoreDefaults;
+	}
 }

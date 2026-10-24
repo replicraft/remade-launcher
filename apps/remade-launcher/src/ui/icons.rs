@@ -11,6 +11,7 @@ pub(crate) const DOWNLOAD: &str = "\u{E20C}";
 pub(crate) const GITHUB: &str = "\u{E576}";
 pub(crate) const GEAR: &str = "\u{E270}";
 pub(crate) const SEARCH: &str = "\u{E30C}";
+pub(crate) const X: &str = "\u{E4F6}";
 
 #[cfg(test)]
 mod tests {
@@ -18,7 +19,7 @@ mod tests {
 
 	#[test]
 	fn every_icon_is_a_single_private_use_character() {
-		for icon in [COMPASS, BOOKS, DOWNLOAD, GITHUB, GEAR, SEARCH] {
+		for icon in [COMPASS, BOOKS, DOWNLOAD, GITHUB, GEAR, SEARCH, X] {
 			let mut characters = icon.chars();
 			let first = characters.next().unwrap();
 

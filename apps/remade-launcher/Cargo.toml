@@ -8,10 +8,17 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
+eframe.workspace = true
+egui.workspace = true
+image.workspace = true
+launcher-background.workspace = true
+launcher-catalog.workspace = true
 launcher-core.workspace = true
 launcher-model.workspace = true
-launcher-ui.workspace = true
+launcher-resolver.workspace = true
+launcher-storage.workspace = true
 mimalloc.workspace = true
+time.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

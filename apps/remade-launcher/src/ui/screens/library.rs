@@ -6,7 +6,8 @@ use launcher_model::{InstallationId, MinimumAge, UpdateMode};
 use launcher_storage::AppPolicy;
 
 use super::{Action, page, unavailable};
-use crate::theme;
+use crate::ui::components::search_bar;
+use crate::ui::theme;
 
 /// Live progress for an operation, from engine events.
 pub(crate) struct Progress {
@@ -23,9 +24,11 @@ pub(crate) struct LibraryView<'a> {
 	pub(crate) policies: &'a HashMap<InstallationId, AppPolicy>,
 	pub(crate) mode: UpdateMode,
 	pub(crate) global_age: MinimumAge,
+	/// What the search field holds. Narrows the list by name or repository.
+	pub(crate) search: &'a mut String,
 }
 
-pub(crate) fn library(ui: &mut Ui, view: &LibraryView<'_>) -> Option<Action> {
+pub(crate) fn library(ui: &mut Ui, view: &mut LibraryView<'_>) -> Option<Action> {
 	let mut action = None;
 
 	page(ui, "Library", |ui| {
@@ -45,10 +48,28 @@ pub(crate) fn library(ui: &mut Ui, view: &LibraryView<'_>) -> Option<Action> {
 				.color(theme::muted(ui)),
 		);
 
+		search_bar(ui, "Search your apps", view.search);
+		ui.add_space(6.0);
+
+		let needle = view.search.trim().to_lowercase();
+		let shown: Vec<&InstalledApp> = view
+			.apps
+			.iter()
+			.filter(|app| {
+				needle.is_empty()
+					|| app.name.to_lowercase().contains(&needle)
+					|| app.repository.to_lowercase().contains(&needle)
+			})
+			.collect();
+
+		if shown.is_empty() {
+			ui.label(RichText::new("No installed app matches.").color(theme::muted(ui)));
+		}
+
 		ScrollArea::vertical()
 			.auto_shrink([false, false])
 			.show(ui, |ui| {
-				for app in view.apps {
+				for app in shown {
 					action = action.take().or_else(|| row(ui, app, view));
 				}
 			});
@@ -115,7 +136,7 @@ fn row(ui: &mut Ui, app: &InstalledApp, view: &LibraryView<'_>) -> Option<Action
 			ui.horizontal(|ui| {
 				ui.label(
 					RichText::new(&app.name)
-						.family(crate::theme::semibold())
+						.family(crate::ui::theme::semibold())
 						.size(16.0),
 				);
 				ui.label(RichText::new(&app.version).color(theme::muted(ui)));

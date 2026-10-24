@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 
-use egui::{Context, Key, Modifiers, Panel, TextureHandle, TextureOptions};
+use egui::{Context, Panel, TextureHandle, TextureOptions};
 use launcher_background::control::BackgroundStatus;
 use launcher_core::{
 	Engine, EngineEvent, InstalledApp, OperationSummary, Preparation, Stage, UpdateSettings,
@@ -12,14 +12,14 @@ use launcher_model::{InstallationId, ThemePreference, UpdateMode};
 use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
 
-use crate::commands::{Commands, Message};
-use crate::screens::navigation::{self, NavAction, Sidebar};
-use crate::screens::sheet::{self, Outcome, Sheet};
-use crate::screens::{
+use crate::ui::commands::{Commands, Message};
+use crate::ui::screens::navigation::{self, NavAction, Sidebar};
+use crate::ui::screens::sheet::{self, Outcome, Sheet};
+use crate::ui::screens::{
 	self, Action, AddView, ExploreView, LibraryView, Screen, SettingsAction, SettingsView,
 	UpdatesView,
 };
-use crate::{branding, theme};
+use crate::ui::{branding, theme};
 
 pub(crate) struct LauncherApp {
 	commands: Commands,
@@ -32,8 +32,8 @@ pub(crate) struct LauncherApp {
 	add: AddView,
 	/// The Add from GitHub dialog is showing.
 	adding: bool,
-	/// What the sidebar search holds.
-	search: String,
+	/// What the Library's search field holds.
+	library_search: String,
 	history: Vec<OperationSummary>,
 	/// An update check has finished this session.
 	checked: bool,
@@ -74,7 +74,7 @@ impl LauncherApp {
 			explore: ExploreView::new(),
 			add: AddView::default(),
 			adding: false,
-			search: String::new(),
+			library_search: String::new(),
 			history: Vec::new(),
 			checked: false,
 			installed: Vec::new(),
@@ -269,10 +269,6 @@ impl LauncherApp {
 				self.sheet = Some(Sheet::Working("Loading release notes…".into()));
 				self.commands.release_notes(slug, tag, app);
 			}
-			Action::ShowInLibrary => {
-				self.search.clear();
-				self.screen = Screen::Library;
-			}
 			Action::Uninstall(app) => self.sheet = Some(Sheet::ConfirmUninstall(app)),
 			Action::LookUp(url) => self.commands.look_up_custom(url),
 			Action::ChooseFile {
@@ -318,24 +314,6 @@ impl LauncherApp {
 				self.commands.restore_defaults();
 			}
 		}
-	}
-
-	/// Installed apps whose name or repository contains the search text.
-	fn installed_matches(&self) -> Vec<InstalledApp> {
-		let needle = self.search.trim().to_lowercase();
-
-		if needle.is_empty() {
-			return Vec::new();
-		}
-
-		self.installed
-			.iter()
-			.filter(|app| {
-				app.name.to_lowercase().contains(&needle)
-					|| app.repository.to_lowercase().contains(&needle)
-			})
-			.cloned()
-			.collect()
 	}
 
 	fn go(&mut self, screen: Screen) {
@@ -406,15 +384,10 @@ impl eframe::App for LauncherApp {
 
 		self.drain_messages();
 
-		// Cmd/Ctrl+K jumps to the search field from anywhere.
-		if context.input_mut(|input| input.consume_key(Modifiers::COMMAND, Key::K)) {
-			context.memory_mut(|memory| memory.request_focus(navigation::search_id()));
-		}
-
 		let waiting = screens::updates::available(&self.statuses).len();
 		let mut go = None;
 
-		let sidebar_fill = theme::palette_for(&context).sidebar;
+		let sidebar_fill = navigation::fill(&context);
 
 		Panel::left("navigation")
 			.frame(egui::Frame::new().fill(sidebar_fill))
@@ -425,18 +398,12 @@ impl eframe::App for LauncherApp {
 					logo: &self.logo,
 					current: self.screen,
 					updates: waiting,
-					search: &mut self.search,
 				};
 
 				match screens::navigation(ui, sidebar) {
 					NavAction::None => {}
 					NavAction::Go(screen) => go = Some(screen),
 					NavAction::AddFromGithub => self.adding = true,
-					NavAction::Searched => {
-						if !self.search.trim().is_empty() {
-							go = Some(Screen::Explore);
-						}
-					}
 				}
 			});
 
@@ -445,7 +412,6 @@ impl eframe::App for LauncherApp {
 		}
 
 		let mut action = None;
-		let matches = self.installed_matches();
 
 		egui::CentralPanel::default().show(ui, |ui| {
 			if let Some(notice) = self.notice.clone() {
@@ -460,20 +426,19 @@ impl eframe::App for LauncherApp {
 
 			match self.screen {
 				Screen::Explore => {
-					action = self
-						.explore
-						.show(ui, &self.commands, &self.search, &matches);
+					action = self.explore.show(ui, &self.commands);
 				}
 				Screen::Library => {
 					action = screens::library(
 						ui,
-						&LibraryView {
+						&mut LibraryView {
 							apps: &self.installed,
 							busy: &self.progress,
 							statuses: &self.statuses,
 							policies: &self.policies,
 							mode: self.update_settings.mode,
 							global_age: self.update_settings.minimum_age,
+							search: &mut self.library_search,
 						},
 					);
 				}

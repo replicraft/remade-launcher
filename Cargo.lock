@@ -2467,24 +2467,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "launcher-ui"
-version = "0.1.0"
-dependencies = [
- "eframe",
- "egui",
- "image",
- "launcher-background",
- "launcher-catalog",
- "launcher-core",
- "launcher-model",
- "launcher-resolver",
- "launcher-storage",
- "time",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3625,10 +3607,17 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 name = "remade-launcher"
 version = "0.1.0"
 dependencies = [
+ "eframe",
+ "egui",
+ "image",
+ "launcher-background",
+ "launcher-catalog",
  "launcher-core",
  "launcher-model",
- "launcher-ui",
+ "launcher-resolver",
+ "launcher-storage",
  "mimalloc",
+ "time",
  "tokio",
  "tracing",
  "tracing-subscriber",
