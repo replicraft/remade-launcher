@@ -99,6 +99,14 @@ fn help_lists_the_commands_of_the_contract() {
 		"cache",
 		"completions",
 		"about",
+		"repair",
+		"adopt",
+		"download",
+		"collection",
+		"compatible",
+		"open",
+		"auth",
+		"reviews",
 	] {
 		assert!(help.contains(command), "help is missing {command}");
 	}
@@ -419,7 +427,7 @@ fn settings_can_be_read_and_changed_through_config() {
 			.as_array()
 			.unwrap()
 			.len(),
-		3
+		12
 	);
 }
 
@@ -726,5 +734,109 @@ fn a_collection_with_anything_unexpected_is_refused_whole() {
 			.as_array()
 			.unwrap()
 			.is_empty()
+	);
+}
+
+#[test]
+fn the_new_settings_can_be_read_changed_and_are_checked() {
+	let run = run();
+
+	for (key, value, shown) in [
+		("region.time_format", "24h", "24h"),
+		("region.date_format", "iso", "iso"),
+		("interface.scale", "125", "125"),
+		("start_page", "library", "library"),
+		("notifications.updates", "on", "on"),
+		(
+			"network.proxy",
+			"socks5://127.0.0.1:1080",
+			"socks5://127.0.0.1:1080",
+		),
+		("network.proxy", "direct", "direct"),
+		("network.timeout", "60", "60"),
+		("language", "english", "english"),
+	] {
+		assert_eq!(run.json(&["config", "set", key, value]).0, 0, "{key}");
+		assert_eq!(
+			run.json(&["config", "get", key]).1["data"]["value"],
+			shown,
+			"{key}"
+		);
+	}
+
+	// Defaults for what was never set, and nonsense is refused with nothing saved.
+	assert_eq!(
+		run.json(&["config", "get", "notifications.installs"]).1["data"]["value"],
+		"off"
+	);
+
+	for (key, value) in [
+		("interface.scale", "9000"),
+		("network.timeout", "1"),
+		("network.proxy", "http://user:secret@proxy.example"),
+		("region.time_format", "sometimes"),
+		("notifications.updates", "maybe"),
+	] {
+		assert_eq!(
+			run.json(&["config", "set", key, value]).0,
+			2,
+			"{key}={value}"
+		);
+	}
+
+	assert_eq!(
+		run.json(&["config", "get", "interface.scale"]).1["data"]["value"],
+		"125",
+		"unchanged"
+	);
+}
+
+#[test]
+fn auth_says_what_is_set_and_never_touches_the_keychain_for_nothing() {
+	let run = run();
+	let (code, status, _) = run.json(&["--offline", "auth", "status"]);
+
+	assert_eq!(code, 0);
+	assert_eq!(status["data"]["github_token"], "none");
+	assert_eq!(status["data"]["community_account"], "unavailable");
+
+	// Without a way to ask, and with something that is not a token, nothing is saved.
+	assert_eq!(run.json(&["--no-input", "auth", "login"]).0, 2);
+	assert_eq!(
+		run.json(&["auth", "login", "--device"]).1["error"]["code"],
+		"AUTH_UNAVAILABLE"
+	);
+	assert_eq!(
+		run.json(&["--offline", "auth", "status"]).1["data"]["github_token"],
+		"none"
+	);
+}
+
+#[test]
+fn reviews_are_honestly_unavailable_and_send_nothing() {
+	for arguments in [
+		["reviews", "list", "quill"],
+		["reviews", "create", "quill"],
+		["reviews", "edit", "quill"],
+		["reviews", "delete", "quill"],
+	] {
+		let (code, value, _) = run().json(&arguments);
+
+		assert_eq!(
+			(code, value["error"]["code"].as_str()),
+			(4, Some("COMMUNITY_UNAVAILABLE")),
+			"{arguments:?}"
+		);
+	}
+}
+
+#[test]
+fn the_cache_reports_remembered_lookups_and_can_forget_them() {
+	let run = run();
+
+	assert!(run.json(&["cache", "status"]).1["data"]["remembered_lookups_bytes"].is_u64());
+	assert_eq!(
+		run.json(&["cache", "clear"]).1["data"]["removed_lookups"],
+		0
 	);
 }

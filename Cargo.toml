@@ -106,6 +106,7 @@ clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"
 comfy-table = "8"
 indicatif = "0.18"
+rpassword = "7"
 
 # Platform
 directories = "6"

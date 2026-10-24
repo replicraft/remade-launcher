@@ -123,6 +123,20 @@ pub(crate) enum Command {
 	Adopt(AdoptArgs),
 	/// Download and check an app's file without installing or running it.
 	Download(DownloadArgs),
+	/// Say whether an app has a package for this device. Exits 0 if it does.
+	Compatible(SlugArgs),
+	/// Open an app's repository or homepage in your browser.
+	Open(OpenArgs),
+	/// Manage the optional GitHub token that raises the lookup limit.
+	Auth {
+		#[command(subcommand)]
+		action: AuthAction,
+	},
+	/// Read and write community reviews. Not available yet.
+	Reviews {
+		#[command(subcommand)]
+		action: ReviewsAction,
+	},
 	/// Share or import a list of apps. Importing installs nothing.
 	Collection {
 		#[command(subcommand)]
@@ -224,6 +238,45 @@ pub(crate) struct AppArgs {
 #[derive(Debug, Args)]
 pub(crate) struct OptionalAppArgs {
 	pub(crate) app: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct OpenArgs {
+	pub(crate) slug: String,
+
+	/// Open its homepage instead of its repository.
+	#[arg(long)]
+	pub(crate) homepage: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum AuthAction {
+	/// Whether a token is set, and where GitHub says the limit stands.
+	Status,
+	/// Save a GitHub token. It needs no permissions.
+	Login {
+		/// Read the token from standard input.
+		#[arg(long)]
+		with_token: bool,
+
+		/// Sign in through a browser. Not available in this build.
+		#[arg(long)]
+		device: bool,
+	},
+	/// Remove the saved token.
+	Logout,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum ReviewsAction {
+	/// Read an app's reviews.
+	List { slug: String },
+	/// Write a review.
+	Create { slug: String },
+	/// Change your review.
+	Edit { slug: String },
+	/// Delete your review.
+	Delete { slug: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -603,4 +656,6 @@ pub(crate) enum CacheAction {
 	Status,
 	/// Remove scratch folders no unfinished operation needs.
 	Prune,
+	/// Forget the remembered GitHub answers. The next check asks afresh.
+	Clear,
 }

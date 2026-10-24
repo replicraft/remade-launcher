@@ -557,3 +557,170 @@ pub(crate) async fn trust(
 
 	Ok(ExitStatus::Success)
 }
+
+/// Whether an app has a package for this device. The exit status says so, so
+/// a script can ask without reading output.
+pub(crate) async fn compatible(
+	ctx: &Ctx,
+	engine: &Arc<Engine>,
+	args: &SlugArgs,
+) -> Result<ExitStatus, CliError> {
+	ensure_catalog(ctx, engine).await?;
+
+	let state = engine.catalog().state();
+
+	if state
+		.catalog
+		.as_ref()
+		.and_then(|catalog| catalog.project(&args.slug))
+		.is_none()
+	{
+		return Ok(refuse(
+			ctx,
+			"APP_NOT_IN_CATALOG",
+			ExitStatus::Usage,
+			&format!(
+				"\"{}\" is not in the catalog. Try `remade search`.",
+				args.slug
+			),
+		));
+	}
+
+	let report = engine.platforms(Some(&args.slug))?;
+	let variants = report
+		.apps
+		.first()
+		.map(|(_, variants)| variants.as_slice())
+		.unwrap_or_default();
+	let supported: Vec<_> = variants
+		.iter()
+		.filter(|variant| variant.supported)
+		.collect();
+
+	if ctx.machine() {
+		ctx.emit(json!({
+			"slug": args.slug,
+			"compatible": !supported.is_empty(),
+			"packages": supported.iter().map(|variant| json!({ "id": variant.variant_id, "format": variant.format })).collect::<Vec<_>>(),
+			"reasons": variants.iter().filter(|variant| !variant.supported).map(|variant| json!({ "id": variant.variant_id, "reason": variant.reason })).collect::<Vec<_>>(),
+		}));
+	} else if supported.is_empty() {
+		println!("{} has no package for this device.", args.slug);
+
+		for variant in variants {
+			println!(
+				"  {} {} · {}: {}",
+				variant.os, variant.arch, variant.format, variant.reason
+			);
+		}
+	} else {
+		println!(
+			"{} has {} package(s) for this device.",
+			args.slug,
+			supported.len()
+		);
+	}
+
+	Ok(if supported.is_empty() {
+		ExitStatus::Unsupported
+	} else {
+		ExitStatus::Success
+	})
+}
+
+/// Opens `url` in the system browser. The address is always https and always
+/// passed as one argument, never through a shell.
+fn open_in_browser(url: &str) -> Result<(), CliError> {
+	let parsed =
+		launcher_net::Url::parse(url).map_err(|_| CliError::usage("That address is not valid."))?;
+
+	if parsed.scheme() != "https" {
+		return Err(CliError::usage("Only https addresses are opened."));
+	}
+
+	let mut command = if cfg!(target_os = "macos") {
+		let mut command = std::process::Command::new("/usr/bin/open");
+
+		command.arg(parsed.as_str());
+		command
+	} else if cfg!(target_os = "windows") {
+		let mut command = std::process::Command::new("rundll32");
+
+		command.args(["url.dll,FileProtocolHandler", parsed.as_str()]);
+		command
+	} else {
+		let mut command = std::process::Command::new("xdg-open");
+
+		command.arg(parsed.as_str());
+		command
+	};
+
+	command
+		.stdin(std::process::Stdio::null())
+		.stdout(std::process::Stdio::null())
+		.stderr(std::process::Stdio::null())
+		.spawn()
+		.map(drop)
+		.map_err(|_| {
+			CliError::new(
+				"NO_BROWSER",
+				ExitStatus::Unsupported,
+				"There is no way to open a browser from here. The address is shown instead.",
+			)
+		})
+}
+
+/// Opens an app's repository or homepage, or prints the address when no
+/// browser can be opened.
+pub(crate) async fn open(
+	ctx: &Ctx,
+	engine: &Arc<Engine>,
+	args: &crate::cli::OpenArgs,
+) -> Result<ExitStatus, CliError> {
+	let state = ensure_catalog(ctx, engine).await?;
+	let Some(project) = state
+		.catalog
+		.as_ref()
+		.and_then(|catalog| catalog.project(&args.slug))
+	else {
+		return Ok(refuse(
+			ctx,
+			"APP_NOT_IN_CATALOG",
+			ExitStatus::Usage,
+			&format!(
+				"\"{}\" is not in the catalog. Try `remade search`.",
+				args.slug
+			),
+		));
+	};
+
+	let url = if args.homepage {
+		match &project.display.links.homepage {
+			Some(url) => url.clone(),
+			None => {
+				return Ok(refuse(
+					ctx,
+					"NO_HOMEPAGE",
+					ExitStatus::Usage,
+					"That app lists no homepage.",
+				));
+			}
+		}
+	} else {
+		format!("https://github.com/{}", project.source.display_name())
+	};
+
+	let opened = open_in_browser(&url);
+
+	if ctx.machine() {
+		ctx.emit(json!({ "url": url, "opened": opened.is_ok() }));
+	} else {
+		println!("{url}");
+	}
+
+	match opened {
+		Ok(()) => Ok(ExitStatus::Success),
+		Err(error) if ctx.machine() => Err(error),
+		Err(_) => Ok(ExitStatus::Success),
+	}
+}
