@@ -9,7 +9,9 @@ use launcher_core::{Availability, ExploreRow};
 use launcher_model::Os;
 
 use super::filters::category_label;
-use crate::ui::components::{app_tile_for, platform_badges, primary_button, tag, verified_badge};
+use crate::ui::components::{
+	app_tile_for, platform_badges, primary_button, quiet_button, tag, verified_badge,
+};
 use crate::ui::screens::Action;
 use crate::ui::{icons, theme};
 
@@ -173,13 +175,7 @@ fn page(ui: &mut Ui, facts: &Facts<'_>) -> Option<Action> {
 
 			let label = format!("{}  Install", icons::DOWNLOAD);
 
-			if ui
-				.add_enabled(
-					installable,
-					egui::Button::new(label).min_size(vec2(130.0, 36.0)),
-				)
-				.clicked()
-			{
+			if quiet_button(ui, &label, installable, vec2(140.0, 38.0)).clicked() {
 				action = Some(Action::Install {
 					slug: facts.slug.to_owned(),
 				});
