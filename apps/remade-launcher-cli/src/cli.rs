@@ -117,6 +117,8 @@ pub(crate) enum Command {
 	Doctor(OptionalAppArgs),
 	/// Stop managing an app without touching its files.
 	Forget(ForgetArgs),
+	/// Look for damage, and put the app back if there is some.
+	Repair(RepairArgs),
 	/// Hold an app at its current version.
 	Pin(AppArgs),
 	/// Let a pinned app update again.
@@ -213,6 +215,19 @@ pub(crate) struct AppArgs {
 #[derive(Debug, Args)]
 pub(crate) struct OptionalAppArgs {
 	pub(crate) app: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct RepairArgs {
+	pub(crate) app: String,
+
+	/// Say what is wrong and what a repair would do, then stop.
+	#[arg(long)]
+	pub(crate) preview: bool,
+
+	/// Approve without asking.
+	#[arg(short, long)]
+	pub(crate) yes: bool,
 }
 
 #[derive(Debug, Args)]

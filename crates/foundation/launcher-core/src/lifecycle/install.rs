@@ -534,12 +534,26 @@ impl Run<'_> {
 		Sha256::digest(canonical).into()
 	}
 
+	/// Where this release's files go. Putting the same release back over a
+	/// damaged copy, as a repair does, needs a folder of its own beside the
+	/// old one, which is removed once the new one is committed.
 	fn final_root(&self) -> PathBuf {
-		self.service
+		let base = self
+			.service
 			.data
 			.apps_dir()
-			.join(self.installation.to_string())
-			.join(format!("{}-{}", self.body.release.id, self.body.asset.id))
+			.join(self.installation.to_string());
+		let name = format!("{}-{}", self.body.release.id, self.body.asset.id);
+		let first = base.join(&name);
+
+		if !first.exists() {
+			return first;
+		}
+
+		(2..100)
+			.map(|attempt| base.join(format!("{name}-r{attempt}")))
+			.find(|candidate| !candidate.exists())
+			.unwrap_or(first)
 	}
 
 	fn receipt(

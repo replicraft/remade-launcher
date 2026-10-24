@@ -9,16 +9,17 @@ use std::sync::Arc;
 
 use launcher_core::{
 	Applied, Approval, CustomPreparation, Engine, InstalledApp, OperatorUpdate, Preparation, Ready,
-	SavedPlan, UpdateState, custom_plan,
+	RepairOutcome, SavedPlan, UpdateState, custom_plan,
 };
 use launcher_model::InstallationId;
 use launcher_resolver::{EvidenceLevel, Fit};
 use serde_json::{Value, json};
 
+use super::installed::{print_verify, verify_json};
 use super::shared::{app_json, ensure_catalog, find_app};
 use crate::cli::{
-	AppArgs, ApplyArgs, ForgetArgs, InstallArgs, PlanAction, PlanInstallArgs, UninstallArgs,
-	UpdateArgs,
+	AppArgs, ApplyArgs, ForgetArgs, InstallArgs, PlanAction, PlanInstallArgs, RepairArgs,
+	UninstallArgs, UpdateArgs,
 };
 use crate::context::Ctx;
 use crate::errors::CliError;
@@ -372,12 +373,22 @@ pub(crate) async fn plan(
 
 			Ok(ExitStatus::Success)
 		}
-		PlanAction::Repair { .. } => Ok(refuse(
-			ctx,
-			"REPAIR_UNSUPPORTED",
-			ExitStatus::Unsupported,
-			"Repair is not available yet. Use `remade verify` to see what changed, and `remade install` to put the app back.",
-		)),
+		PlanAction::Repair { app } => {
+			let apps = engine.installed().await?;
+			let app = find_app(&apps, app)?;
+
+			match diagnose(ctx, engine, app).await? {
+				Ok(Some(ready)) => {
+					let id = engine.save_ready_plan(&ready, Some(app.id)).await?;
+
+					show_repair_plan(ctx, &id, &ready, app);
+
+					Ok(ExitStatus::Success)
+				}
+				Ok(None) => Ok(ExitStatus::Success),
+				Err(status) => Ok(status),
+			}
+		}
 		PlanAction::Show { id } => {
 			match engine.load_plan(id).await? {
 				SavedPlan::Install {
@@ -485,6 +496,149 @@ async fn prepare_update(
 			"Several packages fit, so no update was chosen.",
 		)),
 	})
+}
+
+/// Looks at one app. Prints what is wrong, and returns the plan to put it
+/// back if there is one. `Ok(None)` means nothing needed doing.
+async fn diagnose(
+	ctx: &Ctx,
+	engine: &Arc<Engine>,
+	app: &InstalledApp,
+) -> Result<Result<Option<Ready>, ExitStatus>, CliError> {
+	// Looking is free, so it works offline. Only a plan needs the network.
+	let report = engine.verify_installation(app.id).await?;
+
+	if !report.is_clean() && ctx.offline {
+		if !ctx.machine() {
+			print_verify(&report);
+		}
+
+		return Ok(Err(refuse(
+			ctx,
+			"OFFLINE",
+			ExitStatus::Network,
+			"Repairing needs the network to fetch the app again.",
+		)));
+	}
+
+	if !report.is_clean() {
+		ensure_catalog(ctx, engine).await?;
+	}
+
+	let assessment = engine.assess_repair(app.id).await?;
+
+	match assessment.outcome {
+		RepairOutcome::NotNeeded => {
+			if ctx.machine() {
+				ctx.emit(
+					json!({ "repair": "not_needed", "diagnosis": verify_json(&assessment.report) }),
+				);
+			} else {
+				println!(
+					"{}: nothing to repair ({} files match).",
+					app.name, assessment.report.files_checked
+				);
+			}
+
+			Ok(Ok(None))
+		}
+		RepairOutcome::Unavailable(why) => {
+			if !ctx.machine() {
+				print_verify(&assessment.report);
+			}
+
+			Ok(Err(refuse(
+				ctx,
+				"REPAIR_UNAVAILABLE",
+				ExitStatus::Unsupported,
+				&why,
+			)))
+		}
+		RepairOutcome::Ready(ready) => {
+			if !ctx.machine() {
+				print_verify(&assessment.report);
+			}
+
+			Ok(Ok(Some(*ready)))
+		}
+	}
+}
+
+fn show_repair_plan(ctx: &Ctx, id: &str, ready: &Ready, app: &InstalledApp) {
+	if ctx.machine() {
+		let mut value = plan_json(id, ready);
+
+		if let Some(object) = value.as_object_mut() {
+			object.insert("operation".into(), json!("repair"));
+			object.insert(
+				"replaces".into(),
+				json!({ "id": app.id.to_string(), "version": app.version }),
+			);
+		}
+
+		ctx.emit(value);
+
+		return;
+	}
+
+	print_plan(id, ready);
+	println!(
+		"  Replaces:        {} {} (the damaged copy)",
+		app.name, app.version
+	);
+	println!("Run `remade apply {id}` to approve it.");
+}
+
+pub(crate) async fn repair(
+	ctx: &Arc<Ctx>,
+	engine: &Arc<Engine>,
+	args: &RepairArgs,
+) -> Result<ExitStatus, CliError> {
+	let apps = engine.installed().await?;
+	let app = find_app(&apps, &args.app)?;
+
+	let ready = match diagnose(ctx, engine, app).await? {
+		Ok(Some(ready)) => ready,
+		Ok(None) => return Ok(ExitStatus::Success),
+		Err(status) => return Ok(status),
+	};
+
+	let id = engine.save_ready_plan(&ready, Some(app.id)).await?;
+
+	if args.preview {
+		show_repair_plan(ctx, &id, &ready, app);
+
+		return Ok(ExitStatus::Success);
+	}
+
+	print_review(ctx, &ready);
+
+	let approval = approval_for(
+		ctx,
+		&ready,
+		args.yes,
+		None,
+		&format!(
+			"Put {} back from {}?",
+			app.name, ready.candidate.release.tag
+		),
+	)?;
+
+	if !approval.confirmed {
+		return Ok(refuse(
+			ctx,
+			"APPROVAL_REQUIRED",
+			ExitStatus::ApprovalRequired,
+			"Cancelled. Nothing was changed.",
+		));
+	}
+
+	let applied = run_plan(ctx, engine, &id, &approval).await?;
+	let after = engine.installed().await?;
+
+	report_applied(ctx, &applied, &after, &id);
+
+	Ok(ExitStatus::Success)
 }
 
 /// Turns Ctrl-C into a request to stop at the next safe point. Once files

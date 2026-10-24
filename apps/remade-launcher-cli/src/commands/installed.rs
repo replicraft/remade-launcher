@@ -297,7 +297,7 @@ pub(crate) async fn operations(
 	}
 }
 
-fn verify_json(report: &launcher_core::VerifyReport) -> Value {
+pub(super) fn verify_json(report: &launcher_core::VerifyReport) -> Value {
 	json!({
 		"app": report.name,
 		"id": report.installation.map(|id| id.to_string()),
@@ -310,7 +310,7 @@ fn verify_json(report: &launcher_core::VerifyReport) -> Value {
 	})
 }
 
-fn print_verify(report: &launcher_core::VerifyReport) {
+pub(super) fn print_verify(report: &launcher_core::VerifyReport) {
 	if report.is_clean() {
 		println!("{}: ok ({} files match)", report.name, report.files_checked);
 

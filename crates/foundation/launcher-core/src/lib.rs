@@ -16,6 +16,7 @@ mod lifecycle;
 mod network;
 mod paths;
 mod prepare;
+mod repair;
 mod saved_plans;
 mod storage_report;
 mod updates;
@@ -42,6 +43,7 @@ pub use lifecycle::{
 pub use network::{RateLimit, StoredResponses, TOKEN_VARIABLE};
 pub use paths::DataDirectory;
 pub use prepare::{CustomPreparation, Preparation, Ready, custom_plan};
+pub use repair::{RepairAssessment, RepairOutcome};
 pub use saved_plans::{Applied, Approval, SavedPlan, UninstallPlan};
 pub use storage_report::StorageReport;
 pub use updates::{

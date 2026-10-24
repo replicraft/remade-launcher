@@ -358,13 +358,15 @@ impl Engine {
 					));
 				}
 
+				// A pin holds an app at its release. Putting that same release
+				// back, as a repair does, is not leaving it.
 				if let Some(installation) = update_of
 					&& self
 						.database
 						.app_policy(installation)
 						.await?
 						.pinned_release_id
-						.is_some()
+						.is_some_and(|pinned| pinned != ready.candidate.release.id)
 				{
 					return Err(LauncherError::new(
 						ErrorCode::AppPinned,

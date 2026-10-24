@@ -1630,3 +1630,147 @@ async fn a_repository_that_changed_hands_blocks_automatic_updates() {
 	);
 	assert_eq!(installed_version(&world).await, "v1.0.0");
 }
+
+// ---------------------------------------------------------------------------
+// Repair
+// ---------------------------------------------------------------------------
+
+async fn assess(world: &World, id: InstallationId) -> crate::RepairAssessment {
+	let provider = GithubProvider::new(world.github.clone());
+
+	world
+		.engine
+		.assess_repair_with(&provider, id, Some(LINUX), at(NOW).unix_timestamp())
+		.await
+		.unwrap()
+}
+
+#[tokio::test]
+async fn a_healthy_app_needs_no_repair() {
+	let (world, id, _root) = installed_world().await;
+
+	let assessment = assess(&world, id).await;
+
+	assert!(matches!(
+		assessment.outcome,
+		crate::RepairOutcome::NotNeeded
+	));
+	assert!(assessment.report.is_clean());
+}
+
+#[tokio::test]
+async fn a_damaged_app_is_put_back_and_edits_are_kept() {
+	let (world, id, root) = installed_world().await;
+
+	std::fs::remove_file(root.join("bin/sample-editor")).unwrap();
+	std::fs::write(root.join("notes.txt"), "mine").unwrap();
+
+	let assessment = assess(&world, id).await;
+	let crate::RepairOutcome::Ready(ready) = assessment.outcome else {
+		panic!("a plan was expected");
+	};
+
+	assert_eq!(
+		assessment.report.missing,
+		vec!["bin/sample-editor".to_owned()]
+	);
+	assert!(
+		ready.notes.iter().any(|note| note.contains("kept")),
+		"{:?}",
+		ready.notes
+	);
+
+	let plan_id = world
+		.engine
+		.save_ready_plan(&ready, Some(id))
+		.await
+		.unwrap();
+
+	world
+		.engine
+		.apply_plan_at(&plan_id, &approval(true, None), at(NOW).unix_timestamp())
+		.await
+		.unwrap();
+
+	let after = world.engine.installed().await.unwrap();
+	let root = std::path::PathBuf::from(&after[0].root);
+
+	assert!(
+		root.join("bin/sample-editor").exists(),
+		"the missing file is back"
+	);
+	assert!(
+		world
+			.engine
+			.verify_installation(after[0].id)
+			.await
+			.unwrap()
+			.is_clean()
+	);
+}
+
+#[tokio::test]
+async fn a_folder_that_is_no_longer_the_launchers_is_not_written_to() {
+	let (world, id, root) = installed_world().await;
+
+	std::fs::remove_file(root.join(".remade-install")).unwrap();
+
+	let assessment = assess(&world, id).await;
+
+	let crate::RepairOutcome::Unavailable(why) = assessment.outcome else {
+		panic!("a refusal was expected");
+	};
+
+	assert!(why.contains("no longer marked"), "{why}");
+}
+
+#[tokio::test]
+async fn a_pinned_app_can_be_repaired_at_its_own_release_but_not_upgraded_by_it() {
+	let (world, id, root) = installed_world().await;
+
+	world.engine.pin(id).await.unwrap();
+	std::fs::remove_file(root.join("bin/sample-editor")).unwrap();
+
+	// Same release still current: allowed, and the saved plan applies.
+	let assessment = assess(&world, id).await;
+	let crate::RepairOutcome::Ready(ready) = assessment.outcome else {
+		panic!("a plan was expected");
+	};
+	let plan_id = world
+		.engine
+		.save_ready_plan(&ready, Some(id))
+		.await
+		.unwrap();
+
+	world
+		.engine
+		.apply_plan_at(&plan_id, &approval(true, None), at(NOW).unix_timestamp())
+		.await
+		.unwrap();
+
+	// A newer release appears: repair must not upgrade a pinned app.
+	let (v1, v2) = (tarball("1.0.0"), tarball("1.1.0"));
+	world
+		.artifacts
+		.0
+		.lock()
+		.unwrap()
+		.insert(asset_url("v1.1.0"), v2.clone());
+	*world.github.releases.lock().unwrap() = format!(
+		"[{},{}]",
+		release_json_at(2, "v1.1.0", &v2, true, MATURE),
+		release_json_at(1, "v1.0.0", &v1, true, "2029-01-01T00:00:00Z")
+	);
+
+	let root = std::path::PathBuf::from(&world.engine.installed().await.unwrap()[0].root);
+
+	std::fs::remove_file(root.join("bin/sample-editor")).unwrap();
+
+	let blocked = assess(&world, id).await;
+
+	let crate::RepairOutcome::Unavailable(why) = blocked.outcome else {
+		panic!("a refusal was expected");
+	};
+
+	assert!(why.contains("pinned"), "{why}");
+}
