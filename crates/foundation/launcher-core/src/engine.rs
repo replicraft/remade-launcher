@@ -63,6 +63,11 @@ impl Engine {
 		let preferences = network::read_preferences(&database).await;
 
 		launcher_model::local_time::configure(preferences.time_format, preferences.date_format);
+		launcher_model::local_time::set_language(
+			preferences
+				.language
+				.resolve(launcher_model::local_time::system_locale()),
+		);
 
 		// The token is read once here. Only a person's action in Settings
 		// changes it afterwards.

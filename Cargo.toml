@@ -66,6 +66,9 @@ egui = { version = "0.37", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
 notify-rust = { version = "4", default-features = false, features = ["z"] }
 muda = { version = "0.21", default-features = false }
+fluent-bundle = "0.16"
+fluent-syntax = "0.12"
+unic-langid = "0.9"
 
 # Archives and filesystem
 cap-std = "4"

@@ -9,8 +9,7 @@ use serde::{Deserialize, Serialize};
 
 pub use crate::local_time::{DateFormat, TimeFormat};
 
-/// The interface language. Only English has strings today; the setting is
-/// here so the choice survives once there are more.
+/// The interface language.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Language {
@@ -18,23 +17,118 @@ pub enum Language {
 	#[default]
 	Auto,
 	English,
+	Japanese,
+	PortugueseBrazil,
+	ChineseSimplified,
+	German,
+	Hindi,
 }
 
 impl Language {
-	pub const ALL: [Self; 2] = [Self::Auto, Self::English];
+	pub const ALL: [Self; 7] = [
+		Self::Auto,
+		Self::English,
+		Self::Japanese,
+		Self::PortugueseBrazil,
+		Self::ChineseSimplified,
+		Self::German,
+		Self::Hindi,
+	];
 
-	pub const fn label(self) -> &'static str {
+	/// The languages with translations, which `Auto` chooses among.
+	pub const TRANSLATED: [Self; 6] = [
+		Self::English,
+		Self::Japanese,
+		Self::PortugueseBrazil,
+		Self::ChineseSimplified,
+		Self::German,
+		Self::Hindi,
+	];
+
+	/// What the language is called in itself, so a person can find theirs
+	/// whatever the interface says now. `Auto` has no name of its own: the
+	/// interface words it in the current language.
+	pub const fn endonym(self) -> Option<&'static str> {
 		match self {
-			Self::Auto => "Automatic",
-			Self::English => "English",
+			Self::Auto => None,
+			Self::English => Some("English"),
+			Self::Japanese => Some("日本語"),
+			Self::PortugueseBrazil => Some("Português (Brasil)"),
+			Self::ChineseSimplified => Some("简体中文"),
+			Self::German => Some("Deutsch"),
+			Self::Hindi => Some("हिन्दी"),
 		}
 	}
 
-	/// The language the interface will actually use for `system_tag`.
-	pub fn resolve(self, _system_tag: &str) -> Self {
-		// Every system language falls back to English until there are
-		// translations to choose from.
-		Self::English
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::Auto => "auto",
+			Self::English => "english",
+			Self::Japanese => "japanese",
+			Self::PortugueseBrazil => "portuguese_brazil",
+			Self::ChineseSimplified => "chinese_simplified",
+			Self::German => "german",
+			Self::Hindi => "hindi",
+		}
+	}
+
+	/// The BCP 47 tag of a translated language. `Auto` has none.
+	pub const fn tag(self) -> Option<&'static str> {
+		match self {
+			Self::Auto => None,
+			Self::English => Some("en"),
+			Self::Japanese => Some("ja"),
+			Self::PortugueseBrazil => Some("pt-BR"),
+			Self::ChineseSimplified => Some("zh-CN"),
+			Self::German => Some("de"),
+			Self::Hindi => Some("hi"),
+		}
+	}
+
+	/// The language the interface will actually use. A fixed choice is kept;
+	/// `Auto` follows `system_tag` (such as `de-AT` or `zh_Hans_CN`) and falls
+	/// back to English for anything without a translation.
+	pub fn resolve(self, system_tag: &str) -> Self {
+		if self != Self::Auto {
+			return self;
+		}
+
+		let primary = system_tag
+			.split(['-', '_'])
+			.next()
+			.unwrap_or("")
+			.to_ascii_lowercase();
+
+		match primary.as_str() {
+			"ja" => Self::Japanese,
+			"pt" => Self::PortugueseBrazil,
+			"zh" => Self::ChineseSimplified,
+			"de" => Self::German,
+			"hi" => Self::Hindi,
+			_ => Self::English,
+		}
+	}
+}
+
+impl std::str::FromStr for Language {
+	type Err = ();
+
+	/// Accepts the stored name, or a language tag such as `pt-br` or `ja`.
+	fn from_str(text: &str) -> Result<Self, ()> {
+		let text = text.trim().to_ascii_lowercase().replace('_', "-");
+
+		match text.as_str() {
+			"auto" => Ok(Self::Auto),
+			"english" | "en" | "en-us" | "en-gb" => Ok(Self::English),
+			"japanese" | "ja" | "ja-jp" => Ok(Self::Japanese),
+			"portuguese-brazil" | "portuguese" | "pt" | "pt-br" => Ok(Self::PortugueseBrazil),
+			"chinese-simplified" | "chinese" | "zh" | "zh-cn" | "zh-hans" => {
+				Ok(Self::ChineseSimplified)
+			}
+			"german" | "de" | "de-de" => Ok(Self::German),
+			"hindi" | "hi" | "hi-in" => Ok(Self::Hindi),
+			_ => Err(()),
+		}
 	}
 }
 
@@ -357,6 +451,46 @@ mod tests {
 		assert_eq!(defaults.network.proxy, Proxy::System);
 		assert_eq!(defaults.network.timeout_seconds, 30);
 		assert_eq!(defaults.launcher_updates, LauncherUpdates::Automatic);
+	}
+
+	#[test]
+	fn automatic_follows_the_system_and_falls_back_to_english() {
+		for (tag, expected) in [
+			("ja-JP", Language::Japanese),
+			("pt-PT", Language::PortugueseBrazil),
+			("zh_Hans_CN", Language::ChineseSimplified),
+			("de-AT", Language::German),
+			("hi", Language::Hindi),
+			("fr-FR", Language::English),
+			("", Language::English),
+		] {
+			assert_eq!(Language::Auto.resolve(tag), expected, "{tag}");
+		}
+
+		assert_eq!(
+			Language::German.resolve("ja-JP"),
+			Language::German,
+			"a fixed choice wins over the system"
+		);
+	}
+
+	#[test]
+	fn every_language_can_be_named_on_the_command_line_and_stored() {
+		for language in Language::ALL {
+			assert_eq!(language.as_str().replace('_', "-").parse(), Ok(language));
+
+			let stored = serde_json::to_string(&language).unwrap();
+
+			assert_eq!(serde_json::from_str::<Language>(&stored).unwrap(), language);
+		}
+
+		assert_eq!("pt-BR".parse(), Ok(Language::PortugueseBrazil));
+		assert_eq!("zh-CN".parse(), Ok(Language::ChineseSimplified));
+		assert_eq!("klingon".parse::<Language>(), Err(()));
+
+		for language in Language::TRANSLATED {
+			assert!(language.tag().is_some() && language.endonym().is_some());
+		}
 	}
 
 	#[test]

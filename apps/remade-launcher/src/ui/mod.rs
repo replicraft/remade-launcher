@@ -4,11 +4,14 @@
 //! itself. It sends typed commands to the engine through [`commands`] and
 //! renders what comes back.
 
+#[macro_use]
+mod i18n;
 mod app;
 mod branding;
 mod commands;
 mod components;
 mod demo;
+mod fonts;
 mod icons;
 mod menu;
 mod notifications;
@@ -29,6 +32,13 @@ use tokio::runtime::Handle;
 pub fn run(engine: Arc<Engine>, runtime: Handle) -> eframe::Result {
 	let initial_theme = runtime.block_on(engine.theme());
 	let preferences = runtime.block_on(engine.preferences());
+	// Everything on screen is worded in the saved language from the first frame.
+	let language = preferences
+		.language
+		.resolve(launcher_model::local_time::system_locale());
+
+	i18n::set_language(language);
+
 	// Open at the size the window had when it was last closed.
 	let size = preferences
 		.layout
@@ -54,6 +64,7 @@ pub fn run(engine: Arc<Engine>, runtime: Handle) -> eframe::Result {
 				engine,
 				runtime,
 				initial_theme,
+				language,
 			)))
 		}),
 	)

@@ -11,7 +11,9 @@ use egui::{
 	Color32, Context, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Stroke,
 	TextStyle, Theme, Visuals,
 };
-use launcher_model::ThemePreference;
+use launcher_model::{Language, ThemePreference};
+
+use super::fonts::system_fallbacks;
 
 pub(crate) const SIDEBAR_WIDTH: f32 = 244.0;
 pub(crate) const SIDEBAR_COLLAPSED_WIDTH: f32 = 64.0;
@@ -98,7 +100,7 @@ pub(crate) fn semibold() -> FontFamily {
 	FontFamily::Name("semibold".into())
 }
 
-fn fonts() -> FontDefinitions {
+fn fonts(language: Language) -> FontDefinitions {
 	let mut fonts = FontDefinitions::default();
 
 	let data = |bytes: &'static [u8]| Arc::new(FontData::from_static(bytes));
@@ -127,6 +129,17 @@ fn fonts() -> FontDefinitions {
 	proportional.insert(0, "open-sans".into());
 	proportional.insert(1, "phosphor".into());
 
+	// Scripts Open Sans lacks borrow the system's fonts, after the icons so
+	// they never replace a glyph the bundled fonts have.
+	for (name, data) in system_fallbacks(language) {
+		fonts.font_data.insert(name.clone(), Arc::new(data));
+		fonts
+			.families
+			.entry(FontFamily::Proportional)
+			.or_default()
+			.push(name);
+	}
+
 	let mut semi = vec!["open-sans-semibold".to_owned(), "phosphor".to_owned()];
 
 	semi.extend(
@@ -143,9 +156,14 @@ fn fonts() -> FontDefinitions {
 	fonts
 }
 
+/// Loads the fonts the language needs. Call again when the language changes.
+pub(crate) fn install_fonts(context: &Context, language: Language) {
+	context.set_fonts(fonts(language));
+}
+
 /// Registers fonts, both themes, and the type scale. Call once.
-pub(crate) fn install(context: &Context) {
-	context.set_fonts(fonts());
+pub(crate) fn install(context: &Context, language: Language) {
+	install_fonts(context, language);
 
 	context.set_visuals_of(Theme::Dark, visuals(&DARK, Visuals::dark()));
 	context.set_visuals_of(Theme::Light, visuals(&LIGHT, Visuals::light()));
@@ -290,7 +308,7 @@ mod tests {
 
 	#[test]
 	fn the_fonts_register_with_icons_as_a_fallback() {
-		let definitions = fonts();
+		let definitions = fonts(Language::English);
 		let proportional = &definitions.families[&FontFamily::Proportional];
 
 		assert_eq!(proportional[0], "open-sans");

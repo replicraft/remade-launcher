@@ -9,7 +9,7 @@ use launcher_core::{
 	UpdateStatus,
 };
 use launcher_model::{
-	InstallationId, Preferences, StartPage, ThemePreference, UpdateMode, product,
+	InstallationId, Language, Preferences, StartPage, ThemePreference, UpdateMode, product,
 };
 use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
@@ -17,6 +17,7 @@ use tokio::runtime::Handle;
 use crate::ui::commands::{Commands, Message};
 use crate::ui::components::{Tone, ViewMode, dialog_close, dialog_ok, notice};
 use crate::ui::demo::{self, Demo};
+use crate::ui::i18n;
 use crate::ui::menu::{AppMenu, MenuCommand};
 use crate::ui::notifications;
 use crate::ui::screens::navigation::{self, NavAction, Sidebar};
@@ -85,6 +86,8 @@ pub(crate) struct LauncherApp {
 
 	/// What the person has chosen in Settings, as last saved.
 	prefs: Preferences,
+	/// The language the interface is in now, with `Auto` already resolved.
+	language: Language,
 	prefs_loaded: bool,
 	/// The first list of installed apps has arrived, so the start page can be
 	/// chosen knowing whether there are any.
@@ -112,10 +115,11 @@ impl LauncherApp {
 		engine: Arc<Engine>,
 		runtime: Handle,
 		initial_theme: ThemePreference,
+		language: Language,
 	) -> Self {
 		let context = &creation.egui_ctx;
 
-		theme::install(context);
+		theme::install(context, language);
 		theme::select(context, initial_theme);
 
 		let (sender, messages) = mpsc::channel();
@@ -158,6 +162,7 @@ impl LauncherApp {
 			statuses: HashMap::new(),
 			policies: HashMap::new(),
 			prefs: Preferences::default(),
+			language,
 			prefs_loaded: false,
 			installed_loaded: false,
 			layout_changed_at: None,
@@ -842,7 +847,30 @@ impl LauncherApp {
 		self.explore.set_sort_key(&self.prefs.layout.explore_sort);
 		self.library.set_sort_key(&self.prefs.layout.library_sort);
 		self.apply_scale();
+		self.apply_language();
 		self.choose_start_page();
+	}
+
+	/// Words the interface in the chosen language, and loads the fonts it
+	/// needs if the script changed.
+	fn apply_language(&mut self) {
+		let language = self
+			.prefs
+			.language
+			.resolve(launcher_model::local_time::system_locale());
+
+		if language == self.language {
+			return;
+		}
+
+		if !crate::ui::fonts::same_fonts(language, self.language) {
+			theme::install_fonts(&self.context, language);
+		}
+
+		self.language = language;
+		i18n::set_language(language);
+		launcher_model::local_time::set_language(language);
+		self.context.request_repaint();
 	}
 
 	fn apply_scale(&self) {
@@ -854,6 +882,7 @@ impl LauncherApp {
 	fn change_preferences(&mut self, prefs: Preferences) {
 		self.prefs = prefs;
 		self.apply_scale();
+		self.apply_language();
 		self.commands.save_preferences(self.prefs.clone());
 	}
 

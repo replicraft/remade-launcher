@@ -138,6 +138,7 @@ impl Engine {
 	/// network settings, for every holder of the client.
 	pub(crate) async fn apply_preferences(&self, preferences: &Preferences) {
 		local_time::configure(preferences.time_format, preferences.date_format);
+		local_time::set_language(preferences.language.resolve(local_time::system_locale()));
 
 		let token = self.effective_token().await;
 

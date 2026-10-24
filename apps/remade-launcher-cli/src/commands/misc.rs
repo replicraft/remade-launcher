@@ -7,7 +7,7 @@ use clap::CommandFactory;
 use launcher_core::Engine;
 use launcher_model::local_time::{DateFormat, TimeFormat};
 use launcher_model::{
-	Language, MinimumAge, Network, Preferences, Proxy, StartPage, ThemePreference, product,
+	MinimumAge, Network, Preferences, Proxy, StartPage, ThemePreference, product,
 };
 use serde_json::json;
 
@@ -39,12 +39,8 @@ fn setting_entries(
 		),
 		(
 			"language",
-			match prefs.language {
-				Language::Auto => "auto",
-				Language::English => "english",
-			}
-			.to_owned(),
-			"auto or english",
+			prefs.language.as_str().to_owned(),
+			"auto, english, japanese, portuguese_brazil, chinese_simplified, german, or hindi (language tags such as ja or pt-br work too)",
 		),
 		(
 			"region.time_format",
@@ -129,11 +125,11 @@ fn change_preference(prefs: &mut Preferences, key: &str, value: &str) -> Result<
 
 	match key {
 		"language" => {
-			prefs.language = match value.to_lowercase().as_str() {
-				"auto" => Language::Auto,
-				"english" | "en" => Language::English,
-				_ => return Err(wrong("auto or english")),
-			};
+			prefs.language = value.parse().map_err(|()| {
+				wrong(
+					"auto, english, japanese, portuguese_brazil, chinese_simplified, german, or hindi",
+				)
+			})?;
 		}
 		"region.time_format" => {
 			prefs.time_format = match value.to_lowercase().as_str() {

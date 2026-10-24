@@ -13,6 +13,8 @@ use jiff::Timestamp;
 use jiff::tz::TimeZone;
 use serde::{Deserialize, Serialize};
 
+use crate::preferences::Language;
+
 /// Which clock to show.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -26,6 +28,15 @@ pub enum TimeFormat {
 
 impl TimeFormat {
 	pub const ALL: [Self; 3] = [Self::System, Self::Hour12, Self::Hour24];
+
+	/// The name used on the command line and to pick a translated label.
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::System => "system",
+			Self::Hour12 => "12h",
+			Self::Hour24 => "24h",
+		}
+	}
 
 	pub const fn label(self) -> &'static str {
 		match self {
@@ -58,6 +69,16 @@ impl DateFormat {
 		Self::DayMonthYear,
 		Self::Iso,
 	];
+
+	/// The name used on the command line and to pick a translated label.
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::System => "system",
+			Self::MonthDayYear => "mdy",
+			Self::DayMonthYear => "dmy",
+			Self::Iso => "iso",
+		}
+	}
 
 	pub const fn label(self) -> &'static str {
 		match self {
@@ -150,6 +171,22 @@ pub fn configure(time: TimeFormat, date: DateFormat) {
 	}
 }
 
+static LANGUAGE: RwLock<Language> = RwLock::new(Language::English);
+
+/// Sets the language dates and clocks are written in. `Auto` must already be
+/// resolved to a language.
+pub fn set_language(language: Language) {
+	if let Ok(mut current) = LANGUAGE.write() {
+		*current = language;
+	}
+}
+
+fn language() -> Language {
+	LANGUAGE
+		.read()
+		.map_or(Language::English, |language| *language)
+}
+
 fn chosen() -> Chosen {
 	CHOSEN.read().map_or(
 		Chosen {
@@ -185,56 +222,209 @@ fn current() -> Conventions {
 	resolve(chosen.time, chosen.date, system_tag())
 }
 
-fn date_pattern(style: DateStyle) -> &'static str {
-	match style {
-		DateStyle::MonthDayYear => "%b %-d, %Y",
-		DateStyle::DayMonthYear => "%-d %b %Y",
-		DateStyle::Iso => "%Y-%m-%d",
+/// The words and order a language writes dates and clocks with.
+struct Words {
+	months: [&'static str; 12],
+	today: &'static str,
+	yesterday: &'static str,
+}
+
+fn words(language: Language) -> Words {
+	match language {
+		Language::German => Words {
+			months: [
+				"Jan.",
+				"Feb.",
+				"M\u{e4}rz",
+				"Apr.",
+				"Mai",
+				"Juni",
+				"Juli",
+				"Aug.",
+				"Sept.",
+				"Okt.",
+				"Nov.",
+				"Dez.",
+			],
+			today: "Heute",
+			yesterday: "Gestern",
+		},
+		Language::PortugueseBrazil => Words {
+			months: [
+				"jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.",
+				"nov.", "dez.",
+			],
+			today: "Hoje",
+			yesterday: "Ontem",
+		},
+		Language::Hindi => Words {
+			months: [
+				"जन॰",
+				"फ़र॰",
+				"मार्च",
+				"अप्रैल",
+				"मई",
+				"जून",
+				"जुल॰",
+				"अग॰",
+				"सित॰",
+				"अक्टू॰",
+				"नव॰",
+				"दिस॰",
+			],
+			today: "आज",
+			yesterday: "बीता कल",
+		},
+		Language::Japanese => Words {
+			months: [""; 12],
+			today: "今日",
+			yesterday: "昨日",
+		},
+		Language::ChineseSimplified => Words {
+			months: [""; 12],
+			today: "今天",
+			yesterday: "昨天",
+		},
+		Language::English | Language::Auto => Words {
+			months: [
+				"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+			],
+			today: "Today",
+			yesterday: "Yesterday",
+		},
 	}
 }
 
-fn time_pattern(twelve_hour: bool) -> &'static str {
-	if twelve_hour { "%-I:%M %p" } else { "%H:%M" }
+/// Japanese and Chinese write the year, month, and day with their own
+/// characters, in that order, whatever the "order" setting says.
+fn writes_year_month_day(language: Language) -> bool {
+	matches!(language, Language::Japanese | Language::ChineseSimplified)
 }
 
-/// "Oct 24, 2026", "24 Oct 2026", or "2026-10-24".
+fn date_text(when: &jiff::Zoned, style: DateStyle, language: Language) -> String {
+	let (year, month, day) = (when.year(), when.month(), when.day());
+
+	if style == DateStyle::Iso {
+		return format!("{year}-{month:02}-{day:02}");
+	}
+
+	if writes_year_month_day(language) {
+		return format!("{year}年{month}月{day}日");
+	}
+
+	let name = words(language).months[usize::from(month.unsigned_abs()).saturating_sub(1) % 12];
+
+	match (style, language) {
+		(DateStyle::DayMonthYear, Language::German) => format!("{day}. {name} {year}"),
+		(DateStyle::DayMonthYear, Language::PortugueseBrazil) => {
+			format!("{day} de {name} de {year}")
+		}
+		(DateStyle::DayMonthYear, _) => format!("{day} {name} {year}"),
+		_ => format!("{name} {day}, {year}"),
+	}
+}
+
+fn clock_text(when: &jiff::Zoned, twelve_hour: bool, language: Language) -> String {
+	let (hour, minute) = (when.hour(), when.minute());
+
+	if !twelve_hour {
+		return format!("{hour:02}:{minute:02}");
+	}
+
+	let shown = if hour % 12 == 0 { 12 } else { hour % 12 };
+	let afternoon = hour >= 12;
+
+	match language {
+		Language::Japanese => format!(
+			"{}{shown}:{minute:02}",
+			if afternoon { "午後" } else { "午前" }
+		),
+		Language::ChineseSimplified => {
+			format!(
+				"{}{shown}:{minute:02}",
+				if afternoon { "下午" } else { "上午" }
+			)
+		}
+		Language::Hindi => format!(
+			"{shown}:{minute:02} {}",
+			if afternoon {
+				"अपराह्न"
+			} else {
+				"पूर्वाह्न"
+			}
+		),
+		_ => format!(
+			"{shown}:{minute:02} {}",
+			if afternoon { "PM" } else { "AM" }
+		),
+	}
+}
+
+fn zoned(unix: i64, zone: &TimeZone) -> Option<jiff::Zoned> {
+	Timestamp::from_second(unix)
+		.ok()
+		.map(|timestamp| timestamp.to_zoned(zone.clone()))
+}
+
+/// "Oct 24, 2026", "24 Oct 2026", or "2026-10-24", in the interface language.
 pub fn date(unix: i64) -> String {
-	format_in(unix, &TimeZone::system(), date_pattern(current().dates))
+	let Some(when) = zoned(unix, &TimeZone::system()) else {
+		return UNKNOWN.into();
+	};
+
+	date_text(&when, current().dates, language())
 }
 
 /// A date and time with the zone, such as "Oct 24, 2026, 3:42 PM PDT".
 pub fn date_time(unix: i64) -> String {
-	date_time_in(unix, &TimeZone::system(), current())
+	date_time_in(unix, &TimeZone::system(), current(), language())
 }
 
-fn date_time_in(unix: i64, zone: &TimeZone, conventions: Conventions) -> String {
-	let separator = if conventions.dates == DateStyle::Iso {
+fn date_time_in(
+	unix: i64,
+	zone: &TimeZone,
+	conventions: Conventions,
+	language: Language,
+) -> String {
+	let Some(when) = zoned(unix, zone) else {
+		return UNKNOWN.into();
+	};
+	let separator = if conventions.dates == DateStyle::Iso || writes_year_month_day(language) {
 		" "
 	} else {
 		", "
 	};
-	let pattern = format!(
-		"{}{separator}{} %Z",
-		date_pattern(conventions.dates),
-		time_pattern(conventions.twelve_hour)
-	);
 
-	format_in(unix, zone, &pattern)
+	format!(
+		"{}{separator}{} {}",
+		date_text(&when, conventions.dates, language),
+		clock_text(&when, conventions.twelve_hour, language),
+		when.strftime("%Z")
+	)
 }
 
 /// "Today, 3:42 PM", "Yesterday, 9:05 AM", or the date for anything older.
 pub fn friendly(unix: i64, now: i64) -> String {
-	friendly_in(unix, now, &TimeZone::system(), current())
+	friendly_in(unix, now, &TimeZone::system(), current(), language())
 }
 
-fn friendly_in(unix: i64, now: i64, zone: &TimeZone, conventions: Conventions) -> String {
-	let (Ok(then), Ok(today)) = (Timestamp::from_second(unix), Timestamp::from_second(now)) else {
+fn friendly_in(
+	unix: i64,
+	now: i64,
+	zone: &TimeZone,
+	conventions: Conventions,
+	language: Language,
+) -> String {
+	let (Some(then), Some(today)) = (zoned(unix, zone), zoned(now, zone)) else {
 		return date_time(unix);
 	};
 
-	let then = then.to_zoned(zone.clone());
-	let today = today.to_zoned(zone.clone());
-	let clock = then.strftime(time_pattern(conventions.twelve_hour));
+	let clock = clock_text(&then, conventions.twelve_hour, language);
+	let separator = if writes_year_month_day(language) {
+		" "
+	} else {
+		", "
+	};
 	let days_ago = today
 		.date()
 		.since(then.date())
@@ -242,21 +432,18 @@ fn friendly_in(unix: i64, now: i64, zone: &TimeZone, conventions: Conventions) -
 		.unwrap_or(i32::MAX);
 
 	match days_ago {
-		0 => format!("Today, {clock}"),
-		1 => format!("Yesterday, {clock}"),
-		_ => then.strftime(date_pattern(conventions.dates)).to_string(),
+		0 => format!("{}{separator}{clock}", words(language).today),
+		1 => format!("{}{separator}{clock}", words(language).yesterday),
+		_ => date_text(&then, conventions.dates, language),
 	}
 }
 
+/// A value outside the calendar is a bug upstream. Say so plainly.
+const UNKNOWN: &str = "an unknown time";
+
+#[cfg(test)]
 fn format_in(unix: i64, zone: &TimeZone, pattern: &str) -> String {
-	match Timestamp::from_second(unix) {
-		Ok(timestamp) => timestamp
-			.to_zoned(zone.clone())
-			.strftime(pattern)
-			.to_string(),
-		// A value outside the calendar is a bug upstream. Say so plainly.
-		Err(_) => "an unknown time".into(),
-	}
+	zoned(unix, zone).map_or_else(|| UNKNOWN.into(), |when| when.strftime(pattern).to_string())
 }
 
 #[cfg(test)]
@@ -298,15 +485,21 @@ mod tests {
 	#[test]
 	fn friendly_names_today_and_yesterday_by_local_calendar_days() {
 		assert_eq!(
-			friendly_in(NOW - 600, NOW, &minus_five(), us()),
+			friendly_in(NOW - 600, NOW, &minus_five(), us(), Language::English),
 			"Today, 3:32 PM"
 		);
 		assert_eq!(
-			friendly_in(NOW - 86_400, NOW, &minus_five(), us()),
+			friendly_in(NOW - 86_400, NOW, &minus_five(), us(), Language::English),
 			"Yesterday, 3:42 PM"
 		);
 		assert_eq!(
-			friendly_in(NOW - 86_400 * 5, NOW, &minus_five(), us()),
+			friendly_in(
+				NOW - 86_400 * 5,
+				NOW,
+				&minus_five(),
+				us(),
+				Language::English
+			),
 			"Oct 19, 2026"
 		);
 	}
@@ -371,19 +564,57 @@ mod tests {
 		assert!(!forced.twelve_hour);
 		assert_eq!(forced.dates, DateStyle::Iso);
 		assert_eq!(
-			date_time_in(NOW, &minus_five(), forced),
+			date_time_in(NOW, &minus_five(), forced, Language::English),
 			"2026-10-24 15:42 -05"
 		);
 
 		let german = resolve(TimeFormat::System, DateFormat::System, "de-DE");
 
 		assert_eq!(
-			date_time_in(NOW, &minus_five(), german),
+			date_time_in(NOW, &minus_five(), german, Language::English),
 			"24 Oct 2026, 15:42 -05"
 		);
 		assert_eq!(
-			friendly_in(NOW - 600, NOW, &minus_five(), german),
+			friendly_in(NOW - 600, NOW, &minus_five(), german, Language::English),
 			"Today, 15:32"
+		);
+	}
+
+	#[test]
+	fn dates_and_clocks_are_written_the_way_each_language_writes_them() {
+		let us = us();
+		let european = resolve(TimeFormat::System, DateFormat::System, "de-DE");
+		let day = |conventions, language| date_time_in(NOW, &minus_five(), conventions, language);
+
+		assert_eq!(day(us, Language::German), "Okt. 24, 2026, 3:42 PM -05");
+		assert_eq!(day(european, Language::German), "24. Okt. 2026, 15:42 -05");
+		assert_eq!(
+			day(european, Language::PortugueseBrazil),
+			"24 de out. de 2026, 15:42 -05"
+		);
+		assert_eq!(day(us, Language::Japanese), "2026年10月24日 午後3:42 -05");
+		assert_eq!(
+			day(european, Language::ChineseSimplified),
+			"2026年10月24日 15:42 -05"
+		);
+		assert_eq!(day(us, Language::Hindi), "अक्टू॰ 24, 2026, 3:42 अपराह्न -05");
+		assert_eq!(
+			friendly_in(NOW - 600, NOW, &minus_five(), european, Language::German),
+			"Heute, 15:32"
+		);
+		assert_eq!(
+			friendly_in(NOW - 86_400, NOW, &minus_five(), us, Language::Japanese),
+			"昨日 午後3:42"
+		);
+		assert_eq!(
+			friendly_in(
+				NOW - 600,
+				NOW,
+				&minus_five(),
+				us,
+				Language::PortugueseBrazil
+			),
+			"Hoje, 3:32 PM"
 		);
 	}
 }

@@ -6,6 +6,7 @@ use launcher_model::{Language, Preferences};
 
 use super::SettingsAction;
 use crate::ui::components::{choice_row, setting_row};
+use crate::ui::i18n::text_for;
 use crate::ui::theme;
 
 pub(super) fn region(ui: &mut Ui, prefs: &Preferences, action: &mut SettingsAction) {
@@ -13,15 +14,21 @@ pub(super) fn region(ui: &mut Ui, prefs: &Preferences, action: &mut SettingsActi
 
 	setting_row(
 		ui,
-		"Language",
-		Some(&format!(
-			"Automatic follows your system ({system}). English is the only language with text so far, so every choice shows English; the choice is remembered for when more arrive."
-		)),
+		&t!("settings-language"),
+		Some(&t!("settings-language.description", system = system)),
 		|ui| {
 			let mut chosen = prefs.language;
+			// Each language is named in itself, so it can be found whatever the
+			// interface says now.
 			let options: Vec<(Language, String)> = Language::ALL
 				.iter()
-				.map(|language| (*language, language.label().to_owned()))
+				.map(|language| {
+					let name = language
+						.endonym()
+						.map_or_else(|| t!("settings-language-auto"), str::to_owned);
+
+					(*language, name)
+				})
 				.collect();
 
 			if choice_row(ui, "language", &mut chosen, &options) {
@@ -35,13 +42,13 @@ pub(super) fn region(ui: &mut Ui, prefs: &Preferences, action: &mut SettingsActi
 
 	setting_row(
 		ui,
-		"Time format",
-		Some("Automatic follows your system's region."),
+		&t!("settings-time-format"),
+		Some(&t!("settings-time-format.description")),
 		|ui| {
 			let mut chosen = prefs.time_format;
 			let options: Vec<(TimeFormat, String)> = TimeFormat::ALL
 				.iter()
-				.map(|format| (*format, format.label().to_owned()))
+				.map(|format| (*format, text_for("time-format", format.as_str())))
 				.collect();
 
 			if choice_row(ui, "time-format", &mut chosen, &options) {
@@ -55,13 +62,13 @@ pub(super) fn region(ui: &mut Ui, prefs: &Preferences, action: &mut SettingsActi
 
 	setting_row(
 		ui,
-		"Date format",
-		Some("Automatic follows your system's region."),
+		&t!("settings-date-format"),
+		Some(&t!("settings-date-format.description")),
 		|ui| {
 			let mut chosen = prefs.date_format;
 			let options: Vec<(DateFormat, String)> = DateFormat::ALL
 				.iter()
-				.map(|format| (*format, format.label().to_owned()))
+				.map(|format| (*format, text_for("date-format", format.as_str())))
 				.collect();
 
 			if choice_row(ui, "date-format", &mut chosen, &options) {
@@ -76,10 +83,10 @@ pub(super) fn region(ui: &mut Ui, prefs: &Preferences, action: &mut SettingsActi
 	let now = time::OffsetDateTime::now_utc().unix_timestamp();
 
 	ui.label(
-		RichText::new(format!(
-			"Example: {}   ·   {}",
-			local_time::friendly(now, now),
-			local_time::date_time(now - 3 * 86_400)
+		RichText::new(t!(
+			"settings-region-example",
+			today = local_time::friendly(now, now),
+			earlier = local_time::date_time(now - 3 * 86_400)
 		))
 		.small()
 		.color(theme::muted(ui)),

@@ -12,6 +12,7 @@ repository.workspace = true
 [dependencies]
 eframe.workspace = true
 egui.workspace = true
+fluent-bundle.workspace = true
 image.workspace = true
 launcher-background.workspace = true
 launcher-catalog.workspace = true
@@ -26,6 +27,10 @@ time.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+unic-langid.workspace = true
+
+[dev-dependencies]
+fluent-syntax.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 muda.workspace = true
