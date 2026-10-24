@@ -38,6 +38,9 @@ pub(crate) struct ExploreView {
 	compatible_only: bool,
 	filter: Filter,
 	rows: Vec<ExploreRow>,
+	/// The search, filters, and banner are showing. Folding them away leaves
+	/// more room for the apps.
+	controls_open: bool,
 	selected: Option<String>,
 	next_request: u64,
 	latest_request: u64,
@@ -61,6 +64,7 @@ impl ExploreView {
 			compatible_only: true,
 			filter: Filter::default(),
 			rows: Vec::new(),
+			controls_open: true,
 			selected: None,
 			next_request: 0,
 			latest_request: 0,
@@ -111,23 +115,27 @@ impl ExploreView {
 		}
 
 		page(ui, "Explore", |ui| {
-			if demo.is_some() {
-				ui.label(
-					RichText::new(
-						"Demo catalog. These apps are made up and nothing here installs.",
-					)
-					.small()
-					.color(theme::muted(ui)),
-				);
-				demo_banner(ui, commands);
-			} else {
-				banner(ui, &state, commands);
+			self.controls_toggle(ui, &state);
+
+			if self.controls_open {
+				if demo.is_some() {
+					ui.label(
+						RichText::new(
+							"Demo catalog. These apps are made up and nothing here installs.",
+						)
+						.small()
+						.color(theme::muted(ui)),
+					);
+					demo_banner(ui, commands);
+				} else {
+					banner(ui, &state, commands);
+				}
+
+				search_bar(ui, "Search the catalog", &mut self.query);
+				ui.add_space(8.0);
+
+				self.toolbar(ui, mode);
 			}
-
-			search_bar(ui, "Search the catalog", &mut self.query);
-			ui.add_space(8.0);
-
-			self.toolbar(ui, mode);
 
 			if state.catalog.is_none() && demo.is_none() {
 				return;
@@ -138,6 +146,44 @@ impl ExploreView {
 		});
 
 		action
+	}
+
+	/// The button that folds the search and filters away and back.
+	fn controls_toggle(&mut self, ui: &mut Ui, state: &CatalogState) {
+		ui.horizontal(|ui| {
+			let (icon, label) = if self.controls_open {
+				(icons::CARET_UP, "Hide search and filters")
+			} else {
+				(icons::CARET_DOWN, "Show search and filters")
+			};
+
+			if ui.button(format!("{icon}  {label}")).clicked() {
+				self.controls_open = !self.controls_open;
+			}
+
+			if self.controls_open {
+				return;
+			}
+
+			if state.problem.is_some() {
+				ui.label(
+					RichText::new(icons::WARNING_CIRCLE)
+						.size(18.0)
+						.color(ui.visuals().warn_fg_color),
+				)
+				.on_hover_text("There is a problem with the catalog. Show the filters to read it.");
+			}
+
+			if !self.query.trim().is_empty() || !self.filter.is_open("") {
+				ui.label(
+					RichText::new("Search or filters are active")
+						.small()
+						.color(theme::muted(ui)),
+				);
+			}
+		});
+
+		ui.add_space(6.0);
 	}
 
 	fn toolbar(&mut self, ui: &mut Ui, mode: &mut ViewMode) {

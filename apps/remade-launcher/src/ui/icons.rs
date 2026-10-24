@@ -39,6 +39,9 @@ pub(crate) const NEWSPAPER: &str = "\u{E344}";
 pub(crate) const IMAGE: &str = "\u{E2CA}";
 pub(crate) const PENCIL_LINE: &str = "\u{EBC6}";
 pub(crate) const ARROW_LEFT: &str = "\u{E058}";
+pub(crate) const CARET_UP: &str = "\u{E13C}";
+pub(crate) const CARET_DOWN: &str = "\u{E136}";
+pub(crate) const ARROW_SQUARE_OUT: &str = "\u{E5DE}";
 pub(crate) const SIDEBAR: &str = "\u{EC24}";
 
 #[cfg(test)]
