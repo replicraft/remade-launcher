@@ -235,6 +235,17 @@ impl ApprovedPlan {
 	}
 }
 
+impl Operation {
+	/// The word for this operation in messages and JSON.
+	pub const fn verb(self) -> &'static str {
+		match self {
+			Self::Install => "install",
+			Self::Update => "update",
+			Self::Uninstall => "uninstall",
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -348,16 +359,5 @@ mod tests {
 			"https://github.com/owner/repo/releases/download/v1/evil.zip".into();
 
 		assert!(!approved.covers(&Plan::seal(swapped).unwrap()));
-	}
-}
-
-impl Operation {
-	/// The word for this operation in messages and JSON.
-	pub const fn verb(self) -> &'static str {
-		match self {
-			Self::Install => "install",
-			Self::Update => "update",
-			Self::Uninstall => "uninstall",
-		}
 	}
 }

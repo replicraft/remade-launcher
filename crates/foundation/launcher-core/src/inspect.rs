@@ -5,7 +5,7 @@
 //! cannot say whether an app is safe, only whether it is as installed.
 
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::Path;
 
 use launcher_model::{ErrorCode, InstallationId, LauncherError};
 use launcher_storage::InstallationRecord;
@@ -202,7 +202,7 @@ enum Check {
 	Modified,
 }
 
-fn check_file(root: &PathBuf, entry: &ManifestEntry) -> Check {
+fn check_file(root: &Path, entry: &ManifestEntry) -> Check {
 	use std::io::Read;
 
 	let path = root.join(&entry.path);
