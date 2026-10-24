@@ -3,6 +3,8 @@ resolver = "3"
 members = [
 	"apps/remade-launcher",
 	"crates/domain/launcher-catalog",
+	"crates/domain/launcher-providers",
+	"crates/domain/launcher-resolver",
 	"crates/foundation/launcher-model",
 	"crates/foundation/launcher-core",
 	"crates/infrastructure/launcher-storage",
@@ -33,6 +35,8 @@ repository = "https://github.com/PixelSoftwareStudios/remade-launcher"
 # Internal crates
 launcher-catalog = { path = "crates/domain/launcher-catalog" }
 launcher-core = { path = "crates/foundation/launcher-core" }
+launcher-providers = { path = "crates/domain/launcher-providers" }
+launcher-resolver = { path = "crates/domain/launcher-resolver" }
 launcher-model = { path = "crates/foundation/launcher-model" }
 launcher-net = { path = "crates/infrastructure/launcher-net" }
 launcher-storage = { path = "crates/infrastructure/launcher-storage" }
@@ -56,6 +60,10 @@ tokio-rusqlite = "0.8"
 eframe = { version = "0.37", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 egui = { version = "0.37", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Matching and versions
+globset = { version = "0.4", default-features = false }
+semver = "1"
 
 # Serialization and identifiers
 serde = { version = "1", features = ["derive"] }

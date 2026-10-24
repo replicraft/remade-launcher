@@ -1,0 +1,20 @@
+[package]
+name = "launcher-providers"
+description = "Release providers. They report what exists; they never decide what is trusted."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+launcher-model.workspace = true
+launcher-net.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true
