@@ -50,6 +50,31 @@ pub(crate) fn acquire(data: &DataDirectory) -> Result<OperationLock, LauncherErr
 	}
 }
 
+/// How long to keep trying before reporting that another operation is
+/// running. A process being spawned elsewhere can hold a duplicate of the
+/// lock for an instant, and that is not a real conflict.
+const PATIENCE: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// [`acquire`], retrying briefly so a momentary holder does not cause a
+/// spurious "already running".
+pub(crate) async fn acquire_patiently(
+	data: &DataDirectory,
+) -> Result<OperationLock, LauncherError> {
+	let deadline = tokio::time::Instant::now() + PATIENCE;
+
+	loop {
+		match acquire(data) {
+			Err(error)
+				if error.code() == ErrorCode::OperationInProgress
+					&& tokio::time::Instant::now() < deadline =>
+			{
+				tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+			}
+			result => return result,
+		}
+	}
+}
+
 /// Like [`acquire`], but `None` when busy. For recovery, which simply waits
 /// for a later start.
 pub(crate) fn try_acquire(data: &DataDirectory) -> Option<OperationLock> {

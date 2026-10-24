@@ -10,6 +10,7 @@ mod install;
 mod launch;
 mod lock;
 mod meta;
+mod quarantine;
 mod recover;
 mod remove;
 mod safe_delete;

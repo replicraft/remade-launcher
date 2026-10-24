@@ -93,7 +93,7 @@ impl LifecycleService {
 		now: i64,
 	) -> Result<InstallationId, LauncherError> {
 		// One operation at a time, across the app and the CLI.
-		let _lock = super::lock::acquire(&self.data)?;
+		let _lock = super::lock::acquire_patiently(&self.data).await?;
 
 		let plan = approved.plan();
 		let body = plan.body();
@@ -269,6 +269,9 @@ impl Run<'_> {
 		let tree = staging.join("tree");
 		let mut owned = self.extract(artifact_path, inventory, tree.clone()).await?;
 		owned.push(self.write_marker(&tree)?);
+
+		// Without this, macOS would never check a downloaded app's signature.
+		super::quarantine::mark_downloaded(&tree, self.now)?;
 
 		let root = self.final_root();
 
