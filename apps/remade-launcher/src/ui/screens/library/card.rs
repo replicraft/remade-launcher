@@ -76,6 +76,25 @@ fn title(ui: &mut Ui, item: &Item<'_>) {
 	});
 }
 
+/// How tall the status text comes out at `width`.
+fn status_height(ui: &Ui, item: &Item<'_>, width: f32) -> f32 {
+	let Some(status) = item.status else {
+		return 0.0;
+	};
+
+	let (text, _) = status_text(status, item.mode);
+
+	egui::WidgetText::from(RichText::new(text).small())
+		.into_galley(
+			ui,
+			Some(egui::TextWrapMode::Wrap),
+			width,
+			egui::TextStyle::Body,
+		)
+		.size()
+		.y
+}
+
 fn status_line(ui: &mut Ui, item: &Item<'_>) {
 	let Some(status) = item.status else {
 		return;
@@ -261,15 +280,17 @@ pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	let status_left = title_left + TITLE_WIDTH + 12.0;
 	let status_width = (actions_left - 12.0 - status_left).max(80.0);
 
-	// The status sits in the middle of the card, whatever its length.
+	// The status sits in the middle of the card, whatever its length. Layout
+	// cannot centre a block it has not measured, so measure the text first.
+	let status_height = status_height(ui, item, status_width);
 	let status_area = Rect::from_min_size(
-		pos2(status_left, inner.top()),
-		vec2(status_width, inner.height()),
+		pos2(status_left, middle - status_height / 2.0),
+		vec2(status_width, status_height),
 	);
 	let mut status = ui.new_child(
 		UiBuilder::new()
 			.max_rect(status_area)
-			.layout(Layout::top_down(Align::Min).with_main_align(Align::Center)),
+			.layout(Layout::top_down(Align::Min)),
 	);
 	status_line(&mut status, item);
 
