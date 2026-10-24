@@ -304,7 +304,7 @@ fn about(ui: &mut Ui, logo: &egui::TextureHandle, scroll_to: bool, action: &mut 
 			fact(ui, "License", env!("CARGO_PKG_LICENSE"));
 
 			ui.label(RichText::new("Website").color(theme::muted(ui)));
-			ui.hyperlink_to("remade.wiki", env!("CARGO_PKG_HOMEPAGE"));
+			ui.hyperlink_to("remade.wiki/launcher", env!("CARGO_PKG_HOMEPAGE"));
 			ui.end_row();
 		});
 
