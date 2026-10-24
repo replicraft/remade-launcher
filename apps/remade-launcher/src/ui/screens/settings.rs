@@ -317,22 +317,6 @@ fn about(ui: &mut Ui, logo: &egui::TextureHandle, scroll_to: bool, action: &mut 
 
 	ui.add_space(8.0);
 
-	ui.collapsing("Open source notices", |ui| {
-		for (name, license, note) in NOTICES {
-			ui.horizontal_wrapped(|ui| {
-				ui.label(RichText::new(*name).family(theme::semibold()));
-				ui.label(RichText::new(*license).color(theme::muted(ui)));
-				ui.label(RichText::new(*note).small().color(theme::muted(ui)));
-			});
-		}
-
-		ui.label(
-			RichText::new("The full list of Rust libraries and their licenses is in the project's lock file and source repository.")
-				.small()
-				.color(theme::muted(ui)),
-		);
-	});
-
 	ui.add_space(12.0);
 
 	// The consequences are spelled out in the confirmation that follows.
@@ -346,10 +330,3 @@ fn fact(ui: &mut Ui, label: &str, value: &str) {
 	ui.label(value);
 	ui.end_row();
 }
-
-/// Bundled assets, named here so they are credited in the app itself.
-const NOTICES: &[(&str, &str, &str)] = &[
-	("Open Sans", "SIL Open Font License 1.1", "Interface font"),
-	("Phosphor Icons", "MIT License", "Icon font"),
-	("egui", "MIT or Apache-2.0", "Interface toolkit"),
-];
