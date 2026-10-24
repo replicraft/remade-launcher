@@ -100,7 +100,9 @@ pub(crate) fn muted(ui: &egui::Ui) -> Color32 {
 fn visuals(palette: &Palette, mut base: Visuals) -> Visuals {
 	let rounding = CornerRadius::same(8);
 
-	base.override_text_color = Some(palette.text);
+	// No forced text color: the selected state must be able to draw dark
+	// text on the lime fill, which a global override would defeat.
+	base.override_text_color = None;
 	base.panel_fill = palette.background;
 	base.window_fill = palette.surface;
 	base.extreme_bg_color = palette.surface;

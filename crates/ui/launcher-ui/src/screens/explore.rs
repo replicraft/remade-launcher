@@ -9,7 +9,7 @@ use launcher_catalog::{Project, State, VerificationLevel};
 use launcher_core::{Availability, CatalogState, ExploreQuery, ExploreRow, Origin, ProblemKind};
 use time::OffsetDateTime;
 
-use super::page;
+use super::{Action, page};
 use crate::commands::Commands;
 use crate::theme;
 
@@ -56,7 +56,8 @@ impl ExploreView {
 		}
 	}
 
-	pub(crate) fn show(&mut self, ui: &mut Ui, commands: &Commands) {
+	pub(crate) fn show(&mut self, ui: &mut Ui, commands: &Commands) -> Option<Action> {
+		let mut action = None;
 		let state = commands.catalog_state();
 
 		self.search_if_changed(&state, commands);
@@ -103,14 +104,30 @@ impl ExploreView {
 							.as_ref()
 							.and_then(|catalog| catalog.project(&slug));
 
+						let availability = self
+							.rows
+							.iter()
+							.find(|row| row.slug == slug)
+							.map(|row| row.availability.clone());
+
 						match project {
-							Some(project) => detail(ui, project, &mut self.selected),
+							Some(project) => {
+								action = detail(
+									ui,
+									&slug,
+									project,
+									availability.as_ref(),
+									&mut self.selected,
+								);
+							}
 							None => self.selected = None,
 						}
 					});
 				}
 			});
 		});
+
+		action
 	}
 
 	fn search_if_changed(&mut self, state: &CatalogState, commands: &Commands) {
@@ -215,7 +232,15 @@ fn card(ui: &mut Ui, row: &ExploreRow, selected: bool) -> bool {
 		.clicked()
 }
 
-fn detail(ui: &mut Ui, project: &Project, selected: &mut Option<String>) {
+fn detail(
+	ui: &mut Ui,
+	slug: &str,
+	project: &Project,
+	availability: Option<&Availability>,
+	selected: &mut Option<String>,
+) -> Option<Action> {
+	let mut action = None;
+
 	ScrollArea::vertical()
 		.auto_shrink([false, false])
 		.show(ui, |ui| {
@@ -286,11 +311,31 @@ fn detail(ui: &mut Ui, project: &Project, selected: &mut Option<String>) {
 			}
 
 			ui.add_space(12.0);
-			ui.label(
-				RichText::new("Installing is not available in this version of the launcher yet.")
-					.color(theme::muted(ui)),
-			);
+
+			let installable = project.status.state == State::Active
+				&& availability == Some(&Availability::ThisDevice);
+
+			if ui
+				.add_enabled(installable, egui::Button::new("Install"))
+				.clicked()
+			{
+				action = Some(Action::Install {
+					slug: slug.to_owned(),
+				});
+			}
+
+			if !installable {
+				let reason = match (project.status.state, availability) {
+					(State::Active, Some(availability)) => availability_text(availability),
+					(State::Active, None) => "Checking this device".to_owned(),
+					_ => "Remade has put installs of this app on hold.".to_owned(),
+				};
+
+				ui.label(RichText::new(reason).small().color(theme::muted(ui)));
+			}
 		});
+
+	action
 }
 
 fn fact(ui: &mut Ui, label: &str, value: &str) {

@@ -13,6 +13,7 @@ image.workspace = true
 launcher-catalog.workspace = true
 launcher-core.workspace = true
 launcher-model.workspace = true
+launcher-resolver.workspace = true
 time.workspace = true
 tokio.workspace = true
 tracing.workspace = true
