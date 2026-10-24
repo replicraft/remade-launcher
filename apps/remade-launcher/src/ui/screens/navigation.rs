@@ -1,4 +1,5 @@
-//! The sidebar: the brand and a short list of places.
+//! The sidebar: the brand and a short list of places. It can collapse to a
+//! strip of icons.
 //!
 //! Adding an app from GitHub is an action that opens its own dialog, so it
 //! sits in the list but never becomes the current page.
@@ -6,7 +7,7 @@
 use egui::{Frame, Margin, TextureHandle, Ui};
 
 use super::Screen;
-use crate::ui::components::{brand, nav_item};
+use crate::ui::components::{brand, icon_button, nav_item};
 use crate::ui::{icons, theme};
 
 pub(crate) struct Sidebar<'a> {
@@ -14,6 +15,7 @@ pub(crate) struct Sidebar<'a> {
 	pub(crate) current: Screen,
 	/// How many apps have an update waiting.
 	pub(crate) updates: usize,
+	pub(crate) collapsed: bool,
 }
 
 pub(crate) enum NavAction {
@@ -21,53 +23,87 @@ pub(crate) enum NavAction {
 	Go(Screen),
 	/// Open the Add from GitHub dialog.
 	AddFromGithub,
+	ToggleCollapsed,
 }
 
 pub(crate) fn navigation(ui: &mut Ui, sidebar: Sidebar<'_>) -> NavAction {
 	let mut action = NavAction::None;
+	let compact = sidebar.collapsed;
+	let margin = if compact {
+		Margin::symmetric(10, 16)
+	} else {
+		Margin::symmetric(14, 16)
+	};
 
-	Frame::new()
-		.inner_margin(Margin::symmetric(14, 16))
-		.show(ui, |ui| {
-			ui.spacing_mut().item_spacing.y = 6.0;
+	Frame::new().inner_margin(margin).show(ui, |ui| {
+		ui.spacing_mut().item_spacing.y = 6.0;
 
-			brand(ui, sidebar.logo);
-			ui.add_space(8.0);
+		if compact {
+			brand(ui, sidebar.logo, true);
 
-			for (screen, icon, badge) in [
-				(Screen::Explore, icons::COMPASS, None),
-				(Screen::Library, icons::BOOKS, None),
-				(
-					Screen::Updates,
-					icons::DOWNLOAD,
-					(sidebar.updates > 0).then_some(sidebar.updates),
-				),
-			] {
-				if nav_item(ui, icon, screen.title(), sidebar.current == screen, badge).clicked() {
-					action = NavAction::Go(screen);
-				}
+			if icon_button(ui, icons::SIDEBAR, "Show sidebar", 34.0).clicked() {
+				action = NavAction::ToggleCollapsed;
 			}
+		} else {
+			ui.horizontal(|ui| {
+				brand(ui, sidebar.logo, false);
 
-			if nav_item(ui, icons::GITHUB, "Add from GitHub", false, None).clicked() {
-				action = NavAction::AddFromGithub;
-			}
-
-			ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-				if nav_item(
-					ui,
-					icons::GEAR,
-					Screen::Settings.title(),
-					sidebar.current == Screen::Settings,
-					None,
-				)
-				.clicked()
-				{
-					action = NavAction::Go(Screen::Settings);
-				}
-
-				ui.separator();
+				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+					if icon_button(ui, icons::SIDEBAR, "Hide sidebar", 28.0).clicked() {
+						action = NavAction::ToggleCollapsed;
+					}
+				});
 			});
+		}
+
+		ui.add_space(2.0);
+		ui.separator();
+		ui.add_space(6.0);
+
+		for (screen, icon, badge) in [
+			(Screen::Explore, icons::COMPASS, None),
+			(Screen::Library, icons::BOOKS, None),
+			(
+				Screen::Updates,
+				icons::DOWNLOAD,
+				(sidebar.updates > 0).then_some(sidebar.updates),
+			),
+		] {
+			if nav_item(
+				ui,
+				icon,
+				screen.title(),
+				sidebar.current == screen,
+				badge,
+				compact,
+			)
+			.clicked()
+			{
+				action = NavAction::Go(screen);
+			}
+		}
+
+		if nav_item(ui, icons::GITHUB, "Add from GitHub", false, None, compact).clicked() {
+			action = NavAction::AddFromGithub;
+		}
+
+		ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+			if nav_item(
+				ui,
+				icons::GEAR,
+				Screen::Settings.title(),
+				sidebar.current == Screen::Settings,
+				None,
+				compact,
+			)
+			.clicked()
+			{
+				action = NavAction::Go(Screen::Settings);
+			}
+
+			ui.separator();
 		});
+	});
 
 	action
 }

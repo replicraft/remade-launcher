@@ -14,6 +14,7 @@ use egui::{
 use launcher_model::ThemePreference;
 
 pub(crate) const SIDEBAR_WIDTH: f32 = 244.0;
+pub(crate) const SIDEBAR_COLLAPSED_WIDTH: f32 = 64.0;
 pub(crate) const CONTENT_MARGIN: i8 = 28;
 
 pub(crate) struct Palette {

@@ -5,12 +5,14 @@ use egui::{Align2, FontId, Role, Sense, Ui, WidgetInfo, vec2};
 use super::count_badge;
 use crate::ui::theme;
 
+/// `compact` draws the icon alone, centered, with the label as hover text.
 pub(crate) fn nav_item(
 	ui: &mut Ui,
 	icon: &str,
 	label: &str,
 	selected: bool,
 	badge: Option<usize>,
+	compact: bool,
 ) -> egui::Response {
 	let palette = theme::palette(ui);
 	let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 38.0), Sense::click());
@@ -40,36 +42,57 @@ pub(crate) fn nav_item(
 		} else {
 			palette.text_muted
 		};
-		let middle = rect.left_center();
 		let font = if selected {
 			FontId::new(14.5, theme::semibold())
 		} else {
 			FontId::proportional(14.5)
 		};
 
-		painter.text(
-			middle + vec2(14.0, 0.0),
-			Align2::LEFT_CENTER,
-			icon,
-			FontId::proportional(18.0),
-			icon_color,
-		);
-		painter.text(
-			middle + vec2(44.0, 0.0),
-			Align2::LEFT_CENTER,
-			label,
-			font,
-			palette.text,
-		);
-
-		if let Some(count) = badge {
-			count_badge::paint(
-				painter,
-				palette,
-				rect.right_center() - vec2(24.0, 0.0),
-				count,
+		if compact {
+			painter.text(
+				rect.center(),
+				Align2::CENTER_CENTER,
+				icon,
+				FontId::proportional(20.0),
+				icon_color,
 			);
+
+			if badge.is_some() {
+				painter.circle_filled(rect.center() + vec2(10.0, -10.0), 4.5, palette.accent);
+			}
+		} else {
+			let middle = rect.left_center();
+
+			painter.text(
+				middle + vec2(14.0, 0.0),
+				Align2::LEFT_CENTER,
+				icon,
+				FontId::proportional(18.0),
+				icon_color,
+			);
+			painter.text(
+				middle + vec2(44.0, 0.0),
+				Align2::LEFT_CENTER,
+				label,
+				font,
+				palette.text,
+			);
+
+			if let Some(count) = badge {
+				count_badge::paint(
+					painter,
+					palette,
+					rect.right_center() - vec2(24.0, 0.0),
+					count,
+				);
+			}
 		}
+	}
+
+	if compact {
+		return response
+			.on_hover_text(label)
+			.on_hover_cursor(egui::CursorIcon::PointingHand);
 	}
 
 	response.on_hover_cursor(egui::CursorIcon::PointingHand)

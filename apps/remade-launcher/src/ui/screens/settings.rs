@@ -23,6 +23,9 @@ pub(crate) struct SettingsView<'a> {
 	pub(crate) theme: ThemePreference,
 	pub(crate) updates: UpdateSettings,
 	pub(crate) background: Option<&'a BackgroundStatus>,
+	pub(crate) logo: &'a egui::TextureHandle,
+	/// Scroll the About section into view.
+	pub(crate) show_about: bool,
 }
 
 pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
@@ -38,7 +41,7 @@ pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
 				ui.add_space(16.0);
 				support(ui, &mut action);
 				ui.add_space(16.0);
-				about(ui, &mut action);
+				about(ui, view.logo, view.show_about, &mut action);
 			});
 	});
 
@@ -257,16 +260,75 @@ fn support(ui: &mut Ui, action: &mut SettingsAction) {
 	);
 }
 
-fn about(ui: &mut Ui, action: &mut SettingsAction) {
-	ui.label(RichText::new("About").size(18.0).family(theme::semibold()));
-	ui.add_space(4.0);
+fn about(ui: &mut Ui, logo: &egui::TextureHandle, scroll_to: bool, action: &mut SettingsAction) {
+	let heading = ui.label(RichText::new("About").size(18.0).family(theme::semibold()));
 
-	ui.label(RichText::new(format!("{} by Replicraft", product::NAME)).family(theme::semibold()));
-	ui.label(
-		RichText::new(format!("Version {}", product::VERSION))
-			.small()
-			.color(theme::muted(ui)),
-	);
+	if scroll_to {
+		heading.scroll_to_me(Some(egui::Align::TOP));
+	}
+
+	ui.add_space(8.0);
+
+	ui.horizontal(|ui| {
+		ui.image((logo.id(), egui::vec2(56.0, 56.0)));
+
+		ui.vertical(|ui| {
+			ui.spacing_mut().item_spacing.y = 2.0;
+			ui.label(
+				RichText::new(format!("{} by Replicraft", product::NAME))
+					.size(16.0)
+					.family(theme::semibold()),
+			);
+			ui.label(
+				RichText::new(format!("Version {}", product::VERSION)).color(theme::muted(ui)),
+			);
+			ui.label(
+				RichText::new(product::TAGLINE)
+					.small()
+					.color(theme::muted(ui)),
+			);
+		});
+	});
+
+	ui.add_space(10.0);
+
+	egui::Grid::new("about-facts")
+		.num_columns(2)
+		.spacing([16.0, 6.0])
+		.show(ui, |ui| {
+			fact(
+				ui,
+				"Platform",
+				&format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
+			);
+			fact(ui, "License", env!("CARGO_PKG_LICENSE"));
+
+			ui.label(RichText::new("Website").color(theme::muted(ui)));
+			ui.hyperlink_to("remade.wiki", env!("CARGO_PKG_HOMEPAGE"));
+			ui.end_row();
+
+			ui.label(RichText::new("Source code").color(theme::muted(ui)));
+			ui.hyperlink_to("GitHub", env!("CARGO_PKG_REPOSITORY"));
+			ui.end_row();
+		});
+
+	ui.add_space(8.0);
+
+	ui.collapsing("Open source notices", |ui| {
+		for (name, license, note) in NOTICES {
+			ui.horizontal_wrapped(|ui| {
+				ui.label(RichText::new(*name).family(theme::semibold()));
+				ui.label(RichText::new(*license).color(theme::muted(ui)));
+				ui.label(RichText::new(*note).small().color(theme::muted(ui)));
+			});
+		}
+
+		ui.label(
+			RichText::new("The full list of Rust libraries and their licenses is in the project's lock file and source repository.")
+				.small()
+				.color(theme::muted(ui)),
+		);
+	});
 
 	ui.add_space(12.0);
 
@@ -275,3 +337,16 @@ fn about(ui: &mut Ui, action: &mut SettingsAction) {
 		*action = SettingsAction::RestoreDefaults;
 	}
 }
+
+fn fact(ui: &mut Ui, label: &str, value: &str) {
+	ui.label(RichText::new(label).color(theme::muted(ui)));
+	ui.label(value);
+	ui.end_row();
+}
+
+/// Bundled assets, named here so they are credited in the app itself.
+const NOTICES: &[(&str, &str, &str)] = &[
+	("Open Sans", "SIL Open Font License 1.1", "Interface font"),
+	("Phosphor Icons", "MIT License", "Icon font"),
+	("egui", "MIT or Apache-2.0", "Interface toolkit"),
+];

@@ -1,13 +1,17 @@
-//! The logo, name, and tagline at the top of the sidebar.
+//! The logo, and beside it the name and tagline when there is room.
 
 use egui::{RichText, TextureHandle, Ui, vec2};
 use launcher_model::product;
 
 use crate::ui::theme;
 
-pub(crate) fn brand(ui: &mut Ui, logo: &TextureHandle) {
+pub(crate) fn brand(ui: &mut Ui, logo: &TextureHandle, compact: bool) {
 	ui.horizontal(|ui| {
 		ui.image((logo.id(), vec2(34.0, 34.0)));
+
+		if compact {
+			return;
+		}
 
 		ui.vertical(|ui| {
 			ui.spacing_mut().item_spacing.y = 0.0;
@@ -23,7 +27,4 @@ pub(crate) fn brand(ui: &mut Ui, logo: &TextureHandle) {
 			);
 		});
 	});
-
-	ui.add_space(6.0);
-	ui.separator();
 }

@@ -9,6 +9,7 @@ mod branding;
 mod commands;
 mod components;
 mod icons;
+mod menu;
 mod screens;
 mod theme;
 

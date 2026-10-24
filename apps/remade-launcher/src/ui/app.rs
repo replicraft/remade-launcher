@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 
-use egui::{Context, Panel, TextureHandle, TextureOptions};
+use egui::{Context, Key, Modifiers, Panel, TextureHandle, TextureOptions};
 use launcher_background::control::BackgroundStatus;
 use launcher_core::{
 	Engine, EngineEvent, InstalledApp, OperationSummary, Preparation, Stage, UpdateSettings,
@@ -13,6 +13,7 @@ use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
 
 use crate::ui::commands::{Commands, Message};
+use crate::ui::menu::{AppMenu, MenuCommand};
 use crate::ui::screens::navigation::{self, NavAction, Sidebar};
 use crate::ui::screens::sheet::{self, Outcome, Sheet};
 use crate::ui::screens::{
@@ -26,6 +27,10 @@ pub(crate) struct LauncherApp {
 	context: Context,
 	messages: Receiver<Message>,
 	logo: TextureHandle,
+	menu: AppMenu,
+	sidebar_collapsed: bool,
+	/// Bring the About section into view the next time Settings draws.
+	show_about: bool,
 
 	screen: Screen,
 	explore: ExploreView,
@@ -70,6 +75,9 @@ impl LauncherApp {
 			context: context.clone(),
 			messages,
 			logo,
+			menu: AppMenu::install(context),
+			sidebar_collapsed: false,
+			show_about: false,
 			screen: Screen::Explore,
 			explore: ExploreView::new(),
 			add: AddView::default(),
@@ -316,6 +324,35 @@ impl LauncherApp {
 		}
 	}
 
+	/// Cmd/Ctrl+, opens Settings and Cmd/Ctrl+B folds the sidebar. The
+	/// native menu sends the same commands on macOS.
+	fn handle_shortcuts(&mut self, context: &Context) {
+		let (settings, sidebar) = context.input_mut(|input| {
+			(
+				input.consume_key(Modifiers::COMMAND, Key::Comma),
+				input.consume_key(Modifiers::COMMAND, Key::B),
+			)
+		});
+
+		if sidebar {
+			self.sidebar_collapsed = !self.sidebar_collapsed;
+		}
+
+		if settings {
+			self.go(Screen::Settings);
+		}
+
+		for command in self.menu.poll() {
+			match command {
+				MenuCommand::Settings => self.go(Screen::Settings),
+				MenuCommand::About => {
+					self.show_about = true;
+					self.go(Screen::Settings);
+				}
+			}
+		}
+	}
+
 	fn go(&mut self, screen: Screen) {
 		if screen == Screen::Updates {
 			self.commands.refresh_history();
@@ -383,27 +420,38 @@ impl eframe::App for LauncherApp {
 		let context = ui.ctx().clone();
 
 		self.drain_messages();
+		self.handle_shortcuts(&context);
 
 		let waiting = screens::updates::available(&self.statuses).len();
 		let mut go = None;
 
 		let sidebar_fill = navigation::fill(&context);
+		let sidebar_width = egui::lerp(
+			theme::SIDEBAR_COLLAPSED_WIDTH..=theme::SIDEBAR_WIDTH,
+			context.animate_bool_with_time(
+				egui::Id::unique("sidebar-open"),
+				!self.sidebar_collapsed,
+				0.15,
+			),
+		);
 
 		Panel::left("navigation")
 			.frame(egui::Frame::new().fill(sidebar_fill))
 			.resizable(false)
-			.exact_size(theme::SIDEBAR_WIDTH)
+			.exact_size(sidebar_width)
 			.show(ui, |ui| {
 				let sidebar = Sidebar {
 					logo: &self.logo,
 					current: self.screen,
 					updates: waiting,
+					collapsed: self.sidebar_collapsed,
 				};
 
 				match screens::navigation(ui, sidebar) {
 					NavAction::None => {}
 					NavAction::Go(screen) => go = Some(screen),
 					NavAction::AddFromGithub => self.adding = true,
+					NavAction::ToggleCollapsed => self.sidebar_collapsed = !self.sidebar_collapsed,
 				}
 			});
 
@@ -459,6 +507,8 @@ impl eframe::App for LauncherApp {
 						theme: self.theme,
 						updates: self.update_settings,
 						background: self.background.as_ref(),
+						logo: &self.logo,
+						show_about: std::mem::take(&mut self.show_about),
 					};
 
 					match screens::settings(ui, view) {

@@ -1,10 +1,10 @@
 //! A full-width search field with an icon and a clear button.
 
 use egui::{
-	Align, Align2, FontId, Frame, Key, Layout, Margin, RichText, Role, Sense, TextEdit, Ui,
-	WidgetInfo,
+	Align, Align2, FontId, Frame, Key, Layout, Margin, RichText, Role, TextEdit, Ui, WidgetInfo,
 };
 
+use super::icon_button;
 use crate::ui::{icons, theme};
 
 const HEIGHT: f32 = 42.0;
@@ -31,7 +31,7 @@ pub(crate) fn search_bar(ui: &mut Ui, hint: &str, text: &mut String) -> bool {
 						.color(palette.text_muted),
 				);
 
-				let clear_room = 28.0;
+				let clear_room = 32.0;
 				let field = TextEdit::singleline(text)
 					.hint_text(hint)
 					.font(FontId::proportional(15.0))
@@ -52,23 +52,9 @@ pub(crate) fn search_bar(ui: &mut Ui, hint: &str, text: &mut String) -> bool {
 					changed = true;
 				}
 
-				if !text.is_empty() {
-					let clear = ui.add(
-						egui::Label::new(
-							RichText::new(icons::X).size(16.0).color(palette.text_muted),
-						)
-						.sense(Sense::click()),
-					);
-
-					clear.widget_info(|| WidgetInfo::labeled(Role::Button, true, "Clear search"));
-
-					if clear
-						.on_hover_cursor(egui::CursorIcon::PointingHand)
-						.clicked()
-					{
-						text.clear();
-						changed = true;
-					}
+				if !text.is_empty() && icon_button(ui, icons::X, "Clear search", 24.0).clicked() {
+					text.clear();
+					changed = true;
 				}
 			});
 		});

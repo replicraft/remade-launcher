@@ -42,7 +42,7 @@ impl UpdateMode {
 		match self {
 			Self::Manual => "Manual-update (Default)",
 			Self::OnLaunch => "Auto-update on Launcher start",
-			Self::Daemon => "Auto-update always active daemon (Dangerous)",
+			Self::Daemon => "Auto-update w/ always active daemon (Dangerous)",
 		}
 	}
 
