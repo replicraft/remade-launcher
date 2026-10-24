@@ -333,11 +333,13 @@ mod tests {
 
 		assert_eq!(engine.preferences().await, Preferences::default());
 
-		let mut changed = Preferences::default();
+		let mut changed = Preferences {
+			ui_scale: 125,
+			time_format: TimeFormat::Hour24,
+			date_format: DateFormat::Iso,
+			..Preferences::default()
+		};
 
-		changed.ui_scale = 125;
-		changed.time_format = TimeFormat::Hour24;
-		changed.date_format = DateFormat::Iso;
 		changed.network.proxy = Proxy::Direct;
 		changed.layout.sidebar_collapsed = true;
 
@@ -349,9 +351,11 @@ mod tests {
 	#[tokio::test]
 	async fn unusable_values_are_repaired_on_the_way_in() {
 		let (_directory, engine) = engine(MemorySecret::default()).await;
-		let mut bad = Preferences::default();
+		let mut bad = Preferences {
+			ui_scale: 9_999,
+			..Preferences::default()
+		};
 
-		bad.ui_scale = 9_999;
 		bad.network.proxy = Proxy::Custom("http://user:pw@host".into());
 
 		engine.set_preferences(bad).await.unwrap();

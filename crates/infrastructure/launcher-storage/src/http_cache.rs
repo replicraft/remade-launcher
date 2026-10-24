@@ -23,7 +23,7 @@ impl Database {
 	) -> Result<Option<CachedResponse>, LauncherError> {
 		self.reader()
 			.call(move |connection| -> DbResult<_> {
-				Ok(connection
+				connection
 					.prepare_cached("SELECT etag, body FROM http_cache WHERE url = ?1")?
 					.query_row([url], |row| {
 						Ok(CachedResponse {
@@ -31,7 +31,7 @@ impl Database {
 							body: row.get(1)?,
 						})
 					})
-					.optional()?)
+					.optional()
 			})
 			.await
 			.map_err(unavailable)
@@ -72,7 +72,7 @@ impl Database {
 	pub async fn clear_responses(&self) -> Result<usize, LauncherError> {
 		self.writer()
 			.call(|connection| -> DbResult<usize> {
-				Ok(connection.execute("DELETE FROM http_cache", [])?)
+				connection.execute("DELETE FROM http_cache", [])
 			})
 			.await
 			.map_err(unavailable)

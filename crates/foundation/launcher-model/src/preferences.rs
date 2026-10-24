@@ -305,10 +305,12 @@ mod tests {
 
 	#[test]
 	fn a_round_trip_keeps_everything() {
-		let mut prefs = Preferences::default();
+		let mut prefs = Preferences {
+			time_format: TimeFormat::Hour24,
+			date_format: DateFormat::Iso,
+			..Preferences::default()
+		};
 
-		prefs.time_format = TimeFormat::Hour24;
-		prefs.date_format = DateFormat::Iso;
 		prefs.network.proxy = Proxy::Custom("socks5://127.0.0.1:1080".into());
 		prefs.layout.window = Some((1300.0, 840.0));
 
@@ -350,9 +352,11 @@ mod tests {
 
 	#[test]
 	fn sanitizing_repairs_values_that_could_cause_trouble() {
-		let mut prefs = Preferences::default();
+		let mut prefs = Preferences {
+			ui_scale: 5_000,
+			..Preferences::default()
+		};
 
-		prefs.ui_scale = 5_000;
 		prefs.network.timeout_seconds = 0;
 		prefs.network.proxy = Proxy::Custom("http://user:pw@host".into());
 		prefs.layout.window = Some((f32::NAN, 100.0));
