@@ -57,6 +57,29 @@ remade check && remade update --all
 `--yes` approves a prompt but never accepts an unreviewed source: that needs
 the exact `owner/repository`. `--no-input` makes any question an error.
 
+More of what it does:
+
+```sh
+remade repair quill                    # look first; put it back if it is damaged
+remade download quill --out ~/Downloads  # fetch and check the file; run nothing
+remade adopt /opt/quill --yes          # watch an app you already have; never changed
+remade collection export --out apps.json && remade collection preview apps.json
+remade auth login --with-token < token.txt   # optional: raises GitHub's lookup limit
+remade config set region.time_format 24h
+```
+
+Reviews belong to a community service that does not exist yet, so
+`remade reviews` says so instead of pretending.
+
+## For AI assistants
+
+`remade-launcher-mcp` serves the same engine over the Model Context Protocol
+on standard input and output. By default an assistant can search, inspect,
+check for updates, and *plan* changes, but not make them. Applying a saved
+plan needs `--allow-apply` (and `--allow-destructive` for removals), the
+assistant must name the exact app and version the plan shows, and an app from
+a source Remade has not reviewed can only be accepted by a person.
+
 ## Layout
 
 | Path | What it is |
@@ -64,6 +87,7 @@ the exact `owner/repository`. `--no-input` makes any question an error.
 | `apps/remade-launcher` | The desktop app |
 | `apps/remade-launcher-cli` | The `remade` command line, installable separately |
 | `apps/remade-launcher-daemon` | The optional per-user background updater |
+| `apps/remade-launcher-mcp` | An MCP server for AI assistants, read and plan by default |
 | `crates/foundation/launcher-model` | IDs, errors, product identity, platform targets |
 | `crates/foundation/launcher-core` | The engine: catalog, plans, install lifecycle, recovery |
 | `crates/domain/launcher-catalog` | Signed-catalog verification |

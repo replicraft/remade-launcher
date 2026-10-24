@@ -4,6 +4,7 @@ members = [
 	"apps/remade-launcher",
 	"apps/remade-launcher-cli",
 	"apps/remade-launcher-daemon",
+	"apps/remade-launcher-mcp",
 	"crates/domain/launcher-catalog",
 	"crates/platform/launcher-background",
 	"crates/domain/launcher-packages",
@@ -107,6 +108,10 @@ clap_complete = "4"
 comfy-table = "8"
 indicatif = "0.18"
 rpassword = "7"
+
+# Agent integration
+rmcp = { version = "3", default-features = false, features = ["macros", "server", "transport-io"] }
+schemars = "1"
 
 # Platform
 directories = "6"

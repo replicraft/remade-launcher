@@ -19,11 +19,11 @@ version="$(cargo metadata --no-deps --format-version 1 --manifest-path "$root/Ca
 	| python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "remade-launcher-cli"))')"
 
 cd "$root"
-cargo build --release --locked -p remade-launcher-cli -p remade-launcher-daemon --target "$target"
+cargo build --release --locked -p remade-launcher-cli -p remade-launcher-daemon -p remade-launcher-mcp --target "$target"
 
 case "$target" in
-	*windows*) binary="remade.exe"; daemon="remade-launcher-daemon.exe" ;;
-	*) binary="remade"; daemon="remade-launcher-daemon" ;;
+	*windows*) binary="remade.exe"; daemon="remade-launcher-daemon.exe"; mcp="remade-launcher-mcp.exe" ;;
+	*) binary="remade"; daemon="remade-launcher-daemon"; mcp="remade-launcher-mcp" ;;
 esac
 
 name="remade-$version-$target"
@@ -36,6 +36,9 @@ mkdir -p "$stage"
 install -m 755 "target/$target/release/$binary" "$stage/$binary"
 # `remade daemon register` looks for the updater beside the command.
 install -m 755 "target/$target/release/$daemon" "$stage/$daemon"
+# For AI assistants. It can look things up and plan, and applies nothing unless
+# it is started with --allow-apply.
+install -m 755 "target/$target/release/$mcp" "$stage/$mcp"
 install -m 644 "$root/LICENSE" "$stage/LICENSE"
 
 case "$target" in
