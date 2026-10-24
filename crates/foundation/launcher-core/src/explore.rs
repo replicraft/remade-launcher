@@ -67,6 +67,8 @@ pub struct ExploreRow {
 	pub featured: bool,
 	/// When the app joined the catalog, as Unix seconds, if it says.
 	pub added_at: Option<i64>,
+	/// The original software it remakes or replaces, as the catalog lists it.
+	pub originals: Vec<String>,
 	pub matched: Match,
 }
 
@@ -142,8 +144,46 @@ const MIN_SCORE_PER_CHAR: i64 = 12;
 /// How far apart the matched letters may be, as a multiple of the word.
 const MAX_SPREAD_PER_CHAR: usize = 4;
 
-/// Apps whose name, slug, and repository contain each word's letters in order,
-/// best first. The matching is the `fuzzy-matcher` crate's.
+/// How closely `names` is spelled like all of `terms`, or `None` if it is not.
+///
+/// A word has to have its letters in order in `names`, near each other, and
+/// well enough to score. Words too short to guess at have to appear as typed
+/// in `anywhere`, which is the wider text to look in. The matching is the
+/// `fuzzy-matcher` crate's. The score is higher for a closer spelling.
+pub fn close_score(names: &str, anywhere: &str, terms: &[String]) -> Option<i64> {
+	let matcher = SkimMatcherV2::default().ignore_case();
+	let mut total = 0;
+
+	for term in terms {
+		let chars = term.chars().count();
+
+		if chars < MIN_FUZZY_CHARS {
+			// Too short to guess at. It has to be there as typed.
+			anywhere
+				.to_lowercase()
+				.contains(term.as_str())
+				.then_some(())?;
+
+			continue;
+		}
+
+		let (score, at) = matcher.fuzzy_indices(names, term)?;
+		let spread = at.last()? - at.first()?;
+
+		if spread > MAX_SPREAD_PER_CHAR * chars + 2
+			|| score < MIN_SCORE_PER_CHAR * i64::try_from(chars).ok()?
+		{
+			return None;
+		}
+
+		total += score;
+	}
+
+	Some(total)
+}
+
+/// Apps whose name, slug, and repository are spelled like every word, best
+/// first.
 fn close_matches(
 	projects: &[(&str, &Project)],
 	texts: &[String],
@@ -151,44 +191,26 @@ fn close_matches(
 	host: Option<HostTarget>,
 	supported: &[&str],
 ) -> Vec<ExploreRow> {
-	let matcher = SkimMatcherV2::default().ignore_case();
-
 	let mut scored: Vec<(i64, ExploreRow)> = projects
 		.par_iter()
 		.zip(texts.par_iter())
 		.filter_map(|((slug, project), text)| {
 			// What people type is a name, so match against names only. The
-			// repository is included because it usually repeats the name.
+			// repository is included because it usually repeats the name, and
+			// the original software's names because people search by them.
 			let names = format!(
-				"{} {} {}",
-				project.display.name, slug, project.source.repository
+				"{} {} {} {}",
+				project.display.name,
+				slug,
+				project.source.repository,
+				project.display.original_names.join(" ")
 			);
-			let mut total = 0;
-
-			for term in terms {
-				let chars = term.chars().count();
-
-				total += if chars < MIN_FUZZY_CHARS {
-					// Too short to guess at. It has to be there as typed.
-					text.contains(term.as_str()).then_some(0)?
-				} else {
-					let (score, at) = matcher.fuzzy_indices(&names, term)?;
-					let spread = at.last()? - at.first()?;
-					let wide = spread > MAX_SPREAD_PER_CHAR * chars + 2;
-
-					if wide || score < MIN_SCORE_PER_CHAR * i64::try_from(chars).ok()? {
-						return None;
-					}
-
-					score
-				};
-			}
-
+			let score = close_score(&names, text, terms)?;
 			let mut found = row(slug, project, host, supported);
 
 			found.matched = Match::Close;
 
-			Some((total, found))
+			Some((score, found))
 		})
 		.collect();
 
@@ -215,6 +237,7 @@ fn row(slug: &str, project: &Project, host: Option<HostTarget>, supported: &[&st
 		platforms: platforms(project),
 		featured: project.display.featured,
 		added_at: project.display.added_at_unix(),
+		originals: project.display.original_names.clone(),
 		matched: Match::Exact,
 	}
 }
@@ -440,5 +463,81 @@ mod tests {
 	fn letters_in_the_wrong_order_are_not_close() {
 		assert!(found("rdts").is_empty());
 		assert!(found("lpmas").is_empty());
+	}
+
+	/// The sample catalog, with the app saying what it remakes, signed by a
+	/// key of this test's own.
+	fn catalog_remaking(originals: &[&str]) -> VerifiedCatalog {
+		use base64::Engine as _;
+		use ed25519_dalek::{Signer, SigningKey};
+		use sha2::{Digest, Sha256};
+
+		let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+			.join("../../domain/launcher-catalog/tests/fixtures");
+		let mut manifest: serde_json::Value = serde_json::from_slice(
+			&std::fs::read(root.join("valid/launcher-catalog.json")).unwrap(),
+		)
+		.unwrap();
+
+		manifest["projects"]["sample-editor"]["display"]["original_names"] =
+			serde_json::json!(originals);
+		manifest["hash"] = serde_json::json!(hex::encode(Sha256::digest(
+			serde_json_canonicalizer::to_vec(&manifest["projects"]).unwrap()
+		)));
+
+		let bytes = serde_json::to_vec(&manifest).unwrap();
+		let key = SigningKey::from_bytes(&[4u8; 32]);
+		let engine = base64::engine::general_purpose::STANDARD;
+		let registry = KeyRegistry::from_test_fixture(&format!(
+			r#"{{"schema_version":1,"feed_id":"test.remade.launcher-catalog","test_only":true,"keys":[
+				{{"key_id":"k","algorithm":"ed25519","role":"catalog","status":"active","public_key":"{}"}}]}}"#,
+			engine.encode(key.verifying_key().to_bytes())
+		))
+		.unwrap();
+		let envelope = format!(
+			r#"{{"version":1,"signatures":[{{"key_id":"k","algorithm":"ed25519","signature":"{}"}}]}}"#,
+			engine.encode(key.sign(&bytes).to_bytes())
+		);
+
+		verify(
+			&bytes,
+			envelope.as_bytes(),
+			&VerifyContext {
+				registry: &registry,
+				feed_id: "test.remade.launcher-catalog",
+				now: OffsetDateTime::from_unix_timestamp(1_894_665_600).unwrap(),
+				high_water: None,
+				supported_capabilities: &["safe-archive-v1"],
+				freshness: FreshnessPolicy::RequireCurrent,
+			},
+		)
+		.unwrap()
+		.catalog
+	}
+
+	#[test]
+	fn an_app_is_found_by_the_software_it_remakes() {
+		let catalog = catalog_remaking(&["Paint Shop", "Photo Studio"]);
+		let find = |text: &str| search_blocking(&catalog, &query(text, false), Some(LINUX), &[]);
+
+		let exact = find("photo studio");
+
+		assert_eq!(exact.len(), 1);
+		assert_eq!(exact[0].matched, Match::Exact);
+		assert_eq!(exact[0].originals, ["Paint Shop", "Photo Studio"]);
+		// A slip in the original's name still finds it.
+		assert_eq!(find("phto studio")[0].matched, Match::Close);
+		assert!(find("spreadsheet").is_empty());
+	}
+
+	#[test]
+	fn the_names_of_originals_are_checked_when_the_catalog_is_verified() {
+		let many = ["a", "b", "c", "d", "e", "f"];
+		let result = std::panic::catch_unwind(|| catalog_remaking(&many));
+
+		assert!(
+			result.is_err(),
+			"six originals is more than a listing needs"
+		);
 	}
 }

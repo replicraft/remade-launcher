@@ -295,6 +295,7 @@ mod tests {
 			platforms: Vec::new(),
 			featured,
 			added_at,
+			originals: Vec::new(),
 			matched: Match::Exact,
 		}
 	}

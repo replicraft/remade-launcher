@@ -105,6 +105,10 @@ struct FakeGithub {
 	releases: Arc<Mutex<String>>,
 	/// While true, GitHub answers every request with a server error.
 	down: Arc<Mutex<bool>>,
+	/// While true, GitHub refuses every request because the limit is reached.
+	limited: Arc<Mutex<bool>>,
+	/// How many requests it was asked.
+	asked: Arc<Mutex<usize>>,
 }
 
 impl Transport for FakeGithub {
@@ -114,6 +118,20 @@ impl Transport for FakeGithub {
 		_: MetadataRequest,
 		_: usize,
 	) -> Result<HttpResponse, LauncherError> {
+		*self.asked.lock().unwrap() += 1;
+
+		if *self.limited.lock().unwrap() {
+			return Ok(HttpResponse {
+				status: 403,
+				etag: None,
+				retry_after_seconds: None,
+				rate_limit_remaining: Some(0),
+				rate_limit_reset: None,
+				next_page: None,
+				body: Vec::new(),
+			});
+		}
+
 		if *self.down.lock().unwrap() {
 			return Ok(HttpResponse {
 				status: 500,
@@ -202,6 +220,8 @@ async fn world() -> World {
 			release_json(1, "v1.0.0", &v1, true)
 		))),
 		down: Arc::new(Mutex::new(false)),
+		limited: Arc::new(Mutex::new(false)),
+		asked: Arc::new(Mutex::new(0)),
 	};
 
 	let config = EngineConfig {
@@ -328,6 +348,8 @@ async fn a_repository_that_no_longer_matches_the_catalog_is_refused() {
 		repo: REPO.replace("\"id\":100002", "\"id\":999999"),
 		releases: Arc::new(Mutex::new("[]".into())),
 		down: Arc::new(Mutex::new(false)),
+		limited: Arc::new(Mutex::new(false)),
+		asked: Arc::new(Mutex::new(0)),
 	});
 
 	let error = world
@@ -1616,6 +1638,8 @@ async fn a_repository_that_changed_hands_blocks_automatic_updates() {
 		repo: REPO.replace("\"id\":100002", "\"id\":999999"),
 		releases: world.github.releases.clone(),
 		down: Arc::new(Mutex::new(false)),
+		limited: Arc::new(Mutex::new(false)),
+		asked: Arc::new(Mutex::new(0)),
 	});
 
 	let report = world
@@ -2033,4 +2057,44 @@ async fn someone_who_follows_pre_releases_is_not_told_up_to_date_by_the_stable_l
 		statuses(&world, NOW).await[0].state,
 		UpdateState::CheckFailed(_)
 	));
+}
+
+#[tokio::test]
+async fn once_github_refuses_for_its_limit_the_checks_wait_instead_of_asking_again() {
+	let (world, _) = world_with_update_published(MATURE).await;
+	let asked = |world: &World| *world.github.asked.lock().unwrap();
+
+	*world.github.limited.lock().unwrap() = true;
+
+	let first_asked = asked(&world);
+	let found = statuses(&world, NOW).await;
+
+	assert!(matches!(found[0].state, UpdateState::CheckFailed(_)));
+	assert!(asked(&world) > first_asked, "the first look had to ask");
+
+	// GitHub has not recovered, and nothing should be sent in the meantime.
+	let after_first = asked(&world);
+	let found = statuses(&world, NOW).await;
+
+	assert_eq!(asked(&world), after_first, "no request while waiting");
+	match &found[0].state {
+		UpdateState::CheckFailed(why) => assert!(why.contains("GitHub token"), "{why}"),
+		other => panic!("{other:?}"),
+	}
+
+	// Adding a token clears the wait, so the next check asks again.
+	*world.github.limited.lock().unwrap() = false;
+	world
+		.engine
+		.set_github_token("ghp_abcdefghijklmnopqrstuvwxyz0123456789")
+		.await
+		.unwrap();
+
+	let found = statuses(&world, NOW).await;
+
+	assert!(
+		matches!(found[0].state, UpdateState::Available),
+		"{:?}",
+		found[0].state
+	);
 }

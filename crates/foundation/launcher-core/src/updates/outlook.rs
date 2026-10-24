@@ -1,13 +1,21 @@
 //! What an installed app's update looks like right now.
 
+use std::sync::atomic::Ordering;
+
 use launcher_catalog::Channel;
-use launcher_model::HostTarget;
+use launcher_model::{ErrorCode, HostTarget};
 use launcher_providers::{GithubProvider, Transport};
 use launcher_resolver::{Candidate, Recency, compare_tags};
 use launcher_storage::{AppPolicy, InstallationRecord};
 
 use crate::engine::Engine;
 use crate::prepare::{Preparation, Ready};
+
+/// How long update checks leave GitHub alone after it refuses for a limit.
+const COOLDOWN_SECONDS: i64 = 5 * 60;
+
+/// What is said while waiting. A token is the way out, so it says so.
+const RATE_LIMITED: &str = "GitHub's request limit was reached. Try again in a few minutes, or add a GitHub token in Settings to raise it.";
 
 /// The result of looking for an update, with the reasons kept typed so the
 /// decision and the screens never have to read prose.
@@ -40,6 +48,12 @@ impl Engine {
 	) -> Outlook {
 		if self.snapshot_says_current(record, policy).await {
 			return Outlook::UpToDate;
+		}
+
+		// GitHub just said its limit was reached. Asking again for each of the
+		// remaining apps only repeats the refusal, so wait a few minutes.
+		if self.github_cooldown_until.load(Ordering::Relaxed) > now {
+			return Outlook::Failed(RATE_LIMITED.into());
 		}
 
 		self.outlook_on(provider, record, policy, host, now).await
@@ -124,7 +138,14 @@ impl Engine {
 			.await;
 
 		let mut ready = match preparation {
-			Err(error) => return Outlook::Failed(error.user_message().to_owned()),
+			Err(error) => {
+				if error.code() == ErrorCode::ProviderRateLimited {
+					self.github_cooldown_until
+						.store(now + COOLDOWN_SECONDS, Ordering::Relaxed);
+				}
+
+				return Outlook::Failed(error.user_message().to_owned());
+			}
 			Ok(Preparation::Unavailable(why)) => return Outlook::Unavailable(why),
 			Ok(Preparation::Choose(candidates)) => return Outlook::Choose(candidates),
 			Ok(Preparation::Ready(ready)) => ready,

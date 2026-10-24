@@ -89,6 +89,14 @@ fn validate_project(slug: &str, project: &Project) -> Result<(), CatalogError> {
 		check_text(language, 40, "language")?;
 	}
 
+	if display.original_names.len() > 5 {
+		return Err(schema("too many original names"));
+	}
+
+	for name in &display.original_names {
+		check_text(name, 80, "original name")?;
+	}
+
 	if display.added_at.is_some() && display.added_at_unix().is_none() {
 		return Err(schema("added_at is not a UTC whole-second timestamp"));
 	}

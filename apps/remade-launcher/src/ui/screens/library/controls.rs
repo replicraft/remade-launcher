@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use launcher_core::{InstalledApp, UpdateStatus};
+use launcher_core::{InstalledApp, UpdateStatus, close_score};
 use launcher_model::InstallationId;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -121,14 +121,25 @@ pub(super) fn arrange<'a>(
 	state: &LibraryState,
 ) -> Vec<&'a InstalledApp> {
 	let needle = state.search.trim().to_lowercase();
+	let exact = |app: &InstalledApp| {
+		needle.is_empty()
+			|| app.name.to_lowercase().contains(&needle)
+			|| app.repository.to_lowercase().contains(&needle)
+	};
+
+	// Nothing contains what was typed, so fall back to the closest by
+	// spelling, the way the catalog search does.
+	let by_spelling = !apps.iter().any(exact);
+	let terms: Vec<String> = needle.split_whitespace().map(str::to_owned).collect();
+	let close = |app: &InstalledApp| {
+		let text = format!("{} {}", app.name, app.repository);
+
+		close_score(&text, &text, &terms).is_some()
+	};
 
 	let mut shown: Vec<&InstalledApp> = apps
 		.iter()
-		.filter(|app| {
-			needle.is_empty()
-				|| app.name.to_lowercase().contains(&needle)
-				|| app.repository.to_lowercase().contains(&needle)
-		})
+		.filter(|app| if by_spelling { close(app) } else { exact(app) })
 		.filter(|app| match state.show {
 			Show::All => true,
 			Show::UpdatesAvailable => has_update(statuses, app),
@@ -210,6 +221,30 @@ mod tests {
 			names(&arrange(&apps, &HashMap::new(), &state)),
 			["hex-peek"]
 		);
+	}
+
+	#[test]
+	fn a_search_that_matches_nothing_falls_back_to_the_closest_spelling() {
+		let apps = vec![app("Firefox", true, 1), app("Inkscape", true, 2)];
+		let search = |text: &str| {
+			let state = LibraryState {
+				search: text.into(),
+				..LibraryState::default()
+			};
+
+			arrange(&apps, &HashMap::new(), &state)
+				.iter()
+				.map(|app| app.name.clone())
+				.collect::<Vec<_>>()
+		};
+
+		assert_eq!(search("fire"), ["Firefox"], "an exact match stays exact");
+		assert_eq!(search("frefox"), ["Firefox"]);
+		assert_eq!(search("inksc"), ["Inkscape"], "this one is a prefix");
+		assert!(search("banana").is_empty());
+		// Close matches are only a fallback: when something contains the text,
+		// nothing else comes along.
+		assert_eq!(search("ink"), ["Inkscape"]);
 	}
 
 	#[test]

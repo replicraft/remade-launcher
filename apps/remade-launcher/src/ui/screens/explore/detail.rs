@@ -29,6 +29,8 @@ struct Facts<'a> {
 	categories: &'a [String],
 	maturity: Option<Maturity>,
 	languages: &'a [String],
+	/// The original software it remakes or replaces.
+	originals: &'a [String],
 	platforms: Vec<Os>,
 	license: Option<&'a str>,
 	links: Vec<(String, &'a str)>,
@@ -78,6 +80,7 @@ pub(super) fn detail(
 			categories: &display.categories,
 			maturity: display.maturity,
 			languages: &display.languages,
+			originals: &display.original_names,
 			platforms,
 			license: display.license.as_deref(),
 			links: [
@@ -128,6 +131,7 @@ pub(super) fn demo_detail(ui: &mut Ui, row: &ExploreRow) -> Option<Action> {
 			categories: &row.categories,
 			maturity: row.maturity,
 			languages: &row.languages,
+			originals: &row.originals,
 			platforms: row.platforms.clone(),
 			license: Some("MIT"),
 			links: vec![
@@ -355,6 +359,12 @@ fn details(ui: &mut Ui, facts: &Facts<'_>) {
 				});
 			}
 
+			if !facts.originals.is_empty() {
+				row(ui, &t!("explore-detail-originals"), |ui| {
+					ui.label(facts.originals.join(", "));
+				});
+			}
+
 			if !facts.languages.is_empty() {
 				row(ui, &t!("explore-detail-languages"), |ui| {
 					ui.label(facts.languages.join(", "));
@@ -478,6 +488,7 @@ mod tests {
 			categories: &[],
 			maturity: None,
 			languages: &[],
+			originals: &[],
 			platforms: Vec::new(),
 			license: None,
 			links: Vec::new(),

@@ -43,6 +43,9 @@ pub struct Engine {
 	pub(crate) launcher_update: tokio::sync::Mutex<()>,
 	/// The website's daily release snapshot, once it has been read.
 	pub(crate) observations: crate::updates::ObservationsCache,
+	/// Until this Unix time, update checks do not ask GitHub, because it just
+	/// said its request limit was reached. A new token clears it.
+	pub(crate) github_cooldown_until: std::sync::atomic::AtomicI64,
 }
 
 impl Engine {
@@ -122,6 +125,7 @@ impl Engine {
 			releases: config.releases,
 			launcher_update: tokio::sync::Mutex::new(()),
 			observations: crate::updates::ObservationsCache::default(),
+			github_cooldown_until: std::sync::atomic::AtomicI64::new(0),
 		})
 	}
 

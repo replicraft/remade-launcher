@@ -85,7 +85,8 @@ impl VerifiedCatalog {
 	}
 
 	/// What each project can be found by, lowercase, in [`Self::projects`]
-	/// order: its slug, name, summary, owner, repository, and categories.
+	/// order: its slug, name, summary, owner, repository, categories, and the
+	/// names of the original software it remakes.
 	///
 	/// It is built once, in parallel, the first time it is asked for. Typing in
 	/// a search box then costs a scan, not thousands of small allocations.
@@ -106,6 +107,7 @@ impl VerifiedCatalog {
 					];
 
 					parts.extend(display.categories.iter().map(String::as_str));
+					parts.extend(display.original_names.iter().map(String::as_str));
 
 					parts.join("\n").to_lowercase()
 				})

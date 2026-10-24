@@ -63,6 +63,10 @@ pub struct Display {
 	/// Programming languages the app is written in, for display.
 	#[serde(default)]
 	pub languages: Vec<String>,
+	/// The original software this app remakes or replaces, such as `Notepad`.
+	/// Search finds the app by these names too.
+	#[serde(default)]
+	pub original_names: Vec<String>,
 	/// The catalog's editors chose to highlight this app.
 	#[serde(default)]
 	pub featured: bool,
@@ -421,6 +425,7 @@ mod tests {
 		let plain = display("");
 
 		assert!(plain.languages.is_empty());
+		assert!(plain.original_names.is_empty());
 		assert_eq!(plain.maturity, None);
 		assert_eq!(plain.description, None);
 		assert!(!plain.featured);

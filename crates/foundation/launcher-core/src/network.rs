@@ -216,6 +216,9 @@ impl Engine {
 		let mut preferences = self.preferences().await;
 
 		preferences.network.token_saved = true;
+		// A token has its own, much larger allowance, so try again at once.
+		self.github_cooldown_until
+			.store(0, std::sync::atomic::Ordering::Relaxed);
 		self.set_preferences(preferences).await
 	}
 
