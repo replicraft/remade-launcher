@@ -24,17 +24,26 @@ impl Sort {
 	}
 
 	pub(super) fn from_key(key: &str) -> Option<Self> {
-		Self::OPTIONS
-			.iter()
-			.map(|(sort, _)| *sort)
-			.find(|sort| sort.key() == key)
+		Self::ALL.into_iter().find(|sort| sort.key() == key)
 	}
 
-	pub(super) const OPTIONS: [(Self, &'static str); 3] = [
-		(Self::Name, "Name"),
-		(Self::RecentlyInstalled, "Recently installed"),
-		(Self::UpdatesFirst, "Updates first"),
-	];
+	pub(super) const ALL: [Self; 3] = [Self::Name, Self::RecentlyInstalled, Self::UpdatesFirst];
+
+	pub(super) fn label(self) -> String {
+		match self {
+			Self::Name => t!("library-sort-name"),
+			Self::RecentlyInstalled => t!("library-sort-recent"),
+			Self::UpdatesFirst => t!("library-sort-updates"),
+		}
+	}
+
+	/// Every choice with its words, for the dropdown.
+	pub(super) fn options() -> Vec<(Self, String)> {
+		Self::ALL
+			.into_iter()
+			.map(|sort| (sort, sort.label()))
+			.collect()
+	}
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -47,12 +56,27 @@ pub(super) enum Show {
 }
 
 impl Show {
-	pub(super) const OPTIONS: [(Self, &'static str); 4] = [
-		(Self::All, "All apps"),
-		(Self::UpdatesAvailable, "Updates available"),
-		(Self::Reviewed, "Reviewed by Remade"),
-		(Self::AddedByYou, "Added by you"),
-	];
+	pub(super) fn label(self) -> String {
+		match self {
+			Self::All => t!("library-show-all"),
+			Self::UpdatesAvailable => t!("library-show-updates"),
+			Self::Reviewed => t!("library-show-reviewed"),
+			Self::AddedByYou => t!("library-show-added"),
+		}
+	}
+
+	/// Every choice with its words, for the dropdown.
+	pub(super) fn options() -> Vec<(Self, String)> {
+		[
+			Self::All,
+			Self::UpdatesAvailable,
+			Self::Reviewed,
+			Self::AddedByYou,
+		]
+		.into_iter()
+		.map(|show| (show, show.label()))
+		.collect()
+	}
 }
 
 /// What the Library's controls hold between frames.

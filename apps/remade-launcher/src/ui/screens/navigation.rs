@@ -43,7 +43,7 @@ pub(crate) fn navigation(ui: &mut Ui, sidebar: Sidebar<'_>) -> NavAction {
 			ui.vertical_centered(|ui| {
 				ui.image((sidebar.logo.id(), egui::vec2(34.0, 34.0)));
 
-				if icon_button(ui, icons::SIDEBAR, "Show sidebar", 34.0).clicked() {
+				if icon_button(ui, icons::SIDEBAR, &t!("nav-show-sidebar"), 34.0).clicked() {
 					action = NavAction::ToggleCollapsed;
 				}
 			});
@@ -52,7 +52,7 @@ pub(crate) fn navigation(ui: &mut Ui, sidebar: Sidebar<'_>) -> NavAction {
 				brand(ui, sidebar.logo, false);
 
 				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-					if icon_button(ui, icons::SIDEBAR, "Hide sidebar", 28.0).clicked() {
+					if icon_button(ui, icons::SIDEBAR, &t!("nav-hide-sidebar"), 28.0).clicked() {
 						action = NavAction::ToggleCollapsed;
 					}
 				});
@@ -75,7 +75,7 @@ pub(crate) fn navigation(ui: &mut Ui, sidebar: Sidebar<'_>) -> NavAction {
 			if nav_item(
 				ui,
 				icon,
-				screen.title(),
+				&screen.title(),
 				sidebar.current == screen,
 				badge,
 				compact,
@@ -86,7 +86,16 @@ pub(crate) fn navigation(ui: &mut Ui, sidebar: Sidebar<'_>) -> NavAction {
 			}
 		}
 
-		if nav_item(ui, icons::GITHUB, "Add from GitHub", false, None, compact).clicked() {
+		if nav_item(
+			ui,
+			icons::GITHUB,
+			&t!("nav-add-from-github"),
+			false,
+			None,
+			compact,
+		)
+		.clicked()
+		{
 			action = NavAction::AddFromGithub;
 		}
 
@@ -94,7 +103,7 @@ pub(crate) fn navigation(ui: &mut Ui, sidebar: Sidebar<'_>) -> NavAction {
 			if nav_item(
 				ui,
 				icons::GEAR,
-				Screen::Settings.title(),
+				&Screen::Settings.title(),
 				sidebar.current == Screen::Settings,
 				None,
 				compact,

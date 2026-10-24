@@ -212,9 +212,12 @@ impl Transfers {
 		if self.items.len() > MAX_ROWS {
 			ui.add_space(6.0);
 			ui.label(
-				RichText::new(format!("and {} more", self.items.len() - MAX_ROWS))
-					.small()
-					.color(theme::muted(ui)),
+				RichText::new(t!(
+					"transfers-more",
+					count = (self.items.len() - MAX_ROWS) as i64
+				))
+				.small()
+				.color(theme::muted(ui)),
 			);
 		}
 
@@ -262,8 +265,12 @@ fn row(ui: &mut Ui, item: &Transfer) -> bool {
 				}
 				Phase::Done(_) => {
 					ui.label(
-						RichText::new(format!("{}  Installed", icons::SEAL_CHECK))
-							.color(palette.accent),
+						RichText::new(format!(
+							"{}  {}",
+							icons::SEAL_CHECK,
+							t!("transfers-installed")
+						))
+						.color(palette.accent),
 					);
 				}
 				Phase::Failed(message, _) => {
@@ -272,7 +279,7 @@ fn row(ui: &mut Ui, item: &Transfer) -> bool {
 			}
 		});
 
-		if item.stoppable && icon_button(ui, icons::X, "Stop", 28.0).clicked() {
+		if item.stoppable && icon_button(ui, icons::X, &t!("transfers-stop"), 28.0).clicked() {
 			stop = true;
 		}
 	});
@@ -289,14 +296,18 @@ fn status_line(item: &Transfer) -> String {
 	let mut parts = Vec::new();
 
 	parts.push(match item.total {
-		Some(total) => format!("{} of {}", bytes(item.received), bytes(total)),
+		Some(total) => t!(
+			"transfers-progress",
+			received = bytes(item.received),
+			total = bytes(total)
+		),
 		None => bytes(item.received),
 	});
 
 	if let Some(speed) = item.speed()
 		&& item.fraction().is_none_or(|fraction| fraction < 1.0)
 	{
-		parts.push(format!("{}/s", bytes(speed as u64)));
+		parts.push(t!("transfers-speed", speed = bytes(speed as u64)));
 	}
 
 	parts.join(" · ")

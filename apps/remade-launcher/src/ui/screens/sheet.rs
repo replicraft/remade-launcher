@@ -12,6 +12,7 @@ use launcher_resolver::{Candidate, EvidenceLevel};
 use crate::ui::components::{
 	Choice, Confirm, app_tile_for, dialog_buttons, dialog_close, dialog_ok,
 };
+use crate::ui::i18n::text_for;
 use crate::ui::icons;
 use crate::ui::theme;
 
@@ -70,197 +71,281 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 	let response = Modal::new(Id::unique("sheet"))
 		.frame(theme::dialog_frame(ctx))
 		.show(ctx, |ui| {
-		ui.set_width(460.0);
+			ui.set_width(460.0);
 
-		let origin = ui.cursor().min;
-		let working = matches!(sheet, Sheet::Working(_));
+			let origin = ui.cursor().min;
+			let working = matches!(sheet, Sheet::Working(_));
 
-		match sheet {
-			Sheet::Working(label) => {
-				ui.horizontal(|ui| {
-					ui.spinner();
-					ui.label(label.as_str());
-				});
-			}
-			Sheet::Message { title, lines } => {
-				ui.heading(title.as_str());
-
-				for line in lines.iter() {
-					ui.label(line.as_str());
-				}
-
-				if dialog_ok(ui, "OK") {
-					outcome = Outcome::Close;
-				}
-			}
-			Sheet::Review { ready, update_of, acknowledged } => {
-				if let Some(next) = review(ui, ready, update_of, acknowledged) {
-					outcome = next;
-				}
-			}
-			Sheet::Choose(candidates) => {
-				ui.heading("Several packages fit");
-				ui.label("More than one package fits this device equally well, and the launcher will not guess which you want. This is a gap in the catalog entry, not something you did.");
-
-				for candidate in candidates.iter() {
-					ui.label(format!("• {} ({})", candidate.asset.name, candidate.variant_id));
-				}
-
-				if dialog_ok(ui, "OK") {
-					outcome = Outcome::Close;
-				}
-			}
-			Sheet::ConfirmUninstall(app) => {
-				ui.heading(format!("Uninstall {}?", app.name));
-				ui.add_space(8.0);
-
-				ui.horizontal(|ui| {
-					app_tile_for(ui, app.catalog_slug.as_deref(), &app.name, 44.0);
-
-					ui.vertical(|ui| {
-						ui.spacing_mut().item_spacing.y = 1.0;
-						ui.label(RichText::new(&app.name).family(theme::semibold()));
-						ui.label(RichText::new(format!("{} · {}", app.version, app.repository)).small().color(theme::muted(ui)));
-						ui.label(RichText::new(format!("Installed {}", launcher_model::local_time::date(app.installed_at))).small().color(theme::muted(ui)));
+			match sheet {
+				Sheet::Working(label) => {
+					ui.horizontal(|ui| {
+						ui.spinner();
+						ui.label(label.as_str());
 					});
-				});
-
-				ui.add_space(10.0);
-				ui.label(RichText::new("Where it lives").small().color(theme::muted(ui)));
-				ui.label(RichText::new(&app.root).monospace().small());
-				ui.add_space(10.0);
-
-				ui.label("What happens:");
-				ui.add_space(2.0);
-				ui.label("•  The files the launcher installed are removed.");
-				ui.label("•  Anything you edited, and data the app saved itself, is kept.");
-				ui.label("•  Afterwards you see exactly what was removed and what stayed.");
-
-				ui.add_space(14.0);
-
-				match dialog_buttons(ui, &Confirm { label: "Uninstall", destructive: true, enabled: true }) {
-					Choice::Pending => {}
-					Choice::Cancel => outcome = Outcome::Close,
-					Choice::Confirm => outcome = Outcome::Uninstall(app.clone()),
 				}
-			}
-			Sheet::ConfirmMode { mode, acknowledged } => {
-				ui.heading(mode.label());
-				ui.label(mode.description());
-				ui.add_space(6.0);
-				ui.label("Before you turn this on, know that:");
-				ui.label("• A new version can change how an app behaves, or stop it working.");
-				ui.label("• If a publisher's account is compromised, a harmful release could be installed.");
-				ui.label("• An update can migrate an app's data in a way older versions cannot read.");
-				ui.label("• Updates run without asking, and no scan can promise software is safe.");
+				Sheet::Message { title, lines } => {
+					ui.heading(title.as_str());
 
-				if *mode == UpdateMode::Daemon {
-					ui.add_space(4.0);
-					ui.colored_label(
-						ui.visuals().warn_fg_color,
-						"This also registers a background program that starts each time you sign in, and keeps running after you close the Launcher. You can turn it off here or in your system's login items.",
+					for line in lines.iter() {
+						ui.label(line.as_str());
+					}
+
+					if dialog_ok(ui, &t!("sheet-ok")) {
+						outcome = Outcome::Close;
+					}
+				}
+				Sheet::Review {
+					ready,
+					update_of,
+					acknowledged,
+				} => {
+					if let Some(next) = review(ui, ready, update_of, acknowledged) {
+						outcome = next;
+					}
+				}
+				Sheet::Choose(candidates) => {
+					ui.heading(t!("sheet-choose-title"));
+					ui.label(t!("sheet-choose-body"));
+
+					for candidate in candidates.iter() {
+						ui.label(format!(
+							"• {} ({})",
+							candidate.asset.name, candidate.variant_id
+						));
+					}
+
+					if dialog_ok(ui, &t!("sheet-ok")) {
+						outcome = Outcome::Close;
+					}
+				}
+				Sheet::ConfirmUninstall(app) => {
+					ui.heading(t!("sheet-uninstall-title", name = app.name.as_str()));
+					ui.add_space(8.0);
+
+					ui.horizontal(|ui| {
+						app_tile_for(ui, app.catalog_slug.as_deref(), &app.name, 44.0);
+
+						ui.vertical(|ui| {
+							ui.spacing_mut().item_spacing.y = 1.0;
+							ui.label(RichText::new(&app.name).family(theme::semibold()));
+							ui.label(
+								RichText::new(format!("{} · {}", app.version, app.repository))
+									.small()
+									.color(theme::muted(ui)),
+							);
+							ui.label(
+								RichText::new(t!(
+									"sheet-uninstall-installed",
+									date = launcher_model::local_time::date(app.installed_at)
+								))
+								.small()
+								.color(theme::muted(ui)),
+							);
+						});
+					});
+
+					ui.add_space(10.0);
+					ui.label(
+						RichText::new(t!("sheet-uninstall-location"))
+							.small()
+							.color(theme::muted(ui)),
 					);
+					ui.label(RichText::new(&app.root).monospace().small());
+					ui.add_space(10.0);
+
+					ui.label(t!("sheet-uninstall-what-happens"));
+					ui.add_space(2.0);
+					ui.label(format!("•  {}", t!("sheet-uninstall-removes")));
+					ui.label(format!("•  {}", t!("sheet-uninstall-keeps")));
+					ui.label(format!("•  {}", t!("sheet-uninstall-report")));
+
+					ui.add_space(14.0);
+
+					match dialog_buttons(
+						ui,
+						&Confirm {
+							label: &t!("sheet-uninstall-confirm"),
+							destructive: true,
+							enabled: true,
+						},
+					) {
+						Choice::Pending => {}
+						Choice::Cancel => outcome = Outcome::Close,
+						Choice::Confirm => outcome = Outcome::Uninstall(app.clone()),
+					}
 				}
-
-				ui.add_space(6.0);
-				ui.checkbox(acknowledged, "I understand, and I want automatic updates");
-
-				ui.add_space(14.0);
-
-				match dialog_buttons(ui, &Confirm { label: "Turn on", destructive: false, enabled: *acknowledged }) {
-					Choice::Pending => {}
-					Choice::Cancel => outcome = Outcome::Close,
-					Choice::Confirm => outcome = Outcome::SetMode { mode: *mode, acknowledged: *acknowledged },
-				}
-			}
-			Sheet::ConfirmUpdateAll(updates) => {
-				ui.heading("Update everything?");
-
-				for update in updates.iter() {
-					let to = update
-						.status
-						.available
-						.as_ref()
-						.map_or("?", |available| available.version.as_str());
-
-					ui.label(format!("• {}: {} to {to}", update.status.name, update.status.installed_version));
-				}
-
-				ui.add_space(6.0);
-				ui.label(RichText::new("Each app is checked and replaced one at a time. A failure in one does not stop the others.").small().color(theme::muted(ui)));
-
-				ui.add_space(14.0);
-
-				match dialog_buttons(ui, &Confirm { label: "Update all", destructive: false, enabled: true }) {
-					Choice::Pending => {}
-					Choice::Cancel => outcome = Outcome::Close,
-					Choice::Confirm => outcome = Outcome::UpdateAll(std::mem::take(updates)),
-				}
-			}
-			Sheet::Notes { app, version, text } => {
-				ui.heading(format!("{app} {version}"));
-
-				egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
-					ui.label(if text.trim().is_empty() { "This release has no notes." } else { text.as_str() });
-				});
-
-				if dialog_ok(ui, "Close") {
-					outcome = Outcome::Close;
-				}
-			}
-			Sheet::ConfirmRestore => {
-				heading_with_icon(ui, icons::WARNING, "Restore defaults?");
-				ui.add_space(6.0);
-
-				ui.label("This puts the launcher's own settings back the way a new install has them:");
-				ui.add_space(4.0);
-
-				for line in [
-					"Appearance follows your system again.",
-					"Updates go back to manual, with a one-hour minimum age.",
-					"Every app's own update settings are cleared, including pins.",
-					"A background updater, if you turned one on, is switched off.",
-				] {
-					ui.label(format!("•  {line}"));
-				}
-
-				ui.add_space(8.0);
-				ui.label(RichText::new("Your installed apps and their files are not touched. This cannot be undone.").color(theme::muted(ui)));
-				ui.add_space(14.0);
-
-				match dialog_buttons(ui, &Confirm { label: "Restore defaults", destructive: true, enabled: true }) {
-					Choice::Pending => {}
-					Choice::Cancel => outcome = Outcome::Close,
-					Choice::Confirm => outcome = Outcome::RestoreDefaults,
-				}
-			}
-			Sheet::Removed { name, report } => {
-				ui.heading(format!("{name} was uninstalled"));
-				ui.label(format!("{} files removed.", report.removed_files));
-
-				if !report.is_clean() {
+				Sheet::ConfirmMode { mode, acknowledged } => {
+					ui.heading(text_for("update-mode", mode.as_str()));
+					ui.label(text_for(
+						"update-mode",
+						&format!("{}.description", mode.as_str()),
+					));
 					ui.add_space(6.0);
-					ui.label("Some files were kept so nothing you made is lost:");
+					ui.label(t!("sheet-mode-intro"));
+					ui.label(format!("• {}", t!("sheet-mode-risk-behavior")));
+					ui.label(format!("• {}", t!("sheet-mode-risk-compromised")));
+					ui.label(format!("• {}", t!("sheet-mode-risk-migration")));
+					ui.label(format!("• {}", t!("sheet-mode-risk-unattended")));
 
-					for file in report.kept_modified.iter().chain(&report.kept_unknown).take(8) {
-						ui.label(RichText::new(format!("• {file}")).color(theme::muted(ui)));
+					if *mode == UpdateMode::Daemon {
+						ui.add_space(4.0);
+						ui.colored_label(
+							ui.visuals().warn_fg_color,
+							t!("sheet-mode-daemon-warning"),
+						);
 					}
 
-					if let Some(folder) = &report.leftover_folder {
-						ui.label(RichText::new(folder).small().color(theme::muted(ui)));
+					ui.add_space(6.0);
+					ui.checkbox(acknowledged, t!("sheet-mode-acknowledge"));
+
+					ui.add_space(14.0);
+
+					match dialog_buttons(
+						ui,
+						&Confirm {
+							label: &t!("sheet-mode-confirm"),
+							destructive: false,
+							enabled: *acknowledged,
+						},
+					) {
+						Choice::Pending => {}
+						Choice::Cancel => outcome = Outcome::Close,
+						Choice::Confirm => {
+							outcome = Outcome::SetMode {
+								mode: *mode,
+								acknowledged: *acknowledged,
+							}
+						}
 					}
 				}
+				Sheet::ConfirmUpdateAll(updates) => {
+					ui.heading(t!("sheet-update-all-title"));
 
-				if dialog_ok(ui, "OK") {
-					outcome = Outcome::Close;
+					for update in updates.iter() {
+						let to = update
+							.status
+							.available
+							.as_ref()
+							.map_or("?", |available| available.version.as_str());
+
+						ui.label(format!(
+							"• {}",
+							t!(
+								"sheet-update-all-line",
+								name = update.status.name.as_str(),
+								from = update.status.installed_version.as_str(),
+								to = to
+							)
+						));
+					}
+
+					ui.add_space(6.0);
+					ui.label(
+						RichText::new(t!("sheet-update-all-note"))
+							.small()
+							.color(theme::muted(ui)),
+					);
+
+					ui.add_space(14.0);
+
+					match dialog_buttons(
+						ui,
+						&Confirm {
+							label: &t!("sheet-update-all-confirm"),
+							destructive: false,
+							enabled: true,
+						},
+					) {
+						Choice::Pending => {}
+						Choice::Cancel => outcome = Outcome::Close,
+						Choice::Confirm => outcome = Outcome::UpdateAll(std::mem::take(updates)),
+					}
+				}
+				Sheet::Notes { app, version, text } => {
+					ui.heading(format!("{app} {version}"));
+
+					egui::ScrollArea::vertical()
+						.max_height(320.0)
+						.show(ui, |ui| {
+							ui.label(if text.trim().is_empty() {
+								t!("sheet-notes-empty")
+							} else {
+								text.clone()
+							});
+						});
+
+					if dialog_ok(ui, &t!("sheet-close")) {
+						outcome = Outcome::Close;
+					}
+				}
+				Sheet::ConfirmRestore => {
+					heading_with_icon(ui, icons::WARNING, &t!("sheet-restore-title"));
+					ui.add_space(6.0);
+
+					ui.label(t!("sheet-restore-intro"));
+					ui.add_space(4.0);
+
+					for line in [
+						t!("sheet-restore-appearance"),
+						t!("sheet-restore-updates"),
+						t!("sheet-restore-app-settings"),
+						t!("sheet-restore-daemon"),
+					] {
+						ui.label(format!("•  {line}"));
+					}
+
+					ui.add_space(8.0);
+					ui.label(RichText::new(t!("sheet-restore-note")).color(theme::muted(ui)));
+					ui.add_space(14.0);
+
+					match dialog_buttons(
+						ui,
+						&Confirm {
+							label: &t!("sheet-restore-confirm"),
+							destructive: true,
+							enabled: true,
+						},
+					) {
+						Choice::Pending => {}
+						Choice::Cancel => outcome = Outcome::Close,
+						Choice::Confirm => outcome = Outcome::RestoreDefaults,
+					}
+				}
+				Sheet::Removed { name, report } => {
+					ui.heading(t!("sheet-removed-title", name = name.as_str()));
+					ui.label(t!(
+						"sheet-removed-count",
+						count = report.removed_files as i64
+					));
+
+					if !report.is_clean() {
+						ui.add_space(6.0);
+						ui.label(t!("sheet-removed-kept"));
+
+						for file in report
+							.kept_modified
+							.iter()
+							.chain(&report.kept_unknown)
+							.take(8)
+						{
+							ui.label(RichText::new(format!("• {file}")).color(theme::muted(ui)));
+						}
+
+						if let Some(folder) = &report.leftover_folder {
+							ui.label(RichText::new(folder).small().color(theme::muted(ui)));
+						}
+					}
+
+					if dialog_ok(ui, &t!("sheet-ok")) {
+						outcome = Outcome::Close;
+					}
 				}
 			}
-		}
 
-		if !working && dialog_close(ui, origin, 460.0) {
-			outcome = Outcome::Close;
-		}
-	});
+			if !working && dialog_close(ui, origin, 460.0) {
+				outcome = Outcome::Close;
+			}
+		});
 
 	// Escape or a click outside dismisses read-only sheets, never a working one.
 	if response.should_close()
@@ -280,39 +365,47 @@ fn review(
 	acknowledged: &mut bool,
 ) -> Option<Outcome> {
 	let body = ready.plan.body();
-	let verb = if update_of.is_some() {
-		"Update"
+	let updating = update_of.is_some();
+	let verb = if updating {
+		t!("sheet-review-update")
 	} else {
-		"Install"
+		t!("sheet-review-install")
 	};
 	let mut outcome = None;
 
-	ui.heading(format!("{verb} {}", ready.meta.display_name));
+	let name = ready.meta.display_name.as_str();
+
+	ui.heading(if updating {
+		t!("sheet-review-update-title", name = name)
+	} else {
+		t!("sheet-review-install-title", name = name)
+	});
 	ui.add_space(4.0);
 
 	// The signed or looked-up repository identity, never a description.
 	ui.horizontal(|ui| {
-		ui.label(RichText::new("Source").color(theme::muted(ui)));
+		ui.label(RichText::new(t!("sheet-review-source")).color(theme::muted(ui)));
 		ui.label(RichText::new(&ready.source_display).family(crate::ui::theme::semibold()));
 	});
 
 	if ready.unreviewed {
-		ui.colored_label(
-			ui.visuals().warn_fg_color,
-			"Remade has not reviewed this source. Only install software from people you trust.",
-		);
+		ui.colored_label(ui.visuals().warn_fg_color, t!("sheet-review-unreviewed"));
 	} else {
-		ui.label(RichText::new("Listed in the verified Remade catalog.").color(theme::muted(ui)));
+		ui.label(RichText::new(t!("sheet-review-verified")).color(theme::muted(ui)));
 	}
 
 	ui.add_space(6.0);
-	fact(ui, "Version", &body.release.tag);
+	fact(ui, &t!("sheet-review-version"), &body.release.tag);
 	fact(
 		ui,
-		"File",
+		&t!("sheet-review-file"),
 		&format!("{} ({})", body.asset.name, bytes(body.asset.size)),
 	);
-	fact(ui, "Checked against", evidence(body.install.evidence));
+	fact(
+		ui,
+		&t!("sheet-review-checked-against"),
+		&evidence(body.install.evidence),
+	);
 
 	if !ready.candidate.explanation.is_empty() {
 		ui.add_space(6.0);
@@ -332,9 +425,10 @@ fn review(
 
 	for skipped in &ready.candidate.skipped_newer {
 		ui.label(
-			RichText::new(format!(
-				"Newer release {} skipped: {}",
-				skipped.tag, skipped.reason
+			RichText::new(t!(
+				"sheet-review-skipped",
+				tag = skipped.tag.as_str(),
+				reason = skipped.reason.as_str()
 			))
 			.small()
 			.color(theme::muted(ui)),
@@ -343,10 +437,7 @@ fn review(
 
 	if ready.unreviewed {
 		ui.add_space(6.0);
-		ui.checkbox(
-			acknowledged,
-			"I understand this source is not reviewed by Remade",
-		);
+		ui.checkbox(acknowledged, t!("sheet-review-acknowledge"));
 	}
 
 	ui.add_space(8.0);
@@ -356,7 +447,7 @@ fn review(
 	match dialog_buttons(
 		ui,
 		&Confirm {
-			label: verb,
+			label: &verb,
 			destructive: false,
 			enabled: allowed,
 		},
@@ -382,15 +473,15 @@ fn fact(ui: &mut Ui, label: &str, value: &str) {
 	});
 }
 
-fn evidence(level: EvidenceLevel) -> &'static str {
+fn evidence(level: EvidenceLevel) -> String {
 	match level {
 		EvidenceLevel::HostDigest => {
-			"the checksum GitHub reports for the file. It shows the file is intact, not who made it"
+			t!("sheet-evidence-host-digest")
 		}
-		EvidenceLevel::PinnedSha256 => "a checksum pinned in the signed Remade catalog",
-		EvidenceLevel::PublisherSignature => "the publisher's own signature",
+		EvidenceLevel::PinnedSha256 => t!("sheet-evidence-pinned"),
+		EvidenceLevel::PublisherSignature => t!("sheet-evidence-signature"),
 		EvidenceLevel::LocalObserved => {
-			"nothing beyond the download itself. No checksum was published to compare"
+			t!("sheet-evidence-local")
 		}
 	}
 }

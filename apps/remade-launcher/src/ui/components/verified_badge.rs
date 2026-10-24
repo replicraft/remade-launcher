@@ -10,12 +10,12 @@ pub(crate) fn verified_badge(ui: &mut Ui, reviewed: bool) -> Response {
 	let palette = theme::palette(ui);
 
 	let (icon, color, tip) = if reviewed {
-		(icons::SEAL_CHECK, palette.accent, "Reviewed by Remade")
+		(icons::SEAL_CHECK, palette.accent, t!("common-reviewed"))
 	} else {
 		(
 			icons::SEAL_WARNING,
 			palette.text_muted,
-			"Added by you. Not reviewed by Remade",
+			t!("common-not-reviewed"),
 		)
 	};
 

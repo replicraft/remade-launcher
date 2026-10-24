@@ -1,9 +1,11 @@
 //! Sorting, filtering, and grouping catalog rows. Pure functions, so the
 //! rules are easy to test.
 
-use launcher_catalog::ProjectKind;
+use launcher_catalog::{Maturity, ProjectKind};
 use launcher_core::{Availability, ExploreRow};
 use launcher_model::Os;
+
+use crate::ui::i18n::text;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum Sort {
@@ -24,17 +26,18 @@ impl Sort {
 	}
 
 	pub(super) fn from_key(key: &str) -> Option<Self> {
-		Self::OPTIONS
-			.iter()
-			.map(|(sort, _)| *sort)
-			.find(|sort| sort.key() == key)
+		Self::ALL.into_iter().find(|sort| sort.key() == key)
 	}
 
-	pub(super) const OPTIONS: [(Self, &'static str); 3] = [
-		(Self::NameAscending, "Name A–Z"),
-		(Self::NameDescending, "Name Z–A"),
-		(Self::Newest, "Recently added"),
-	];
+	pub(super) const ALL: [Self; 3] = [Self::NameAscending, Self::NameDescending, Self::Newest];
+
+	pub(super) fn label(self) -> String {
+		match self {
+			Self::NameAscending => t!("explore-sort-name-asc"),
+			Self::NameDescending => t!("explore-sort-name-desc"),
+			Self::Newest => t!("explore-sort-newest"),
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -45,13 +48,23 @@ pub(super) enum KindFilter {
 }
 
 impl KindFilter {
-	pub(super) const OPTIONS: [(Self, &'static str); 5] = [
-		(Self::All, "All"),
-		(Self::Only(ProjectKind::Desktop), "Desktop apps"),
-		(Self::Only(ProjectKind::Cli), "Command-line tools"),
-		(Self::Only(ProjectKind::Service), "Services"),
-		(Self::Only(ProjectKind::Launcher), "Launchers"),
+	pub(super) const ALL: [Self; 5] = [
+		Self::All,
+		Self::Only(ProjectKind::Desktop),
+		Self::Only(ProjectKind::Cli),
+		Self::Only(ProjectKind::Service),
+		Self::Only(ProjectKind::Launcher),
 	];
+
+	pub(super) fn label(self) -> String {
+		match self {
+			Self::All => t!("explore-kind-all"),
+			Self::Only(ProjectKind::Desktop) => t!("explore-kind-desktop-plural"),
+			Self::Only(ProjectKind::Cli) => t!("explore-kind-cli-plural"),
+			Self::Only(ProjectKind::Service) => t!("explore-kind-service-plural"),
+			Self::Only(ProjectKind::Launcher) => t!("explore-kind-launcher-plural"),
+		}
+	}
 
 	fn allows(self, kind: ProjectKind) -> bool {
 		match self {
@@ -183,8 +196,38 @@ pub(super) fn recent(rows: &[ExploreRow], limit: usize) -> Vec<&ExploreRow> {
 	dated
 }
 
-/// "developer-tools" as "Developer tools".
+/// A kind of app, as one app is described: "Desktop app".
+pub(super) fn kind_name(kind: ProjectKind) -> String {
+	match kind {
+		ProjectKind::Desktop => t!("explore-kind-desktop"),
+		ProjectKind::Cli => t!("explore-kind-cli"),
+		ProjectKind::Service => t!("explore-kind-service"),
+		ProjectKind::Launcher => t!("explore-kind-launcher"),
+	}
+}
+
+/// How finished an app is.
+pub(super) fn maturity_name(maturity: Maturity) -> String {
+	match maturity {
+		Maturity::Planned => t!("explore-maturity-planned"),
+		Maturity::Experimental => t!("explore-maturity-experimental"),
+		Maturity::Alpha => t!("explore-maturity-alpha"),
+		Maturity::Beta => t!("explore-maturity-beta"),
+		Maturity::Stable => t!("explore-maturity-stable"),
+		Maturity::Archived => t!("explore-maturity-archived"),
+	}
+}
+
+/// A category by its slug. Known ones are translated; any other reads as its
+/// slug does: "developer-tools" as "Developer tools".
 pub(super) fn category_label(slug: &str) -> String {
+	let id = format!("explore-category-{slug}");
+	let known = text(&id);
+
+	if known != id {
+		return known;
+	}
+
 	let spaced = slug.replace('-', " ");
 	let mut characters = spaced.chars();
 

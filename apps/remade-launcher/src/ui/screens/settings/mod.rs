@@ -48,7 +48,7 @@ pub(crate) enum SettingsAction {
 #[derive(Default)]
 pub(crate) struct SettingsInputs {
 	pub(crate) proxy_text: String,
-	pub(crate) proxy_error: Option<&'static str>,
+	pub(crate) proxy_error: Option<launcher_model::preferences::ProxyProblem>,
 	/// The custom-proxy fields are showing, even before one is saved.
 	pub(crate) proxy_editing: bool,
 	pub(crate) token_text: String,
@@ -88,56 +88,54 @@ pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
 		launcher_checking,
 	} = view;
 
-	page(ui, "Settings", |ui| {
+	page(ui, &t!("settings-title"), |ui| {
 		ScrollArea::vertical()
 			.auto_shrink([false, false])
 			.show(ui, |ui| {
-				panel(ui, "Appearance", None, |ui| {
+				panel(ui, &t!("settings-appearance"), None, |ui| {
 					general::general(ui, theme, prefs, &mut action)
 				});
 				ui.add_space(14.0);
 
-				panel(ui, "Language and region", None, |ui| {
+				panel(ui, &t!("settings-region-panel"), None, |ui| {
 					region::region(ui, prefs, &mut action)
 				});
 				ui.add_space(14.0);
 
 				panel(
 					ui,
-					"Updates",
-					Some(
-						"How installed apps are updated. The Launcher updates itself separately, below.",
-					),
+					&t!("settings-updates-panel"),
+					Some(&t!("settings-updates-panel.description")),
 					|ui| updates::updates(ui, &updates, background, &mut action),
 				);
 				ui.add_space(14.0);
 
 				panel(
 					ui,
-					"Launcher updates",
-					Some(
-						"How the Launcher keeps itself up to date. This does not change how your apps are updated.",
-					),
+					&t!("settings-launcher-panel"),
+					Some(&t!("settings-launcher-panel.description")),
 					|ui| launcher::launcher(ui, prefs, launcher, launcher_checking, &mut action),
 				);
 				ui.add_space(14.0);
 
-				panel(ui, "Notifications", None, |ui| {
+				panel(ui, &t!("settings-notifications-panel"), None, |ui| {
 					notifications::notifications(ui, prefs, &mut action)
 				});
 				ui.add_space(14.0);
 
-				panel(ui, "Network", None, |ui| {
+				panel(ui, &t!("settings-network-panel"), None, |ui| {
 					network::network(ui, &NetworkView { prefs, token, rate }, inputs, &mut action);
 				});
 				ui.add_space(14.0);
 
-				panel(ui, "Storage", None, |ui| {
+				panel(ui, &t!("settings-storage-panel"), None, |ui| {
 					storage::storage(ui, storage, &mut action)
 				});
 				ui.add_space(14.0);
 
-				panel(ui, "Support", None, |ui| support::support(ui, &mut action));
+				panel(ui, &t!("settings-support-panel"), None, |ui| {
+					support::support(ui, &mut action)
+				});
 				ui.add_space(14.0);
 
 				// An invisible marker the About menu item can scroll to.
@@ -147,7 +145,9 @@ pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
 					anchor.scroll_to_me(Some(egui::Align::TOP));
 				}
 
-				panel(ui, "About", None, |ui| about::about(ui, logo, &mut action));
+				panel(ui, &t!("settings-about-panel"), None, |ui| {
+					about::about(ui, logo, &mut action)
+				});
 				ui.add_space(24.0);
 			});
 	});

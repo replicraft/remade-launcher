@@ -17,6 +17,8 @@ pub(crate) fn dialog_close(ui: &mut Ui, origin: Pos2, width: f32) -> bool {
 		vec2(SIZE, SIZE),
 	);
 
-	ui.put(rect, |ui: &mut Ui| icon_button(ui, icons::X, "Close", SIZE))
-		.clicked()
+	ui.put(rect, |ui: &mut Ui| {
+		icon_button(ui, icons::X, &t!("common-close"), SIZE)
+	})
+	.clicked()
 }

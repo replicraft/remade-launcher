@@ -29,8 +29,8 @@ pub(crate) fn view_toggle(ui: &mut Ui, mode: &mut ViewMode) -> bool {
 	);
 
 	for (index, (choice, icon, label)) in [
-		(ViewMode::Grid, icons::GRID, "Grid view"),
-		(ViewMode::List, icons::LIST, "List view"),
+		(ViewMode::Grid, icons::GRID, t!("common-view-grid")),
+		(ViewMode::List, icons::LIST, t!("common-view-list")),
 	]
 	.into_iter()
 	.enumerate()
@@ -42,7 +42,7 @@ pub(crate) fn view_toggle(ui: &mut Ui, mode: &mut ViewMode) -> bool {
 		let response = ui.allocate_rect(cell, Sense::click());
 		let chosen = *mode == choice;
 
-		response.widget_info(|| WidgetInfo::selected(Role::RadioButton, true, chosen, label));
+		response.widget_info(|| WidgetInfo::selected(Role::RadioButton, true, chosen, &label));
 
 		if chosen {
 			ui.painter().rect_filled(cell, 6.0, palette.selected);

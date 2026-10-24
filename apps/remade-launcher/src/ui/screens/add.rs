@@ -31,26 +31,23 @@ impl AddView {
 	pub(crate) fn show(&mut self, ui: &mut Ui) -> Option<Action> {
 		let mut action = None;
 
-		ui.heading("Add from GitHub");
+		ui.heading(t!("add-title"));
 		ui.add_space(8.0);
 
 		(|ui: &mut Ui| {
-			ui.label(
-				RichText::new("Paste a public GitHub repository or release link. Remade has not reviewed apps you add this way, and a checksum cannot show who made a file or that it is safe.")
-					.color(theme::muted(ui)),
-			);
+			ui.label(RichText::new(t!("add-intro")).color(theme::muted(ui)));
 
 			ui.horizontal(|ui| {
 				ui.add(
 					egui::TextEdit::singleline(&mut self.url)
-						.hint_text("https://github.com/owner/repository")
+						.hint_text(t!("add-url-hint"))
 						.desired_width(420.0),
 				);
 
 				let can_look_up = !self.loading && !self.url.trim().is_empty();
 
 				if ui
-					.add_enabled(can_look_up, egui::Button::new("Look up"))
+					.add_enabled(can_look_up, egui::Button::new(t!("add-look-up")))
 					.clicked()
 				{
 					self.loading = true;
@@ -73,17 +70,16 @@ impl AddView {
 					.family(crate::ui::theme::semibold())
 					.size(18.0),
 			);
-			ui.label(RichText::new(format!("Release {}", lookup.tag)).color(theme::muted(ui)));
+			ui.label(
+				RichText::new(t!("add-release", tag = lookup.tag.as_str())).color(theme::muted(ui)),
+			);
 
 			if !lookup.discovery_complete {
-				ui.label(
-					RichText::new("Only the most recent releases were checked.")
-						.color(theme::muted(ui)),
-				);
+				ui.label(RichText::new(t!("add-partial")).color(theme::muted(ui)));
 			}
 
 			if lookup.options.is_empty() {
-				ui.label("This release has no downloadable app files.");
+				ui.label(t!("add-no-files"));
 
 				return;
 			}
@@ -110,7 +106,7 @@ impl AddView {
 							);
 
 							if option.managed {
-								if ui.button("Review install").clicked() {
+								if ui.button(t!("add-review-install")).clicked() {
 									action = Some(Action::ChooseFile {
 										preparation: Box::new(lookup.clone()),
 										asset_id: option.asset.id,
@@ -118,7 +114,7 @@ impl AddView {
 								}
 							} else {
 								ui.label(
-									RichText::new("Download only")
+									RichText::new(t!("add-download-only"))
 										.small()
 										.color(theme::muted(ui)),
 								);
@@ -132,10 +128,10 @@ impl AddView {
 	}
 }
 
-fn fit_text(fit: Fit) -> &'static str {
+fn fit_text(fit: Fit) -> String {
 	match fit {
-		Fit::Matches => "Named for this device",
-		Fit::Unknown => "Name does not say which device",
-		Fit::Mismatch => "Named for another device",
+		Fit::Matches => t!("add-fit-matches"),
+		Fit::Unknown => t!("add-fit-unknown"),
+		Fit::Mismatch => t!("add-fit-mismatch"),
 	}
 }

@@ -1,1 +1,31 @@
 # zh-CN: common
+
+common-cancel = 取消
+common-close = 关闭
+common-clear-search = 清除搜索
+common-version-old = 旧版
+common-version-new = 新版
+common-reviewed = 已通过 Remade 审核
+common-not-reviewed = 由你添加，未经 Remade 审核
+common-view-grid = 网格视图
+common-view-list = 列表视图
+nav-show-sidebar = 显示侧边栏
+nav-hide-sidebar = 隐藏侧边栏
+nav-add-from-github = 从 GitHub 添加
+nav-explore = 探索
+nav-library = 应用库
+nav-updates = 更新
+nav-settings = 设置
+transfers-more = 以及另外 { $count } 项
+transfers-installed = 已安装
+transfers-stop = 停止
+transfers-progress = { $received } / { $total }
+transfers-speed = { $speed }/秒
+menu-about = 关于 { $name }
+menu-settings = 设置…
+notify-install-finished = { $name } 已安装
+    .body = 打开启动器即可开始使用。
+notify-install-failed = 无法安装 { $name }
+    .body = 打开启动器查看原因。
+notify-updates-available = 有 { $count } 个更新可用
+    .body = 打开启动器查看并安装。

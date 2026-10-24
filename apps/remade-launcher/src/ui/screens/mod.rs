@@ -9,6 +9,8 @@ mod settings;
 pub(crate) mod sheet;
 pub(crate) mod updates;
 
+use crate::ui::i18n::text_for;
+
 pub(crate) use add::AddView;
 pub(crate) use explore::ExploreView;
 pub(crate) use library::{LibraryState, LibraryView, library};
@@ -47,13 +49,8 @@ impl Screen {
 			.find(|screen| screen.key() == key)
 	}
 
-	pub(crate) const fn title(self) -> &'static str {
-		match self {
-			Self::Explore => "Explore",
-			Self::Library => "Library",
-			Self::Updates => "Updates",
-			Self::Settings => "Settings",
-		}
+	pub(crate) fn title(self) -> String {
+		text_for("nav", self.key())
 	}
 }
 

@@ -8,6 +8,7 @@ use launcher_core::LauncherUpdateReport;
 use launcher_model::{LauncherUpdates, Preferences, local_time};
 
 use super::SettingsAction;
+use crate::ui::i18n::text_for;
 use crate::ui::theme;
 
 pub(super) fn launcher(
@@ -29,11 +30,17 @@ pub(super) fn launcher(
 			}
 
 			ui.vertical(|ui| {
-				ui.label(RichText::new(mode.label()).family(theme::semibold()));
 				ui.label(
-					RichText::new(mode.description())
-						.small()
-						.color(theme::muted(ui)),
+					RichText::new(text_for("launcher-updates", mode.as_str()))
+						.family(theme::semibold()),
+				);
+				ui.label(
+					RichText::new(t!(&format!(
+						"launcher-updates-{}.description",
+						mode.as_str()
+					)))
+					.small()
+					.color(theme::muted(ui)),
 				);
 			});
 		});
@@ -51,35 +58,42 @@ pub(super) fn launcher(
 
 	if let Some(at) = report.checked_at {
 		ui.label(
-			RichText::new(format!("Last checked {}", local_time::date_time(at)))
-				.small()
-				.color(muted),
+			RichText::new(t!(
+				"settings-launcher-last-checked",
+				when = local_time::date_time(at)
+			))
+			.small()
+			.color(muted),
 		);
 	}
 
 	if let Some(staged) = &report.staged {
 		ui.add_space(4.0);
 		ui.label(
-			RichText::new(format!(
-				"{} is downloaded. It starts the next time you open the launcher.",
-				staged.version
+			RichText::new(t!(
+				"settings-launcher-staged",
+				version = staged.version.to_string()
 			))
 			.family(theme::semibold()),
 		);
 	} else if let Some(found) = &report.available {
 		ui.add_space(4.0);
 		ui.label(
-			RichText::new(format!("{} is available.", found.version)).family(theme::semibold()),
+			RichText::new(t!(
+				"settings-launcher-available",
+				version = found.version.to_string()
+			))
+			.family(theme::semibold()),
 		);
 	}
 
 	if let Some(applied) = &report.applied {
 		ui.label(
-			RichText::new(format!(
-				"Switched from {} to {} on {}.",
-				applied.from,
-				applied.to,
-				local_time::date_time(applied.at)
+			RichText::new(t!(
+				"settings-launcher-applied",
+				from = applied.from.to_string(),
+				to = applied.to.to_string(),
+				when = local_time::date_time(applied.at)
 			))
 			.small()
 			.color(muted),
@@ -97,18 +111,22 @@ pub(super) fn launcher(
 		if ui
 			.add_enabled(
 				!checking,
-				egui::Button::new(if checking { "Checking…" } else { "Check now" }),
+				egui::Button::new(if checking {
+					t!("settings-launcher-checking")
+				} else {
+					t!("settings-launcher-check-now")
+				}),
 			)
 			.clicked()
 		{
 			*action = SettingsAction::CheckLauncherUpdate;
 		}
 
-		if can_download && ui.button("Download now").clicked() {
+		if can_download && ui.button(t!("settings-launcher-download")).clicked() {
 			*action = SettingsAction::DownloadLauncherUpdate;
 		}
 
-		if report.can_roll_back && ui.button("Go back to the previous version").clicked() {
+		if report.can_roll_back && ui.button(t!("settings-launcher-roll-back")).clicked() {
 			*action = SettingsAction::RollBackLauncher;
 		}
 	});

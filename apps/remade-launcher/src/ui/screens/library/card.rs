@@ -125,7 +125,7 @@ fn actions(ui: &mut Ui, item: &Item<'_>, compact: bool) -> Option<Action> {
 
 			ui.add(bar.desired_width((ui.available_width() - 56.0).max(60.0)));
 
-			if progress.stoppable && ui.small_button("Stop").clicked() {
+			if progress.stoppable && ui.small_button(t!("library-stop")).clicked() {
 				action = Some(Action::Cancel);
 			}
 		});
@@ -140,9 +140,9 @@ fn actions(ui: &mut Ui, item: &Item<'_>, compact: bool) -> Option<Action> {
 			.add_enabled(
 				app.launchable,
 				egui::Button::new(if compact {
-					"Open".to_owned()
+					t!("library-open")
 				} else {
-					format!("{}  Open", icons::PLAY)
+					format!("{}  {}", icons::PLAY, t!("library-open"))
 				}),
 			)
 			.clicked()
@@ -152,9 +152,9 @@ fn actions(ui: &mut Ui, item: &Item<'_>, compact: bool) -> Option<Action> {
 
 		if app.curated && !item.pinned {
 			let label = match (update_ready, compact) {
-				(true, false) => format!("{}  Update", icons::ARROW_CLOCKWISE),
-				(true, true) => "Update".to_owned(),
-				(false, _) => "Check".to_owned(),
+				(true, false) => format!("{}  {}", icons::ARROW_CLOCKWISE, t!("library-update")),
+				(true, true) => t!("library-update"),
+				(false, _) => t!("library-check"),
 			};
 
 			if ui.button(label).clicked() {
@@ -165,17 +165,19 @@ fn actions(ui: &mut Ui, item: &Item<'_>, compact: bool) -> Option<Action> {
 		if !compact
 			&& app.curated
 			&& let Some(slug) = &app.catalog_slug
-			&& ui.button("View listing").clicked()
+			&& ui.button(t!("library-view-listing")).clicked()
 		{
 			action = Some(Action::ViewListing(slug.clone()));
 		}
 
 		ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-			if icon_button(ui, icons::TRASH, "Uninstall", 28.0).clicked() {
+			if icon_button(ui, icons::TRASH, &t!("library-uninstall"), 28.0).clicked() {
 				action = Some(Action::Uninstall(app.clone()));
 			}
 
-			if app.curated && icon_button(ui, icons::GEAR, "Update settings", 28.0).clicked() {
+			if app.curated
+				&& icon_button(ui, icons::GEAR, &t!("library-update-settings"), 28.0).clicked()
+			{
 				action = Some(Action::OpenAppSettings(app.id));
 			}
 		});
@@ -213,7 +215,7 @@ pub(super) fn grid_card(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 		if ui
 			.put(
 				spot,
-				egui::Button::new(RichText::new("View listing").small()),
+				egui::Button::new(RichText::new(t!("library-view-listing")).small()),
 			)
 			.clicked()
 		{
@@ -292,10 +294,10 @@ pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	name.spacing_mut().item_spacing.y = 1.0;
 	title(&mut name, item);
 	name.label(
-		RichText::new(format!(
-			"{} · installed {}",
-			item.app.version,
-			launcher_model::local_time::date(item.app.installed_at)
+		RichText::new(t!(
+			"library-installed-line",
+			version = item.app.version.as_str(),
+			date = launcher_model::local_time::date(item.app.installed_at)
 		))
 		.small()
 		.color(theme::muted(&name)),

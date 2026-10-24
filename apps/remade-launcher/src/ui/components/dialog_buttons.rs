@@ -24,7 +24,7 @@ pub(crate) fn dialog_buttons(ui: &mut Ui, confirm: &Confirm<'_>) -> Choice {
 	let mut choice = Choice::Pending;
 
 	ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-		if ui.button("Cancel").clicked() {
+		if ui.button(t!("common-cancel")).clicked() {
 			choice = Choice::Cancel;
 		}
 

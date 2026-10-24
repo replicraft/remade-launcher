@@ -7,6 +7,7 @@ use launcher_core::UpdateSettings;
 use launcher_model::{MinimumAge, UpdateMode};
 
 use super::SettingsAction;
+use crate::ui::i18n::text_for;
 use crate::ui::theme;
 
 pub(super) fn updates(
@@ -23,7 +24,8 @@ pub(super) fn updates(
 			}
 
 			ui.vertical(|ui| {
-				let title = RichText::new(mode.label()).family(theme::semibold());
+				let title =
+					RichText::new(text_for("update-mode", mode.as_str())).family(theme::semibold());
 				let title = if mode == UpdateMode::Daemon {
 					title.color(ui.visuals().warn_fg_color)
 				} else {
@@ -32,7 +34,7 @@ pub(super) fn updates(
 
 				ui.label(title);
 				ui.label(
-					RichText::new(mode.description())
+					RichText::new(t!(&format!("update-mode-{}.description", mode.as_str())))
 						.small()
 						.color(theme::muted(ui)),
 				);
@@ -54,12 +56,12 @@ pub(super) fn updates(
 }
 
 fn minimum_age(ui: &mut Ui, settings: &UpdateSettings, action: &mut SettingsAction) {
-	ui.label(RichText::new("Auto-update Default Minimum Release Age").family(theme::semibold()));
+	ui.label(RichText::new(t!("settings-min-age")).family(theme::semibold()));
 	ui.label(
 		RichText::new(if settings.mode.is_automatic() {
-			"A release must be at least this old before an automatic update installs it. Each app can use its own."
+			t!("settings-min-age.automatic")
 		} else {
-			"Used only by the automatic modes. It never holds back an update you start yourself."
+			t!("settings-min-age.manual")
 		})
 		.small()
 		.color(theme::muted(ui)),
@@ -69,17 +71,14 @@ fn minimum_age(ui: &mut Ui, settings: &UpdateSettings, action: &mut SettingsActi
 	let current = MinimumAge::PRESETS
 		.iter()
 		.find(|(_, age)| *age == settings.minimum_age)
-		.map_or_else(
-			|| settings.minimum_age.short(),
-			|(label, _)| (*label).to_owned(),
-		);
+		.map_or_else(|| settings.minimum_age.short(), |(_, age)| age_label(*age));
 
 	ComboBox::from_id_salt("minimum-age")
 		.selected_text(current)
 		.show_ui(ui, |ui| {
-			for (label, age) in MinimumAge::PRESETS {
+			for (_, age) in MinimumAge::PRESETS {
 				if ui
-					.selectable_label(settings.minimum_age == age, label)
+					.selectable_label(settings.minimum_age == age, age_label(age))
 					.clicked()
 				{
 					*action = SettingsAction::SetMinimumAge(age);
@@ -88,11 +87,13 @@ fn minimum_age(ui: &mut Ui, settings: &UpdateSettings, action: &mut SettingsActi
 		});
 
 	if settings.minimum_age == MinimumAge::NONE {
-		ui.colored_label(
-			ui.visuals().warn_fg_color,
-			"No delay installs a release the moment it is published. That is riskier.",
-		);
+		ui.colored_label(ui.visuals().warn_fg_color, t!("settings-min-age-warning"));
 	}
+}
+
+/// A preset delay in words, such as "6 hours".
+fn age_label(age: MinimumAge) -> String {
+	t!(&format!("minimum-age-{}", age.seconds()))
 }
 
 /// The updater's real state. It is never "Active" just because the setting
@@ -102,30 +103,36 @@ fn background_status(
 	background: Option<&BackgroundStatus>,
 	action: &mut SettingsAction,
 ) {
-	ui.label(RichText::new("Background updater").family(theme::semibold()));
+	ui.label(RichText::new(t!("settings-background")).family(theme::semibold()));
 
 	let Some(status) = background else {
-		ui.label(RichText::new("Checking…").color(theme::muted(ui)));
+		ui.label(RichText::new(t!("settings-background-checking")).color(theme::muted(ui)));
 
 		return;
 	};
 
 	let (label, detail) = match (&status.running, &status.registration) {
-		(Some(_), _) => ("Active", None),
-		(None, RegistrationState::Registered) => {
-			("Stopped", Some("It will start when you sign in."))
-		}
+		(Some(_), _) => (t!("settings-background-active"), None),
+		(None, RegistrationState::Registered) => (
+			t!("settings-background-stopped"),
+			Some(t!("settings-background-stopped.detail")),
+		),
 		(None, RegistrationState::PendingApproval) => (
-			"Pending OS approval",
-			Some("Approve it in your system's login items."),
+			t!("settings-background-pending"),
+			Some(t!("settings-background-pending.detail")),
 		),
 		(None, RegistrationState::DisabledByOs) => (
-			"Disabled by OS",
-			Some("You turned it off in system settings. The Launcher will not turn it back on."),
+			t!("settings-background-disabled"),
+			Some(t!("settings-background-disabled.detail")),
 		),
-		(None, RegistrationState::NotInstalled) => ("Not installed", None),
-		(None, RegistrationState::Failed(why)) => ("Failed", Some(why.as_str())),
-		(None, RegistrationState::Unsupported(why)) => ("Unavailable here", Some(why.as_str())),
+		(None, RegistrationState::NotInstalled) => (t!("settings-background-not-installed"), None),
+		// The reasons come from the system and stay as they are.
+		(None, RegistrationState::Failed(why)) => {
+			(t!("settings-background-failed"), Some(why.clone()))
+		}
+		(None, RegistrationState::Unsupported(why)) => {
+			(t!("settings-background-unavailable"), Some(why.clone()))
+		}
 	};
 
 	ui.label(label);
@@ -137,9 +144,9 @@ fn background_status(
 	if let Some(info) = &status.running {
 		if let Some(at) = info.last_completed.or(info.last_attempted) {
 			ui.label(
-				RichText::new(format!(
-					"Last check: {}",
-					crate::ui::screens::sheet::when(at)
+				RichText::new(t!(
+					"settings-background-last-check",
+					when = crate::ui::screens::sheet::when(at)
 				))
 				.small()
 				.color(theme::muted(ui)),
@@ -148,24 +155,27 @@ fn background_status(
 
 		if let Some(outcome) = &info.last_outcome {
 			ui.label(
-				RichText::new(format!("Last result: {outcome}"))
-					.small()
-					.color(theme::muted(ui)),
-			);
-		}
-
-		if let Some(next) = info.next_due {
-			ui.label(
-				RichText::new(format!(
-					"Next check: {}",
-					crate::ui::screens::sheet::when(next)
+				RichText::new(t!(
+					"settings-background-last-result",
+					outcome = outcome.as_str()
 				))
 				.small()
 				.color(theme::muted(ui)),
 			);
 		}
 
-		if ui.button("Stop background updates").clicked() {
+		if let Some(next) = info.next_due {
+			ui.label(
+				RichText::new(t!(
+					"settings-background-next-check",
+					when = crate::ui::screens::sheet::when(next)
+				))
+				.small()
+				.color(theme::muted(ui)),
+			);
+		}
+
+		if ui.button(t!("settings-background-stop")).clicked() {
 			*action = SettingsAction::StopBackground;
 		}
 	}

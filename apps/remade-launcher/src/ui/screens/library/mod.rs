@@ -17,6 +17,7 @@ use self::controls::{Show, Sort, arrange};
 pub(crate) use self::status::status_text;
 use super::{Action, page, unavailable};
 use crate::ui::components::{ViewMode, card_grid, dropdown, search_bar, view_toggle};
+use crate::ui::i18n::text_for;
 use crate::ui::theme;
 
 /// Live progress for an operation, from engine events.
@@ -44,38 +45,49 @@ const CARD_MIN_WIDTH: f32 = 320.0;
 pub(crate) fn library(ui: &mut Ui, view: &mut LibraryView<'_>) -> Option<Action> {
 	let mut action = None;
 
-	page(ui, "Library", |ui| {
+	page(ui, &t!("library-title"), |ui| {
 		if view.apps.is_empty() && view.busy.is_empty() {
 			unavailable(
 				ui,
-				"Nothing installed yet",
-				"Apps you install with Remade Launcher will appear here. Find some in Explore.",
+				&t!("library-empty-title"),
+				&t!("library-empty-description"),
 			);
 
 			return;
 		}
 
-		search_bar(ui, "Search your apps", &mut view.state.search);
+		search_bar(ui, &t!("library-search"), &mut view.state.search);
 		ui.add_space(8.0);
+
+		let sorts = Sort::options();
+		let sorts: Vec<(Sort, &str)> = sorts
+			.iter()
+			.map(|(sort, name)| (*sort, name.as_str()))
+			.collect();
+		let shows = Show::options();
+		let shows: Vec<(Show, &str)> = shows
+			.iter()
+			.map(|(show, name)| (*show, name.as_str()))
+			.collect();
 
 		ui.horizontal_wrapped(|ui| {
 			dropdown(
 				ui,
 				"library-sort",
-				"Sort",
+				&t!("library-sort"),
 				&mut view.state.sort,
-				&Sort::OPTIONS,
+				&sorts,
 			);
 			dropdown(
 				ui,
 				"library-show",
-				"Show",
+				&t!("library-show"),
 				&mut view.state.show,
-				&Show::OPTIONS,
+				&shows,
 			);
 
 			ui.label(
-				RichText::new(view.mode.label())
+				RichText::new(text_for("update-mode", view.mode.as_str()))
 					.small()
 					.color(theme::muted(ui)),
 			);
@@ -90,7 +102,7 @@ pub(crate) fn library(ui: &mut Ui, view: &mut LibraryView<'_>) -> Option<Action>
 		let shown = arrange(view.apps, view.statuses, view.state);
 
 		if shown.is_empty() {
-			ui.label(RichText::new("No installed app matches.").color(theme::muted(ui)));
+			ui.label(RichText::new(t!("library-no-match")).color(theme::muted(ui)));
 		}
 
 		let items: Vec<Item<'_>> = shown

@@ -28,28 +28,22 @@ pub(crate) fn send(title: &str, body: &str) {
 /// The wording for finished installs, in one place so it stays consistent.
 pub(crate) fn install_finished(name: &str) -> (String, String) {
 	(
-		format!("{name} is installed"),
-		"Open the launcher to start it.".to_owned(),
+		t!("notify-install-finished", name = name),
+		t!("notify-install-finished.body"),
 	)
 }
 
 pub(crate) fn install_failed(name: &str) -> (String, String) {
 	(
-		format!("{name} could not be installed"),
-		"Open the launcher to see why.".to_owned(),
+		t!("notify-install-failed", name = name),
+		t!("notify-install-failed.body"),
 	)
 }
 
 pub(crate) fn updates_available(count: usize) -> (String, String) {
-	let title = if count == 1 {
-		"1 update is available".to_owned()
-	} else {
-		format!("{count} updates are available")
-	};
-
 	(
-		title,
-		"Open the launcher to review and install them.".to_owned(),
+		t!("notify-updates-available", count = count as i64),
+		t!("notify-updates-available.body"),
 	)
 }
 

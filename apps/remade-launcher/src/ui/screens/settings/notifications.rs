@@ -13,18 +13,18 @@ pub(super) fn notifications(ui: &mut Ui, prefs: &Preferences, action: &mut Setti
 	changed |= ui
 		.checkbox(
 			&mut next.notifications.updates_available,
-			"Tell me when updates are available",
+			t!("settings-notify-updates"),
 		)
 		.changed();
 	changed |= ui
 		.checkbox(
 			&mut next.notifications.install_finished,
-			"Tell me when an install or update finishes",
+			t!("settings-notify-finished"),
 		)
 		.changed();
 
 	ui.label(
-		RichText::new("Notifications appear only while the launcher is in the background. Your system may ask permission the first time.")
+		RichText::new(t!("settings-notify-note"))
 			.small()
 			.color(theme::muted(ui)),
 	);
@@ -35,7 +35,7 @@ pub(super) fn notifications(ui: &mut Ui, prefs: &Preferences, action: &mut Setti
 
 	ui.add_space(6.0);
 
-	if ui.button("Send a test notification").clicked() {
+	if ui.button(t!("settings-notify-test")).clicked() {
 		*action = SettingsAction::TestNotification;
 	}
 }

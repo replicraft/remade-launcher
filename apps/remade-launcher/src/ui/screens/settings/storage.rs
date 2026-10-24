@@ -12,7 +12,7 @@ pub(super) fn storage(ui: &mut Ui, report: Option<&StorageReport>, action: &mut 
 	let Some(report) = report else {
 		ui.horizontal(|ui| {
 			ui.spinner();
-			ui.label("Measuring…");
+			ui.label(t!("settings-measuring"));
 		});
 
 		return;
@@ -20,8 +20,8 @@ pub(super) fn storage(ui: &mut Ui, report: Option<&StorageReport>, action: &mut 
 
 	setting_row(
 		ui,
-		"Your apps",
-		Some("Everything the launcher has installed. Uninstall an app to free its space."),
+		&t!("settings-storage-apps"),
+		Some(&t!("settings-storage-apps.description")),
 		|ui| {
 			ui.label(RichText::new(bytes(report.apps_bytes)).family(theme::semibold()));
 			ui.label(
@@ -31,7 +31,7 @@ pub(super) fn storage(ui: &mut Ui, report: Option<&StorageReport>, action: &mut 
 					.color(theme::muted(ui)),
 			);
 
-			if ui.button("Show in file manager").clicked() {
+			if ui.button(t!("settings-show-folder")).clicked() {
 				*action = SettingsAction::ShowFolder(report.apps_folder.clone());
 			}
 		},
@@ -39,17 +39,15 @@ pub(super) fn storage(ui: &mut Ui, report: Option<&StorageReport>, action: &mut 
 
 	setting_row(
 		ui,
-		"Leftover downloads",
-		Some(
-			"Files from installs that were interrupted. Safe to remove; nothing running is touched.",
-		),
+		&t!("settings-storage-leftover"),
+		Some(&t!("settings-storage-leftover.description")),
 		|ui| {
 			ui.label(RichText::new(bytes(report.leftover_bytes)).family(theme::semibold()));
 
 			if ui
 				.add_enabled(
 					report.leftover_bytes > 0,
-					egui::Button::new("Clear leftovers"),
+					egui::Button::new(t!("settings-clear-leftovers")),
 				)
 				.clicked()
 			{
@@ -60,17 +58,15 @@ pub(super) fn storage(ui: &mut Ui, report: Option<&StorageReport>, action: &mut 
 
 	setting_row(
 		ui,
-		"Remembered lookups",
-		Some(
-			"Answers from GitHub kept to make checks faster and cheaper. They are refilled as needed.",
-		),
+		&t!("settings-storage-cache"),
+		Some(&t!("settings-storage-cache.description")),
 		|ui| {
 			ui.label(RichText::new(bytes(report.cache_bytes)).family(theme::semibold()));
 
 			if ui
 				.add_enabled(
 					report.cache_bytes > 0,
-					egui::Button::new("Clear remembered lookups"),
+					egui::Button::new(t!("settings-clear-cache")),
 				)
 				.clicked()
 			{
@@ -81,8 +77,8 @@ pub(super) fn storage(ui: &mut Ui, report: Option<&StorageReport>, action: &mut 
 
 	setting_row(
 		ui,
-		"Launcher data",
-		Some("The launcher's own records: what is installed, settings, and history."),
+		&t!("settings-storage-data"),
+		Some(&t!("settings-storage-data.description")),
 		|ui| {
 			ui.label(RichText::new(bytes(report.database_bytes)).family(theme::semibold()));
 			ui.label(
@@ -92,7 +88,7 @@ pub(super) fn storage(ui: &mut Ui, report: Option<&StorageReport>, action: &mut 
 					.color(theme::muted(ui)),
 			);
 
-			if ui.button("Show in file manager").clicked() {
+			if ui.button(t!("settings-show-folder")).clicked() {
 				*action = SettingsAction::ShowFolder(report.data_folder.clone());
 			}
 		},

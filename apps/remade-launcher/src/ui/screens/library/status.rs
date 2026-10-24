@@ -7,14 +7,13 @@ use launcher_model::UpdateMode;
 /// A failed check is never "up to date".
 pub(crate) fn status_text(status: &UpdateStatus, mode: UpdateMode) -> (String, bool) {
 	match &status.state {
-		UpdateState::UpToDate => ("Up to date".into(), false),
-		UpdateState::Pinned => ("Pinned".into(), false),
-		UpdateState::CheckFailed(why) => (
-			format!("Needs your attention: could not check ({why})"),
-			true,
-		),
+		UpdateState::UpToDate => (t!("library-status-up-to-date"), false),
+		UpdateState::Pinned => (t!("library-status-pinned"), false),
+		UpdateState::CheckFailed(why) => {
+			(t!("library-status-check-failed", why = why.as_str()), true)
+		}
 		UpdateState::Unsupported(why) => (why.clone(), false),
-		UpdateState::NeedsChoice => ("Needs your attention: several packages fit".into(), true),
+		UpdateState::NeedsChoice => (t!("library-status-needs-choice"), true),
 		UpdateState::Available => {
 			let version = status
 				.available
@@ -22,24 +21,24 @@ pub(crate) fn status_text(status: &UpdateStatus, mode: UpdateMode) -> (String, b
 				.map_or("?", |available| available.version.as_str());
 
 			if !mode.is_automatic() {
-				return (format!("Update available: {version}"), false);
+				return (
+					t!("library-status-update-available", version = version),
+					false,
+				);
 			}
 
 			match &status.auto.decision {
-				Decision::Apply => (
-					format!("Update available: {version}. It will install automatically."),
-					false,
-				),
+				Decision::Apply => (t!("library-status-update-auto", version = version), false),
 				Decision::Skip(SkipReason::MinReleaseAgeNotMet { .. }) => {
-					(format!("Waiting for minimum age: {version}"), false)
+					(t!("library-status-waiting-age", version = version), false)
 				}
-				Decision::Skip(SkipReason::AutoPaused) => (
-					format!("Update available: {version}. Automatic updates are paused."),
-					false,
+				Decision::Skip(SkipReason::AutoPaused) => {
+					(t!("library-status-update-paused", version = version), false)
+				}
+				Decision::Skip(reason) => (
+					t!("library-status-attention", reason = reason.message()),
+					true,
 				),
-				Decision::Skip(reason) => {
-					(format!("Needs your attention: {}", reason.message()), true)
-				}
 			}
 		}
 	}

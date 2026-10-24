@@ -10,6 +10,7 @@ use super::library::{Progress, status_text};
 use super::sheet::{bytes, when};
 use super::{Action, page};
 use crate::ui::components::{app_tile_for, version_change};
+use crate::ui::i18n::text_for;
 use crate::ui::theme;
 
 pub(crate) struct UpdatesView<'a> {
@@ -37,16 +38,16 @@ pub(crate) fn updates(ui: &mut Ui, view: &UpdatesView<'_>) -> Option<Action> {
 	let mut action = None;
 	let ready = available(view.statuses);
 
-	page(ui, "Updates", |ui| {
+	page(ui, &t!("updates-title"), |ui| {
 		ui.horizontal(|ui| {
-			if ui.button("Check for updates").clicked() {
+			if ui.button(t!("updates-check")).clicked() {
 				action = Some(Action::CheckUpdates);
 			}
 
 			let label = if ready.is_empty() {
-				"Update all".to_owned()
+				t!("updates-all")
 			} else {
-				format!("Update all ({})", ready.len())
+				t!("updates-all-count", count = ready.len() as i64)
 			};
 
 			if ui
@@ -57,7 +58,7 @@ pub(crate) fn updates(ui: &mut Ui, view: &UpdatesView<'_>) -> Option<Action> {
 			}
 
 			ui.label(
-				RichText::new(view.mode.label())
+				RichText::new(text_for("update-mode", view.mode.as_str()))
 					.small()
 					.color(theme::muted(ui)),
 			);
@@ -70,9 +71,9 @@ pub(crate) fn updates(ui: &mut Ui, view: &UpdatesView<'_>) -> Option<Action> {
 					ui.add_space(16.0);
 					ui.label(
 						RichText::new(if view.checked {
-							"Everything that can be checked is up to date."
+							t!("updates-all-current")
 						} else {
-							"Press Check for updates to look."
+							t!("updates-not-checked")
 						})
 						.color(theme::muted(ui)),
 					);
@@ -130,17 +131,14 @@ fn available_row(
 
 			if let Some(at) = update.published_at {
 				ui.label(
-					RichText::new(format!("Published {}", when(at)))
+					RichText::new(t!("updates-published", when = when(at)))
 						.small()
 						.color(theme::muted(ui)),
 				);
 			}
 
 			if update.rebuilt {
-				ui.colored_label(
-					ui.visuals().warn_fg_color,
-					"The publisher replaced the file for the version you have. Read the notes before updating.",
-				);
+				ui.colored_label(ui.visuals().warn_fg_color, t!("updates-rebuilt"));
 			}
 
 			if let Some(progress) = progress {
@@ -159,12 +157,12 @@ fn available_row(
 			}
 
 			ui.horizontal(|ui| {
-				if ui.button("Update").clicked() {
+				if ui.button(t!("updates-update")).clicked() {
 					action = Some(Action::Update(status.installation));
 				}
 
 				if let Some(slug) = &status.catalog_slug
-					&& ui.button("Release notes").clicked()
+					&& ui.button(t!("updates-release-notes")).clicked()
 				{
 					action = Some(Action::ReleaseNotes {
 						slug: slug.clone(),
@@ -202,7 +200,7 @@ fn attention(ui: &mut Ui, view: &UpdatesView<'_>) {
 
 	ui.add_space(12.0);
 	ui.label(
-		RichText::new("Held or not checked")
+		RichText::new(t!("updates-held-title"))
 			.size(18.0)
 			.family(theme::semibold()),
 	);
@@ -225,15 +223,13 @@ fn attention(ui: &mut Ui, view: &UpdatesView<'_>) {
 fn history(ui: &mut Ui, history: &[OperationSummary]) {
 	ui.add_space(12.0);
 	ui.label(
-		RichText::new("History")
+		RichText::new(t!("updates-history-title"))
 			.size(18.0)
 			.family(theme::semibold()),
 	);
 
 	if history.is_empty() {
-		ui.label(
-			RichText::new("Nothing has been installed or removed yet.").color(theme::muted(ui)),
-		);
+		ui.label(RichText::new(t!("updates-history-empty")).color(theme::muted(ui)));
 
 		return;
 	}

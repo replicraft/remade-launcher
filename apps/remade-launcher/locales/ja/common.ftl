@@ -1,1 +1,31 @@
 # ja: common
+
+common-cancel = キャンセル
+common-close = 閉じる
+common-clear-search = 検索をクリア
+common-version-old = 現在
+common-version-new = 新規
+common-reviewed = Remade 審査済み
+common-not-reviewed = あなたが追加しました。Remade の審査は受けていません
+common-view-grid = グリッド表示
+common-view-list = リスト表示
+nav-show-sidebar = サイドバーを表示
+nav-hide-sidebar = サイドバーを隠す
+nav-add-from-github = GitHub から追加
+nav-explore = 探す
+nav-library = ライブラリ
+nav-updates = アップデート
+nav-settings = 設定
+transfers-more = ほか { $count } 件
+transfers-installed = インストール済み
+transfers-stop = 停止
+transfers-progress = { $received } / { $total }
+transfers-speed = { $speed }/秒
+menu-about = { $name } について
+menu-settings = 設定…
+notify-install-finished = { $name } をインストールしました
+    .body = ランチャーを開いて起動してください。
+notify-install-failed = { $name } をインストールできませんでした
+    .body = ランチャーを開いて理由を確認してください。
+notify-updates-available = { $count } 件のアップデートがあります
+    .body = ランチャーを開いて確認し、インストールしてください。

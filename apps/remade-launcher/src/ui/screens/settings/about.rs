@@ -14,12 +14,13 @@ pub(super) fn about(ui: &mut Ui, logo: &egui::TextureHandle, action: &mut Settin
 		ui.vertical(|ui| {
 			ui.spacing_mut().item_spacing.y = 2.0;
 			ui.label(
-				RichText::new(format!("{} by Replicraft", product::NAME))
+				RichText::new(t!("settings-about-by", name = product::NAME))
 					.size(16.0)
 					.family(theme::semibold()),
 			);
 			ui.label(
-				RichText::new(format!("Version {}", product::VERSION)).color(theme::muted(ui)),
+				RichText::new(t!("settings-about-version", version = product::VERSION))
+					.color(theme::muted(ui)),
 			);
 			ui.label(
 				RichText::new(product::TAGLINE)
@@ -37,12 +38,12 @@ pub(super) fn about(ui: &mut Ui, logo: &egui::TextureHandle, action: &mut Settin
 		.show(ui, |ui| {
 			fact(
 				ui,
-				"Platform",
+				&t!("settings-about-platform"),
 				&format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
 			);
-			fact(ui, "License", env!("CARGO_PKG_LICENSE"));
+			fact(ui, &t!("settings-about-license"), env!("CARGO_PKG_LICENSE"));
 
-			ui.label(RichText::new("Website").color(theme::muted(ui)));
+			ui.label(RichText::new(t!("settings-about-website")).color(theme::muted(ui)));
 			ui.hyperlink_to("remade.wiki/launcher", env!("CARGO_PKG_HOMEPAGE"));
 			ui.end_row();
 		});
@@ -50,14 +51,14 @@ pub(super) fn about(ui: &mut Ui, logo: &egui::TextureHandle, action: &mut Settin
 	ui.add_space(8.0);
 
 	ui.hyperlink_to(
-		format!("{}  View the source on GitHub", icons::GITHUB),
+		format!("{}  {}", icons::GITHUB, t!("settings-about-source")),
 		env!("CARGO_PKG_REPOSITORY"),
 	);
 
 	ui.add_space(12.0);
 
 	// The consequences are spelled out in the confirmation that follows.
-	if danger_button(ui, "Restore defaults").clicked() {
+	if danger_button(ui, &t!("settings-about-restore")).clicked() {
 		*action = SettingsAction::RestoreDefaults;
 	}
 }

@@ -10,14 +10,22 @@ pub(crate) fn version_change(ui: &mut Ui, old: &str, new: &str) {
 	ui.horizontal(|ui| {
 		ui.spacing_mut().item_spacing.x = 8.0;
 
-		ui.label(RichText::new("Old").small().color(palette.text_muted));
+		ui.label(
+			RichText::new(t!("common-version-old"))
+				.small()
+				.color(palette.text_muted),
+		);
 		ui.label(RichText::new(old).family(theme::semibold()));
 		ui.label(
 			RichText::new(icons::ARROW_RIGHT)
 				.size(16.0)
 				.color(palette.text_muted),
 		);
-		ui.label(RichText::new("New").small().color(palette.text_muted));
+		ui.label(
+			RichText::new(t!("common-version-new"))
+				.small()
+				.color(palette.text_muted),
+		);
 		ui.label(
 			RichText::new(new)
 				.family(theme::semibold())

@@ -252,15 +252,14 @@ impl LauncherApp {
 						.filter(|item| item.ready.is_some())
 						.collect();
 
-					self.sheet =
-						Some(if ready.is_empty() {
-							Sheet::Message {
-			title: "Nothing to update".into(),
-			lines: vec!["No installed app has an update that can be installed right now.".into()],
-		}
-						} else {
-							Sheet::ConfirmUpdateAll(ready)
-						});
+					self.sheet = Some(if ready.is_empty() {
+						Sheet::Message {
+							title: t!("app-nothing-title"),
+							lines: vec![t!("app-nothing-body")],
+						}
+					} else {
+						Sheet::ConfirmUpdateAll(ready)
+					});
 				}
 				Message::Restored(settings, background) => {
 					self.update_settings = *settings;
@@ -271,10 +270,8 @@ impl LauncherApp {
 					self.commands.refresh_preferences();
 					self.notice = None;
 					self.sheet = Some(Sheet::Message {
-						title: "Defaults restored".into(),
-						lines: vec![
-							"Appearance and update settings are back to their defaults.".into(),
-						],
+						title: t!("app-restored-title"),
+						lines: vec![t!("app-restored-body")],
 					});
 				}
 				Message::Notice(text) => {
@@ -285,8 +282,8 @@ impl LauncherApp {
 				Message::Diagnostics(text) => {
 					self.context.copy_text(text);
 					self.sheet = Some(Sheet::Message {
-						title: "Copied".into(),
-						lines: vec!["A support report is on your clipboard. It has no file paths or app names.".into()],
+						title: t!("app-copied-title"),
+						lines: vec![t!("app-copied-body")],
 					});
 				}
 			}
@@ -338,8 +335,12 @@ impl LauncherApp {
 			return;
 		}
 
-		self.transfers
-			.begin(key.clone(), name.clone(), Some(slug.clone()), "Starting");
+		self.transfers.begin(
+			key.clone(),
+			name.clone(),
+			Some(slug.clone()),
+			&t!("app-stage-starting"),
+		);
 		self.demo_downloads.push(DemoDownload {
 			total: demo::download_size(&slug),
 			key,
@@ -367,9 +368,9 @@ impl LauncherApp {
 			let total = Some(download.total);
 
 			if seconds < download_time {
-				let label = format!(
-					"Downloading {}",
-					screens::sheet::bytes((seconds * SPEED) as u64)
+				let label = t!(
+					"app-stage-downloading",
+					size = screens::sheet::bytes((seconds * SPEED) as u64)
 				);
 
 				self.transfers
@@ -377,13 +378,17 @@ impl LauncherApp {
 			} else if seconds < download_time + 0.8 {
 				self.transfers.set(
 					&download.key,
-					"Checking the download",
+					&t!("app-stage-checking"),
 					download.total,
 					total,
 				);
 			} else if seconds < download_time + 2.0 {
-				self.transfers
-					.set(&download.key, "Unpacking", download.total, total);
+				self.transfers.set(
+					&download.key,
+					&t!("app-stage-unpacking"),
+					download.total,
+					total,
+				);
 			} else {
 				finished.push(download.key.clone());
 			}
@@ -479,7 +484,7 @@ impl LauncherApp {
 				self.progress.insert(
 					app.id,
 					screens::library::Progress {
-						label: "Removing files".into(),
+						label: t!("app-removing-files"),
 						fraction: Some(done),
 						stoppable: false,
 					},
@@ -517,7 +522,7 @@ impl LauncherApp {
 	/// nothing real happens.
 	fn perform_demo(&mut self, action: Action) {
 		let say = |text: &str| Sheet::Message {
-			title: "Demo mode".into(),
+			title: t!("app-demo-title"),
 			lines: vec![text.to_owned()],
 		};
 
@@ -556,13 +561,9 @@ impl LauncherApp {
 			Action::OpenAppSettings(id) => self.app_settings = Some(id),
 			Action::LookUp(_) => {
 				self.add.lookup_failed();
-				self.sheet = Some(say("Looking up repositories is turned off in demo mode."));
+				self.sheet = Some(say(&t!("app-demo-lookup-off")));
 			}
-			_ => {
-				self.sheet = Some(say(
-					"This would change your apps, so it does nothing in demo mode.",
-				))
-			}
+			_ => self.sheet = Some(say(&t!("app-demo-no-change"))),
 		}
 	}
 
@@ -592,7 +593,7 @@ impl LauncherApp {
 			Preparation::Unavailable(reason) => {
 				self.transfers.drop_waiting();
 				self.sheet = Some(Sheet::Message {
-					title: "Not available".into(),
+					title: t!("app-unavailable-title"),
 					lines: vec![reason],
 				});
 			}
@@ -605,17 +606,20 @@ impl LauncherApp {
 		};
 
 		let (label, received, total) = match &event.stage {
-			Stage::Accepted => ("Starting".to_owned(), 0, None),
+			Stage::Accepted => (t!("app-stage-starting"), 0, None),
 			Stage::Downloading { received, total } => (
-				format!("Downloading {}", screens::sheet::bytes(*received)),
+				t!(
+					"app-stage-downloading",
+					size = screens::sheet::bytes(*received)
+				),
 				*received,
 				*total,
 			),
-			Stage::Verifying => ("Checking the download".into(), 0, None),
-			Stage::Inspecting => ("Inspecting the package".into(), 0, None),
-			Stage::Extracting => ("Unpacking".into(), 0, None),
-			Stage::Applying => ("Finishing".into(), 0, None),
-			Stage::Removing => ("Removing".into(), 0, None),
+			Stage::Verifying => (t!("app-stage-checking"), 0, None),
+			Stage::Inspecting => (t!("app-stage-inspecting"), 0, None),
+			Stage::Extracting => (t!("app-stage-unpacking"), 0, None),
+			Stage::Applying => (t!("app-stage-finishing"), 0, None),
+			Stage::Removing => (t!("app-stage-removing"), 0, None),
 			Stage::Completed | Stage::Failed { .. } | Stage::RecoveryRequired { .. } => {
 				self.progress.remove(&event.installation);
 				// What was true before this operation no longer is.
@@ -663,7 +667,7 @@ impl LauncherApp {
 					installed
 						.iter()
 						.find(|app| app.id == event.installation)
-						.map_or_else(|| "An app".to_owned(), |app| app.name.clone())
+						.map_or_else(|| t!("app-an-app"), |app| app.name.clone())
 				},
 				label,
 				received,
@@ -695,13 +699,13 @@ impl LauncherApp {
 					TransferKey::Slug(slug.clone()),
 					name,
 					Some(slug.clone()),
-					"Checking the latest release…",
+					&t!("app-checking-release"),
 				);
 				self.commands.prepare_install(slug);
 			}
 			Action::Update(id) => {
 				let app = self.installed.iter().find(|app| app.id == id);
-				let name = app.map_or_else(|| "An app".to_owned(), |app| app.name.clone());
+				let name = app.map_or_else(|| t!("app-an-app"), |app| app.name.clone());
 				let slug = app.and_then(|app| app.catalog_slug.clone());
 
 				self.update_of = Some(id);
@@ -709,7 +713,7 @@ impl LauncherApp {
 					TransferKey::Installation(id),
 					name,
 					slug,
-					"Checking for a newer version…",
+					&t!("app-checking-newer"),
 				);
 				self.commands.prepare_update(id);
 			}
@@ -722,11 +726,11 @@ impl LauncherApp {
 			// Handled before this match.
 			Action::ViewListing(_) => {}
 			Action::UpdateAll => {
-				self.sheet = Some(Sheet::Working("Checking what can be updated…".into()));
+				self.sheet = Some(Sheet::Working(t!("app-working-updates")));
 				self.commands.plan_all_updates();
 			}
 			Action::ReleaseNotes { slug, tag, app } => {
-				self.sheet = Some(Sheet::Working("Loading release notes…".into()));
+				self.sheet = Some(Sheet::Working(t!("app-working-notes")));
 				self.commands.release_notes(slug, tag, app);
 			}
 			Action::Uninstall(app) => self.sheet = Some(Sheet::ConfirmUninstall(app)),
@@ -735,7 +739,7 @@ impl LauncherApp {
 				preparation,
 				asset_id,
 			} => {
-				self.sheet = Some(Sheet::Working("Preparing…".into()));
+				self.sheet = Some(Sheet::Working(t!("app-working-preparing")));
 				self.commands.choose_custom_file(*preparation, asset_id);
 			}
 		}
@@ -958,14 +962,22 @@ impl LauncherApp {
 		}
 
 		let headline = if ready {
-			format!("{} {version} is ready", product::NAME)
+			t!(
+				"app-launcher-ready",
+				name = product::NAME,
+				version = version.as_str()
+			)
 		} else {
-			format!("{} {version} is available", product::NAME)
+			t!(
+				"app-launcher-available",
+				name = product::NAME,
+				version = version.as_str()
+			)
 		};
 		let detail = if ready {
-			"It starts the next time you open the launcher."
+			t!("app-launcher-ready-detail")
 		} else {
-			"Open Settings to download it."
+			t!("app-launcher-available-detail")
 		};
 
 		if notice(
@@ -973,8 +985,8 @@ impl LauncherApp {
 			Tone::Info,
 			crate::ui::icons::ARROW_CLOCKWISE,
 			&headline,
-			Some(detail),
-			Some("Details"),
+			Some(&detail),
+			Some(&t!("app-details")),
 		) {
 			self.launcher_banner_dismissed = Some(version);
 			self.go(Screen::Settings);
@@ -1008,7 +1020,7 @@ impl LauncherApp {
 		let name = self
 			.transfers
 			.name_of(installation)
-			.unwrap_or_else(|| "An app".to_owned());
+			.unwrap_or_else(|| t!("app-an-app"));
 
 		match stage {
 			Stage::Completed => {
@@ -1080,7 +1092,11 @@ impl LauncherApp {
 
 						ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
 							library = ui
-								.button(format!("{}  Go to Library", crate::ui::icons::BOOKS))
+								.button(format!(
+									"{}  {}",
+									crate::ui::icons::BOOKS,
+									t!("app-go-to-library")
+								))
 								.clicked();
 						});
 					}
@@ -1121,14 +1137,14 @@ impl LauncherApp {
 
 				let origin = ui.cursor().min;
 
-				ui.heading(format!("{} update settings", app.name));
+				ui.heading(t!("app-update-settings-title", name = app.name.as_str()));
 				ui.add_space(10.0);
 
 				action = screens::app_settings::app_settings(ui, &app, &policy, global_age);
 
 				ui.add_space(14.0);
 
-				if dialog_ok(ui, "Done") || dialog_close(ui, origin, 420.0) {
+				if dialog_ok(ui, &t!("app-done")) || dialog_close(ui, origin, 420.0) {
 					close = true;
 				}
 			});
@@ -1164,7 +1180,7 @@ impl LauncherApp {
 
 				// Both the corner × and a button, so it is easy to leave. This
 				// one sits on the left, away from the lookup button.
-				if ui.button("Close").clicked() || dialog_close(ui, origin, 520.0) {
+				if ui.button(t!("app-close")).clicked() || dialog_close(ui, origin, 520.0) {
 					close = true;
 				}
 			});
@@ -1256,7 +1272,7 @@ impl eframe::App for LauncherApp {
 				ui.horizontal(|ui| {
 					ui.colored_label(ui.visuals().error_fg_color, notice);
 
-					if ui.small_button("Dismiss").clicked() {
+					if ui.small_button(t!("app-dismiss")).clicked() {
 						self.notice = None;
 					}
 				});
@@ -1341,7 +1357,7 @@ impl eframe::App for LauncherApp {
 						}
 						SettingsAction::RollBackLauncher => self.commands.roll_back_launcher(),
 						SettingsAction::TestNotification => {
-							notifications::send(product::NAME, "This is a test notification.");
+							notifications::send(product::NAME, &t!("app-test-notification"));
 						}
 					}
 				}

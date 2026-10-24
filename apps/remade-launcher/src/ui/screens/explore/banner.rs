@@ -72,38 +72,41 @@ fn messages(facts: &Facts) -> Vec<Message> {
 			(true, Some(cached)) => Message {
 				tone: Tone::Warning,
 				icon: icons::WIFI_SLASH,
-				headline: "Could not reach Remade servers, using cached catalog info.".into(),
-				detail: Some(format!("The cached copy was verified on {}. New apps and releases may be missing.", date(cached))),
+				headline: t!("explore-banner-offline-cached"),
+				detail: Some(t!(
+					"explore-banner-offline-cached.description",
+					date = date(cached)
+				)),
 				retry: true,
 			},
 			(true, None) => Message {
 				tone: Tone::Warning,
 				icon: icons::WIFI_SLASH,
-				headline: "Could not reach Remade servers, using catalog info you already have.".into(),
+				headline: t!("explore-banner-offline-known"),
 				detail: None,
 				retry: true,
 			},
 			(false, _) => Message {
 				tone: Tone::Warning,
 				icon: icons::WIFI_SLASH,
-				headline: "Could not reach Remade servers.".into(),
-				detail: Some("There is no cached catalog to fall back on yet. Check your connection and try again.".into()),
+				headline: t!("explore-banner-offline"),
+				detail: Some(t!("explore-banner-offline.description")),
 				retry: true,
 			},
 		}),
 		Some((kind, why)) => {
 			let headline = match kind {
 				ProblemKind::Network => unreachable!("handled above"),
-				ProblemKind::Security => "The catalog was rejected.",
-				ProblemKind::Unusable => "The catalog could not be used.",
-				ProblemKind::NoTrustedKeys => "The catalog is not configured.",
-				ProblemKind::Storage => "The catalog could not be saved.",
+				ProblemKind::Security => t!("explore-banner-rejected"),
+				ProblemKind::Unusable => t!("explore-banner-unusable"),
+				ProblemKind::NoTrustedKeys => t!("explore-banner-unconfigured"),
+				ProblemKind::Storage => t!("explore-banner-not-saved"),
 			};
 
 			shown.push(Message {
 				tone: Tone::Warning,
 				icon: icons::WARNING_CIRCLE,
-				headline: headline.into(),
+				headline,
 				detail: Some(why.clone()),
 				retry: true,
 			});
@@ -115,8 +118,8 @@ fn messages(facts: &Facts) -> Vec<Message> {
 		shown.push(Message {
 			tone: Tone::Warning,
 			icon: icons::WARNING_CIRCLE,
-			headline: format!("This catalog expired on {}.", date(expired)),
-			detail: Some("You can browse it, but new installs and updates are on hold until it is refreshed.".into()),
+			headline: t!("explore-banner-expired", date = date(expired)),
+			detail: Some(t!("explore-banner-expired.description")),
 			retry: true,
 		});
 	}
@@ -125,11 +128,8 @@ fn messages(facts: &Facts) -> Vec<Message> {
 		shown.push(Message {
 			tone: Tone::Warning,
 			icon: icons::WARNING_CIRCLE,
-			headline: "Your computer's clock looks wrong.".into(),
-			detail: Some(
-				"It is earlier than a time the launcher already trusted. Check the date and time."
-					.into(),
-			),
+			headline: t!("explore-banner-clock"),
+			detail: Some(t!("explore-banner-clock.description")),
 			retry: false,
 		});
 	}
@@ -162,7 +162,8 @@ fn draw(ui: &mut Ui, facts: &Facts, commands: &Commands) {
 	let problems = messages(facts);
 
 	for message in &problems {
-		let button = (message.retry && !facts.refreshing).then_some("Try again");
+		let try_again = t!("explore-try-again");
+		let button = (message.retry && !facts.refreshing).then_some(try_again.as_str());
 
 		if notice(
 			ui,
@@ -181,21 +182,21 @@ fn draw(ui: &mut Ui, facts: &Facts, commands: &Commands) {
 	ui.horizontal(|ui| {
 		if facts.refreshing {
 			ui.spinner();
-			ui.label("Checking for catalog updates…");
+			ui.label(t!("explore-banner-checking"));
 
 			return;
 		}
 
 		let line = match (facts.checked_at, facts.cached_on, facts.has_catalog) {
-			(Some(at), _, true) => format!(
-				"Verified catalog, checked {}.",
-				launcher_model::local_time::date(at)
+			(Some(at), _, true) => t!(
+				"explore-banner-checked",
+				date = launcher_model::local_time::date(at)
 			),
-			(_, Some(on), true) if problems.is_empty() => format!(
-				"Using verified catalog cached on {}.",
-				launcher_model::local_time::date(on)
+			(_, Some(on), true) if problems.is_empty() => t!(
+				"explore-banner-cached",
+				date = launcher_model::local_time::date(on)
 			),
-			(_, _, false) if problems.is_empty() => "No catalog has been loaded yet.".to_owned(),
+			(_, _, false) if problems.is_empty() => t!("explore-banner-none"),
 			_ => String::new(),
 		};
 
@@ -203,7 +204,7 @@ fn draw(ui: &mut Ui, facts: &Facts, commands: &Commands) {
 			ui.label(egui::RichText::new(line).small().color(theme::muted(ui)));
 		}
 
-		if problems.is_empty() && ui.small_button("Check for updates").clicked() {
+		if problems.is_empty() && ui.small_button(t!("explore-check-updates")).clicked() {
 			commands.refresh_catalog();
 		}
 	});

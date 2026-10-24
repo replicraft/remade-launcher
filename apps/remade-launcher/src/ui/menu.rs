@@ -34,10 +34,10 @@ impl AppMenu {
 		let sender = Mutex::new(sender);
 		let context = context.clone();
 
-		let about = MenuItem::with_id("about", format!("About {}", product::NAME), true, None);
+		let about = MenuItem::with_id("about", t!("menu-about", name = product::NAME), true, None);
 		let settings = MenuItem::with_id(
 			"settings",
-			"Settings…",
+			t!("menu-settings"),
 			true,
 			Some(Accelerator::new(Modifiers::META, Code::Comma)),
 		);

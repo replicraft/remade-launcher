@@ -14,7 +14,9 @@ use egui::{RichText, ScrollArea, Ui};
 use launcher_core::{CatalogState, ExploreQuery, ExploreRow};
 
 use self::banner::{banner, demo_banner};
-use self::cards::{CATEGORY_TILE_HEIGHT, GRID_CARD_HEIGHT, category_tile, grid_card, list_row};
+use self::cards::{
+	CATEGORY_TILE_HEIGHT, GRID_CARD_HEIGHT, app_count, category_tile, grid_card, list_row,
+};
 use self::detail::{demo_detail, detail};
 use self::filters::{
 	Filter, KindFilter, Sort, categories, category_label, featured, filter_demo, languages,
@@ -123,8 +125,8 @@ impl ExploreView {
 		// An app's own page takes the whole width, so there is room for
 		// screenshots and longer descriptions.
 		if let Some(slug) = self.selected.clone() {
-			page(ui, "Explore", |ui| {
-				let back = format!("{}  Back to catalog", icons::ARROW_LEFT);
+			page(ui, &t!("explore-title"), |ui| {
+				let back = format!("{}  {}", icons::ARROW_LEFT, t!("explore-back"));
 
 				if ui.button(back).clicked() {
 					self.selected = None;
@@ -138,24 +140,22 @@ impl ExploreView {
 			return action;
 		}
 
-		page(ui, "Explore", |ui| {
+		page(ui, &t!("explore-title"), |ui| {
 			self.controls_toggle(ui, &state);
 
 			if self.controls_open {
 				if demo.is_some() {
 					ui.label(
-						RichText::new(
-							"Demo catalog. These apps are made up and nothing here installs.",
-						)
-						.small()
-						.color(theme::muted(ui)),
+						RichText::new(t!("explore-demo-note"))
+							.small()
+							.color(theme::muted(ui)),
 					);
 					demo_banner(ui, commands);
 				} else {
 					banner(ui, &state, commands);
 				}
 
-				search_bar(ui, "Search the catalog", &mut self.query);
+				search_bar(ui, &t!("explore-search-hint"), &mut self.query);
 				ui.add_space(8.0);
 
 				self.toolbar(ui, mode);
@@ -176,9 +176,9 @@ impl ExploreView {
 	fn controls_toggle(&mut self, ui: &mut Ui, state: &CatalogState) {
 		ui.horizontal(|ui| {
 			let (icon, label) = if self.controls_open {
-				(icons::CARET_UP, "Hide search and filters")
+				(icons::CARET_UP, t!("explore-hide-controls"))
 			} else {
-				(icons::CARET_DOWN, "Show search and filters")
+				(icons::CARET_DOWN, t!("explore-show-controls"))
 			};
 
 			if ui.button(format!("{icon}  {label}")).clicked() {
@@ -195,12 +195,12 @@ impl ExploreView {
 						.size(18.0)
 						.color(ui.visuals().warn_fg_color),
 				)
-				.on_hover_text("There is a problem with the catalog. Show the filters to read it.");
+				.on_hover_text(t!("explore-problem-hint"));
 			}
 
 			if !self.query.trim().is_empty() || !self.filter.is_open("") {
 				ui.label(
-					RichText::new("Search or filters are active")
+					RichText::new(t!("explore-filters-active"))
 						.small()
 						.color(theme::muted(ui)),
 				);
@@ -212,19 +212,28 @@ impl ExploreView {
 
 	fn toolbar(&mut self, ui: &mut Ui, mode: &mut ViewMode) {
 		ui.horizontal_wrapped(|ui| {
+			let sorts: Vec<(Sort, String)> = Sort::ALL
+				.into_iter()
+				.map(|sort| (sort, sort.label()))
+				.collect();
+			let kinds: Vec<(KindFilter, String)> = KindFilter::ALL
+				.into_iter()
+				.map(|kind| (kind, kind.label()))
+				.collect();
+
 			dropdown(
 				ui,
 				"explore-sort",
-				"Sort",
+				&t!("explore-sort"),
 				&mut self.filter.sort,
-				&Sort::OPTIONS,
+				&borrowed(&sorts),
 			);
 			dropdown(
 				ui,
 				"explore-kind",
-				"Type",
+				&t!("explore-type"),
 				&mut self.filter.kind,
-				&KindFilter::OPTIONS,
+				&borrowed(&kinds),
 			);
 
 			let spoken: Vec<(String, String)> = languages(&self.rows)
@@ -236,13 +245,15 @@ impl ExploreView {
 				.map(|os| (os, os.label().to_owned()))
 				.collect();
 
+			let all = t!("explore-all");
+
 			if !spoken.is_empty() {
 				choice_dropdown(
 					ui,
 					"explore-language",
-					"Language",
+					&t!("explore-language"),
 					&mut self.filter.language,
-					"All",
+					&all,
 					&spoken,
 				);
 			}
@@ -251,9 +262,9 @@ impl ExploreView {
 				choice_dropdown(
 					ui,
 					"explore-platform",
-					"Platform",
+					&t!("explore-platform"),
 					&mut self.filter.platform,
-					"All",
+					&all,
 					&systems,
 				);
 			}
@@ -264,7 +275,7 @@ impl ExploreView {
 		});
 
 		ui.add_space(6.0);
-		ui.checkbox(&mut self.compatible_only, "Only apps for this device");
+		ui.checkbox(&mut self.compatible_only, t!("explore-compatible-only"));
 
 		let popular = categories(&self.rows);
 
@@ -275,7 +286,7 @@ impl ExploreView {
 		ui.add_space(6.0);
 
 		ui.horizontal_wrapped(|ui| {
-			if chip(ui, "All", self.filter.category.is_none()) {
+			if chip(ui, &t!("explore-all"), self.filter.category.is_none()) {
 				self.filter.category = None;
 			}
 
@@ -310,23 +321,14 @@ impl ExploreView {
 				let shown = visible(&self.rows, &self.filter);
 				let title = match &self.filter.category {
 					Some(slug) => category_label(slug),
-					None if open => "All apps".to_owned(),
-					None => "Results".to_owned(),
+					None if open => t!("explore-all-apps"),
+					None => t!("explore-results"),
 				};
 
-				section_title(
-					ui,
-					None,
-					&title,
-					Some(&format!(
-						"{} {}",
-						shown.len(),
-						if shown.len() == 1 { "app" } else { "apps" }
-					)),
-				);
+				section_title(ui, None, &title, Some(&app_count(shown.len())));
 
 				if shown.is_empty() {
-					ui.label(RichText::new("No apps match these filters.").color(theme::muted(ui)));
+					ui.label(RichText::new(t!("explore-none-for-filters")).color(theme::muted(ui)));
 				}
 
 				self.draw(ui, mode, &shown, None, CARD_MIN_WIDTH, &mut picked);
@@ -352,21 +354,21 @@ impl ExploreView {
 		let starred = featured(&self.rows);
 
 		if !starred.is_empty() {
-			section_title(ui, Some(icons::STAR), "Featured", None);
+			section_title(ui, Some(icons::STAR), &t!("explore-featured"), None);
 			self.draw(ui, mode, &starred, None, FEATURED_MIN_WIDTH, picked);
 		}
 
 		let newest = recent(&self.rows, RECENT_COUNT);
 
 		if !newest.is_empty() {
-			section_title(ui, Some(icons::SPARKLE), "Recently added", None);
+			section_title(ui, Some(icons::SPARKLE), &t!("explore-recent"), None);
 			self.draw(ui, mode, &newest, Some(Note::Added), CARD_MIN_WIDTH, picked);
 		}
 
 		let groups = categories(&self.rows);
 
 		if !groups.is_empty() {
-			section_title(ui, Some(icons::GRID), "Categories", None);
+			section_title(ui, Some(icons::GRID), &t!("explore-categories"), None);
 
 			card_grid(
 				ui,
@@ -421,15 +423,10 @@ impl ExploreView {
 
 	fn nothing_found(&self, ui: &mut Ui) {
 		ui.add_space(16.0);
-		ui.label(RichText::new("No apps match.").color(theme::muted(ui)));
+		ui.label(RichText::new(t!("explore-nothing")).color(theme::muted(ui)));
 
 		if self.compatible_only {
-			ui.label(
-				RichText::new(
-					"Turn off \"Only apps for this device\" to see every app in the catalog.",
-				)
-				.color(theme::muted(ui)),
-			);
+			ui.label(RichText::new(t!("explore-nothing.hint")).color(theme::muted(ui)));
 		}
 	}
 
@@ -497,6 +494,14 @@ impl ExploreView {
 	}
 }
 
+/// Option labels as the dropdown wants them.
+fn borrowed<T: Copy>(options: &[(T, String)]) -> Vec<(T, &str)> {
+	options
+		.iter()
+		.map(|(value, label)| (*value, label.as_str()))
+		.collect()
+}
+
 /// What a card's footer says in place of its category.
 #[derive(Clone, Copy)]
 enum Note {
@@ -507,7 +512,7 @@ impl Note {
 	fn text(self, row: &ExploreRow) -> String {
 		match self {
 			Self::Added => match row.added_at {
-				Some(at) => format!("Added {}", launcher_model::local_time::date(at)),
+				Some(at) => t!("explore-added", date = launcher_model::local_time::date(at)),
 				None => String::new(),
 			},
 		}

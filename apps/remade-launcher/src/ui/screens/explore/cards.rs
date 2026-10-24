@@ -13,12 +13,12 @@ pub(super) const LIST_ROW_HEIGHT: f32 = 88.0;
 pub(super) const CATEGORY_TILE_HEIGHT: f32 = 64.0;
 
 /// A short phrase for the corner of a card.
-fn availability_short(availability: &Availability) -> &'static str {
+fn availability_short(availability: &Availability) -> String {
 	match availability {
-		Availability::ThisDevice => "Compatible",
-		Availability::NeedsNewerLauncher => "Needs newer launcher",
-		Availability::OtherPlatforms(_) => "Not for this device",
-		Availability::NoPackages => "No package yet",
+		Availability::ThisDevice => t!("explore-short-compatible"),
+		Availability::NeedsNewerLauncher => t!("explore-short-newer-launcher"),
+		Availability::OtherPlatforms(_) => t!("explore-short-other-platforms"),
+		Availability::NoPackages => t!("explore-short-no-package"),
 	}
 }
 
@@ -237,17 +237,19 @@ pub(super) fn category_tile(ui: &mut Ui, slug: &str, count: usize, selected: boo
 			ui.spacing_mut().item_spacing.y = 0.0;
 			ui.label(RichText::new(&label).family(theme::semibold()));
 			ui.label(
-				RichText::new(format!(
-					"{count} {}",
-					if count == 1 { "app" } else { "apps" }
-				))
-				.small()
-				.color(palette.text_muted),
+				RichText::new(app_count(count))
+					.small()
+					.color(palette.text_muted),
 			);
 		},
 	);
 
 	response.clicked()
+}
+
+/// "1 app" or "5 apps".
+pub(super) fn app_count(count: usize) -> String {
+	t!("explore-app-count", count = count as i64)
 }
 
 /// Summary text that stops after two lines with an ellipsis.

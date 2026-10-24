@@ -52,7 +52,9 @@ pub(crate) fn search_bar(ui: &mut Ui, hint: &str, text: &mut String) -> bool {
 					changed = true;
 				}
 
-				if !text.is_empty() && icon_button(ui, icons::X, "Clear search", 24.0).clicked() {
+				if !text.is_empty()
+					&& icon_button(ui, icons::X, &t!("common-clear-search"), 24.0).clicked()
+				{
 					text.clear();
 					changed = true;
 				}

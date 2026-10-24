@@ -148,6 +148,16 @@ pub enum StartPage {
 impl StartPage {
 	pub const ALL: [Self; 4] = [Self::Auto, Self::Library, Self::Explore, Self::LastUsed];
 
+	/// A stable key, for looking up the translated label.
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::Auto => "auto",
+			Self::Library => "library",
+			Self::Explore => "explore",
+			Self::LastUsed => "last-used",
+		}
+	}
+
 	pub const fn label(self) -> &'static str {
 		match self {
 			Self::Auto => "Library if I have apps, otherwise Explore",

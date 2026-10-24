@@ -8,7 +8,9 @@ use launcher_catalog::{Maturity, Project, State, VerificationLevel};
 use launcher_core::{Availability, ExploreRow};
 use launcher_model::Os;
 
-use super::filters::category_label;
+use crate::ui::i18n::text_for;
+
+use super::filters::{category_label, kind_name, maturity_name};
 use crate::ui::components::{
 	app_tile_for, panel, platform_badges, primary_button, quiet_button, quiet_button_with_icon,
 	tag, verified_badge,
@@ -22,16 +24,16 @@ struct Facts<'a> {
 	name: &'a str,
 	summary: &'a str,
 	description: Option<String>,
-	kind: &'a str,
+	kind: String,
 	source: String,
 	categories: &'a [String],
 	maturity: Option<Maturity>,
 	languages: &'a [String],
 	platforms: Vec<Os>,
 	license: Option<&'a str>,
-	links: Vec<(&'static str, &'a str)>,
+	links: Vec<(String, &'a str)>,
 	/// One entry per package: what it is, and how it is checked.
-	packages: Vec<(String, &'static str)>,
+	packages: Vec<(String, String)>,
 	/// Why installs are on hold, if they are.
 	hold: Option<String>,
 	availability: Option<&'a Availability>,
@@ -47,11 +49,14 @@ pub(super) fn detail(
 	let display = &project.display;
 	let links = &display.links;
 
-	let mut hold = status_label(project.status.state).map(str::to_owned);
-
-	if let (Some(label), Some(reason)) = (&mut hold, &project.status.reason) {
-		label.push_str(&format!(". {reason}"));
-	}
+	let hold = status_label(project.status.state).map(|label| match &project.status.reason {
+		Some(reason) => t!(
+			"explore-hold-with-reason",
+			label = label,
+			reason = reason.as_str()
+		),
+		None => label,
+	});
 
 	let mut platforms: Vec<Os> = Vec::new();
 
@@ -68,7 +73,7 @@ pub(super) fn detail(
 			name: &display.name,
 			summary: &display.summary,
 			description: display.description.clone(),
-			kind: display.kind.label(),
+			kind: kind_name(display.kind),
 			source: project.source.display_name(),
 			categories: &display.categories,
 			maturity: display.maturity,
@@ -76,13 +81,16 @@ pub(super) fn detail(
 			platforms,
 			license: display.license.as_deref(),
 			links: [
-				("Homepage", &links.homepage),
-				("Documentation", &links.documentation),
-				("Source", &links.source),
-				("Changelog", &links.changelog),
+				("homepage", &links.homepage),
+				("documentation", &links.documentation),
+				("source", &links.source),
+				("changelog", &links.changelog),
 			]
 			.into_iter()
-			.filter_map(|(label, url)| url.as_deref().map(|url| (label, url)))
+			.filter_map(|(name, url)| {
+				url.as_deref()
+					.map(|url| (text_for("explore-link", name), url))
+			})
 			.collect(),
 			packages: project
 				.variants
@@ -115,7 +123,7 @@ pub(super) fn demo_detail(ui: &mut Ui, row: &ExploreRow) -> Option<Action> {
 			name: &row.name,
 			summary: &row.summary,
 			description: Some(crate::ui::demo::description(&row.name)),
-			kind: row.kind.label(),
+			kind: kind_name(row.kind),
 			source: row.repository.clone(),
 			categories: &row.categories,
 			maturity: row.maturity,
@@ -123,8 +131,8 @@ pub(super) fn demo_detail(ui: &mut Ui, row: &ExploreRow) -> Option<Action> {
 			platforms: row.platforms.clone(),
 			license: Some("MIT"),
 			links: vec![
-				("Homepage", "https://example.com"),
-				("Source", "https://example.com"),
+				(text_for("explore-link", "homepage"), "https://example.com"),
+				(text_for("explore-link", "source"), "https://example.com"),
 			],
 			packages: row
 				.platforms
@@ -132,7 +140,7 @@ pub(super) fn demo_detail(ui: &mut Ui, row: &ExploreRow) -> Option<Action> {
 				.map(|os| {
 					(
 						format!("{} · Universal", os.label()),
-						"Checked against a SHA-256 pinned in the signed catalog.",
+						evidence(VerificationLevel::PinnedSha256),
 					)
 				})
 				.collect(),
@@ -171,18 +179,20 @@ fn page(ui: &mut Ui, facts: &Facts<'_>) -> Option<Action> {
 
 			if let Some(description) = &facts.description {
 				ui.add_space(16.0);
-				card(ui, "Description", |ui| description_text(ui, description));
+				card(ui, &t!("explore-description"), |ui| {
+					description_text(ui, description)
+				});
 			}
 
 			ui.add_space(16.0);
-			card(ui, "Details", |ui| details(ui, facts));
+			card(ui, &t!("explore-details"), |ui| details(ui, facts));
 
 			ui.add_space(14.0);
-			card(ui, "Packages", |ui| packages(ui, facts));
+			card(ui, &t!("explore-packages"), |ui| packages(ui, facts));
 			// A quiet second Install, for when the person has read this far.
 			ui.add_space(16.0);
 
-			let label = format!("{}  Install", icons::DOWNLOAD);
+			let label = format!("{}  {}", icons::DOWNLOAD, t!("explore-install"));
 
 			ui.horizontal(|ui| {
 				if quiet_button(ui, &label, installable, vec2(140.0, 38.0)).clicked() {
@@ -194,8 +204,8 @@ fn page(ui: &mut Ui, facts: &Facts<'_>) -> Option<Action> {
 				// Only the flag is red, so the label stays calm.
 				let flag = (icons::FLAG, theme::palette(ui).danger);
 
-				if quiet_button_with_icon(ui, flag, "Report entry", true, vec2(160.0, 38.0))
-					.on_hover_text("Tell us if something about this entry is wrong")
+				if quiet_button_with_icon(ui, flag, &t!("explore-report"), true, vec2(160.0, 38.0))
+					.on_hover_text(t!("explore-report.tooltip"))
 					.clicked()
 				{
 					ui.ctx().open_url(egui::OpenUrl::new_tab(report_url(facts)));
@@ -232,7 +242,7 @@ fn header(ui: &mut Ui, facts: &Facts<'_>, installable: bool, action: &mut Option
 			ui.vertical(|ui| {
 				ui.spacing_mut().item_spacing.y = 6.0;
 
-				let label = format!("{}  Install", icons::DOWNLOAD);
+				let label = format!("{}  {}", icons::DOWNLOAD, t!("explore-install"));
 
 				if primary_button(ui, &label, installable, vec2(BUTTON_WIDTH, 60.0)).clicked() {
 					*action = Some(Action::Install {
@@ -243,8 +253,8 @@ fn header(ui: &mut Ui, facts: &Facts<'_>, installable: bool, action: &mut Option
 				if !installable {
 					let reason = match (facts.active, facts.availability) {
 						(true, Some(availability)) => availability_text(availability),
-						(true, None) => "Checking this device".to_owned(),
-						_ => "Remade has put installs of this app on hold.".to_owned(),
+						(true, None) => t!("explore-checking-device"),
+						_ => t!("explore-on-hold"),
 					};
 
 					ui.add(
@@ -283,10 +293,10 @@ fn header_text(ui: &mut Ui, facts: &Facts<'_>, width: f32) {
 		ui.add_space(4.0);
 
 		ui.horizontal_wrapped(|ui| {
-			tag(ui, facts.kind);
+			tag(ui, &facts.kind);
 
 			if let Some(maturity) = facts.maturity {
-				tag(ui, maturity.label());
+				tag(ui, &maturity_name(maturity));
 			}
 
 			for category in facts.categories {
@@ -318,16 +328,16 @@ fn details(ui: &mut Ui, facts: &Facts<'_>) {
 		.spacing([32.0, 12.0])
 		.min_col_width(110.0)
 		.show(ui, |ui| {
-			row(ui, "Source", |ui| {
+			row(ui, &t!("explore-detail-source"), |ui| {
 				ui.label(&facts.source);
 			});
 
-			row(ui, "Type", |ui| {
-				ui.label(facts.kind);
+			row(ui, &t!("explore-detail-type"), |ui| {
+				ui.label(&facts.kind);
 			});
 
 			if !facts.categories.is_empty() {
-				row(ui, "Categories", |ui| {
+				row(ui, &t!("explore-detail-categories"), |ui| {
 					ui.label(
 						facts
 							.categories
@@ -340,19 +350,19 @@ fn details(ui: &mut Ui, facts: &Facts<'_>) {
 			}
 
 			if let Some(maturity) = facts.maturity {
-				row(ui, "Maturity", |ui| {
-					ui.label(maturity.label());
+				row(ui, &t!("explore-detail-maturity"), |ui| {
+					ui.label(maturity_name(maturity));
 				});
 			}
 
 			if !facts.languages.is_empty() {
-				row(ui, "Languages", |ui| {
+				row(ui, &t!("explore-detail-languages"), |ui| {
 					ui.label(facts.languages.join(", "));
 				});
 			}
 
 			if !facts.platforms.is_empty() {
-				row(ui, "Platforms", |ui| {
+				row(ui, &t!("explore-detail-platforms"), |ui| {
 					platform_badges(ui, &facts.platforms);
 					ui.label(
 						facts
@@ -366,7 +376,7 @@ fn details(ui: &mut Ui, facts: &Facts<'_>) {
 			}
 
 			if let Some(license) = facts.license {
-				row(ui, "License", |ui| {
+				row(ui, &t!("explore-detail-license"), |ui| {
 					ui.label(license);
 				});
 			}
@@ -375,7 +385,7 @@ fn details(ui: &mut Ui, facts: &Facts<'_>) {
 
 fn packages(ui: &mut Ui, facts: &Facts<'_>) {
 	if facts.packages.is_empty() {
-		ui.label(RichText::new("This app has no managed package.").color(theme::muted(ui)));
+		ui.label(RichText::new(t!("explore-no-package")).color(theme::muted(ui)));
 
 		return;
 	}
@@ -386,7 +396,7 @@ fn packages(ui: &mut Ui, facts: &Facts<'_>) {
 		}
 
 		ui.label(RichText::new(title).family(theme::semibold()));
-		ui.label(RichText::new(*how).small().color(theme::muted(ui)));
+		ui.label(RichText::new(how).small().color(theme::muted(ui)));
 	}
 }
 
@@ -401,38 +411,36 @@ fn row(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
 	ui.end_row();
 }
 
-fn evidence(level: VerificationLevel) -> &'static str {
+fn evidence(level: VerificationLevel) -> String {
 	match level {
-		VerificationLevel::HostDigest => "Checked against the digest the download host reports.",
-		VerificationLevel::PinnedSha256 => {
-			"Checked against a SHA-256 pinned in the signed catalog."
-		}
-		VerificationLevel::PublisherSignature => "Requires the publisher's own signature.",
+		VerificationLevel::HostDigest => t!("explore-evidence-host"),
+		VerificationLevel::PinnedSha256 => t!("explore-evidence-pinned"),
+		VerificationLevel::PublisherSignature => t!("explore-evidence-publisher"),
 	}
 }
 
-pub(super) fn status_label(state: State) -> Option<&'static str> {
+pub(super) fn status_label(state: State) -> Option<String> {
 	match state {
 		State::Active => None,
-		State::Paused => Some("Paused: new installs are on hold"),
-		State::Revoked => Some("Revoked: blocked by Remade"),
+		State::Paused => Some(t!("explore-status-paused")),
+		State::Revoked => Some(t!("explore-status-revoked")),
 	}
 }
 
 /// Why an app can or cannot be installed on this device, in full.
 pub(super) fn availability_text(availability: &Availability) -> String {
 	match availability {
-		Availability::ThisDevice => "A package exists for this device.".into(),
-		Availability::NeedsNewerLauncher => "Needs a newer version of the launcher.".into(),
+		Availability::ThisDevice => t!("explore-availability-this-device"),
+		Availability::NeedsNewerLauncher => t!("explore-availability-newer-launcher"),
 		Availability::OtherPlatforms(systems) => {
 			let names: Vec<_> = systems.iter().map(|os| os.label()).collect();
 
-			format!(
-				"No package for this device. Packages exist for {}.",
-				names.join(", ")
+			t!(
+				"explore-availability-other-platforms",
+				systems = names.join(", ")
 			)
 		}
-		Availability::NoPackages => "No managed package yet.".into(),
+		Availability::NoPackages => t!("explore-availability-no-package"),
 	}
 }
 
@@ -465,7 +473,7 @@ mod tests {
 			name: "Lumen & Notes",
 			summary: "",
 			description: None,
-			kind: "Desktop app",
+			kind: "Desktop app".to_owned(),
 			source: String::new(),
 			categories: &[],
 			maturity: None,

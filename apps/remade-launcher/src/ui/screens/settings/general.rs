@@ -5,6 +5,7 @@ use launcher_model::{Preferences, StartPage, ThemePreference};
 
 use super::SettingsAction;
 use crate::ui::components::{choice_row, setting_row};
+use crate::ui::i18n::text_for;
 use crate::ui::theme;
 
 pub(super) fn general(
@@ -13,10 +14,13 @@ pub(super) fn general(
 	prefs: &Preferences,
 	action: &mut SettingsAction,
 ) {
-	setting_row(ui, "Theme", None, |ui| {
+	setting_row(ui, &t!("settings-theme"), None, |ui| {
 		ui.horizontal(|ui| {
 			for choice in ThemePreference::ALL {
-				if ui.radio(theme_now == choice, choice.label()).clicked() {
+				if ui
+					.radio(theme_now == choice, text_for("theme", choice.as_str()))
+					.clicked()
+				{
 					*action = SettingsAction::Theme(choice);
 				}
 			}
@@ -25,8 +29,8 @@ pub(super) fn general(
 
 	setting_row(
 		ui,
-		"Interface scale",
-		Some("Makes everything larger or smaller. Useful on high-resolution screens."),
+		&t!("settings-scale"),
+		Some(&t!("settings-scale.description")),
 		|ui| {
 			let mut chosen = prefs.ui_scale;
 			let options: Vec<(u16, String)> = Preferences::SCALES
@@ -45,13 +49,13 @@ pub(super) fn general(
 
 	setting_row(
 		ui,
-		"Open on",
-		Some("The page the launcher shows when it starts."),
+		&t!("settings-start-page"),
+		Some(&t!("settings-start-page.description")),
 		|ui| {
 			let mut chosen = prefs.start_page;
 			let options: Vec<(StartPage, String)> = StartPage::ALL
 				.iter()
-				.map(|page| (*page, page.label().to_owned()))
+				.map(|page| (*page, text_for("start-page", page.as_str())))
 				.collect();
 
 			if choice_row(ui, "start-page", &mut chosen, &options) {
@@ -63,5 +67,9 @@ pub(super) fn general(
 		},
 	);
 
-	ui.label(RichText::new("Your layout, such as the folded sidebar, grid or list, and window size, is remembered automatically.").small().color(theme::muted(ui)));
+	ui.label(
+		RichText::new(t!("settings-layout-note"))
+			.small()
+			.color(theme::muted(ui)),
+	);
 }

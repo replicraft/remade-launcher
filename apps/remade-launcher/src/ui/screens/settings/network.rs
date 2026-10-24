@@ -2,6 +2,7 @@
 
 use egui::{RichText, TextEdit, Ui};
 use launcher_core::{RateLimit, TokenState};
+use launcher_model::preferences::ProxyProblem;
 use launcher_model::{Preferences, Proxy};
 
 use super::{SettingsAction, SettingsInputs};
@@ -38,10 +39,8 @@ fn proxy(
 ) {
 	setting_row(
 		ui,
-		"Proxy",
-		Some(
-			"Automatic uses your system's proxy settings, including the usual environment variables.",
-		),
+		&t!("settings-proxy"),
+		Some(&t!("settings-proxy.description")),
 		|ui| {
 			let mode = match &prefs.network.proxy {
 				Proxy::System => 0,
@@ -50,9 +49,9 @@ fn proxy(
 			};
 			let mut chosen = mode;
 			let options = [
-				(0, "Automatic (system)".to_owned()),
-				(1, "No proxy".to_owned()),
-				(2, "Custom address".to_owned()),
+				(0, t!("settings-proxy-auto")),
+				(1, t!("settings-proxy-none")),
+				(2, t!("settings-proxy-custom")),
 			];
 
 			if choice_row(ui, "proxy-mode", &mut chosen, &options) && chosen != mode {
@@ -84,12 +83,16 @@ fn proxy(
 				);
 
 				if let Some(problem) = inputs.proxy_error {
-					ui.colored_label(ui.visuals().warn_fg_color, problem);
+					ui.colored_label(ui.visuals().warn_fg_color, proxy_problem_text(problem));
 				}
 
-				ui.label(RichText::new("http://, https://, or socks5://. Leave user names and passwords out: they would be saved unprotected.").small().color(theme::muted(ui)));
+				ui.label(
+					RichText::new(t!("settings-proxy-hint"))
+						.small()
+						.color(theme::muted(ui)),
+				);
 
-				if ui.button("Use this proxy").clicked() {
+				if ui.button(t!("settings-proxy-use")).clicked() {
 					match check_proxy_text(&inputs.proxy_text) {
 						Ok(()) => {
 							let mut next = prefs.clone();
@@ -110,20 +113,20 @@ fn proxy(
 fn timeout(ui: &mut Ui, prefs: &Preferences, action: &mut SettingsAction) {
 	setting_row(
 		ui,
-		"Request timeout",
-		Some("How long to wait for a server before giving up. Slow connections may need longer."),
+		&t!("settings-timeout"),
+		Some(&t!("settings-timeout.description")),
 		|ui| {
 			let mut chosen = prefs.network.timeout_seconds;
 			let options: Vec<(u32, String)> = [15, 30, 60, 120, 300]
 				.into_iter()
-				.map(|seconds| (seconds, format!("{seconds} seconds")))
+				.map(|seconds| (seconds, t!("settings-seconds", count = i64::from(seconds))))
 				.collect();
 
 			// A value saved by hand that is not on the list still shows as itself.
 			let mut options = options;
 
 			if !options.iter().any(|(seconds, _)| *seconds == chosen) {
-				options.push((chosen, format!("{chosen} seconds")));
+				options.push((chosen, t!("settings-seconds", count = i64::from(chosen))));
 			}
 
 			if choice_row(ui, "timeout", &mut chosen, &options) {
@@ -143,13 +146,13 @@ fn github(
 	action: &mut SettingsAction,
 ) {
 	ui.label(
-		RichText::new("GitHub access")
+		RichText::new(t!("settings-github"))
 			.family(theme::semibold())
 			.size(15.0),
 	);
 	ui.add(
 		egui::Label::new(
-			RichText::new("GitHub allows 60 lookups an hour to anyone, and 5,000 with a free token. The launcher remembers what it has already asked, so most checks cost nothing. Add a token only if you keep a lot of apps and still hit the limit. A token with no permissions is enough, because everything the launcher reads is public.")
+			RichText::new(t!("settings-github-intro"))
 				.small()
 				.color(theme::muted(ui)),
 		)
@@ -160,25 +163,23 @@ fn github(
 	match view.token {
 		TokenState::Stored => {
 			ui.label(format!(
-				"{}  A token is saved in your system's credential store.",
-				crate::ui::icons::SEAL_CHECK
+				"{}  {}",
+				crate::ui::icons::SEAL_CHECK,
+				t!("settings-token-stored")
 			));
 
-			if ui.button("Remove token").clicked() {
+			if ui.button(t!("settings-token-remove")).clicked() {
 				*action = SettingsAction::ClearToken;
 			}
 		}
 		TokenState::FromEnvironment => {
-			ui.label(format!(
-				"A token comes from the {} setting in your environment.",
-				launcher_core::TOKEN_VARIABLE
+			ui.label(t!(
+				"settings-token-environment",
+				name = launcher_core::TOKEN_VARIABLE
 			));
 		}
 		TokenState::Unavailable(why) => {
-			ui.colored_label(
-				ui.visuals().warn_fg_color,
-				"Your system's credential store is not available, so a token cannot be kept safely.",
-			);
+			ui.colored_label(ui.visuals().warn_fg_color, t!("settings-token-unavailable"));
 			ui.label(RichText::new(why).small().color(theme::muted(ui)));
 		}
 		TokenState::Absent => {
@@ -186,14 +187,14 @@ fn github(
 				ui.add(
 					TextEdit::singleline(&mut inputs.token_text)
 						.password(true)
-						.hint_text("Paste a token")
+						.hint_text(t!("settings-token-paste"))
 						.desired_width(280.0),
 				);
 
 				let ready = !inputs.token_text.trim().is_empty();
 
 				if ui
-					.add_enabled(ready, egui::Button::new("Save token"))
+					.add_enabled(ready, egui::Button::new(t!("settings-token-save")))
 					.clicked()
 				{
 					*action = SettingsAction::SaveToken(std::mem::take(&mut inputs.token_text));
@@ -205,7 +206,7 @@ fn github(
 	ui.add_space(8.0);
 
 	ui.horizontal(|ui| {
-		if ui.button("Check my limit").clicked() {
+		if ui.button(t!("settings-rate-check")).clicked() {
 			*action = SettingsAction::CheckRateLimit;
 		}
 
@@ -216,15 +217,15 @@ fn github(
 					time::OffsetDateTime::now_utc().unix_timestamp(),
 				);
 
-				ui.label(format!(
-					"{} of {} lookups left. Resets {}. {}",
-					limit.remaining,
-					limit.limit,
-					resets.to_lowercase(),
-					if limit.signed_in {
-						"Using your token."
+				ui.label(t!(
+					"settings-rate-left",
+					remaining = limit.remaining as i64,
+					limit = limit.limit as i64,
+					resets = resets.to_lowercase(),
+					note = if limit.signed_in {
+						t!("settings-rate-token")
 					} else {
-						"Not signed in."
+						t!("settings-rate-anonymous")
 					}
 				));
 			}
@@ -236,7 +237,16 @@ fn github(
 	});
 }
 
-/// Checks a proxy address, giving the message to show if it is not usable.
-fn check_proxy_text(text: &str) -> Result<(), &'static str> {
-	launcher_model::preferences::check_proxy(text).map_err(|problem| problem.message())
+/// Checks a proxy address, giving what was wrong if it is not usable.
+fn check_proxy_text(text: &str) -> Result<(), ProxyProblem> {
+	launcher_model::preferences::check_proxy(text)
+}
+
+fn proxy_problem_text(problem: ProxyProblem) -> String {
+	match problem {
+		ProxyProblem::Empty => t!("settings-proxy-problem-empty"),
+		ProxyProblem::NotAnAddress => t!("settings-proxy-problem-address"),
+		ProxyProblem::UnsupportedScheme => t!("settings-proxy-problem-scheme"),
+		ProxyProblem::HasCredentials => t!("settings-proxy-problem-credentials"),
+	}
 }

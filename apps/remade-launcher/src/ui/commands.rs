@@ -239,12 +239,12 @@ impl Commands {
 				LaunchOutcome::Checked(statuses) => Message::Statuses(statuses),
 				LaunchOutcome::Cycle(report) => {
 					let text = if report.already_running {
-						"Another update pass was already running.".to_owned()
+						t!("app-notice-already-running")
 					} else if report.updated() > 0 || report.failed() > 0 {
-						format!(
-							"Automatic updates: {} updated, {} failed.",
-							report.updated(),
-							report.failed()
+						t!(
+							"app-notice-auto-updates",
+							updated = report.updated() as i64,
+							failed = report.failed() as i64
 						)
 					} else {
 						String::new()
