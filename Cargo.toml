@@ -3,7 +3,9 @@ resolver = "3"
 members = [
 	"apps/remade-launcher",
 	"apps/remade-launcher-cli",
+	"apps/remade-launcher-daemon",
 	"crates/domain/launcher-catalog",
+	"crates/platform/launcher-background",
 	"crates/domain/launcher-packages",
 	"crates/domain/launcher-providers",
 	"crates/domain/launcher-resolver",
@@ -35,6 +37,7 @@ repository = "https://github.com/PixelSoftwareStudios/remade-launcher"
 [workspace.dependencies]
 
 # Internal crates
+launcher-background = { path = "crates/platform/launcher-background" }
 launcher-catalog = { path = "crates/domain/launcher-catalog" }
 launcher-core = { path = "crates/foundation/launcher-core" }
 launcher-packages = { path = "crates/domain/launcher-packages" }
@@ -49,7 +52,7 @@ launcher-ui = { path = "crates/ui/launcher-ui" }
 rayon = "1"
 
 # Async runtime
-tokio = { version = "1", default-features = false, features = ["fs", "io-util", "macros", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1", default-features = false, features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 
 # Networking
 reqwest = { version = "0.13", default-features = false, features = ["brotli", "gzip", "http2", "rustls", "stream"] }
@@ -98,6 +101,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["a
 
 # Command line
 clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
 indicatif = "0.18"
 
 # Platform

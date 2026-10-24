@@ -1,0 +1,23 @@
+[package]
+name = "remade-launcher-daemon"
+description = "The per-user background updater. Started at login only if you turned it on."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "remade-launcher-daemon"
+path = "src/main.rs"
+
+[dependencies]
+launcher-background.workspace = true
+launcher-core.workspace = true
+launcher-model.workspace = true
+mimalloc.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

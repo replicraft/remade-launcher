@@ -747,6 +747,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "037e2a1a92236d0aff7e845093f64661d6df4c02c9fcc61a60e9e1d736fa392f"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2284,6 +2293,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "launcher-background"
+version = "0.1.0"
+dependencies = [
+ "launcher-model",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "launcher-catalog"
 version = "0.1.0"
 dependencies = [
@@ -2318,6 +2341,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "serde_json_canonicalizer",
  "sha2",
  "tar",
  "tempfile",
@@ -3578,6 +3602,7 @@ name = "remade-launcher-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "clap_complete",
  "indicatif",
  "launcher-core",
  "launcher-model",
@@ -3587,6 +3612,19 @@ dependencies = [
  "serde_json",
  "tempfile",
  "time",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "remade-launcher-daemon"
+version = "0.1.0"
+dependencies = [
+ "launcher-background",
+ "launcher-core",
+ "launcher-model",
+ "mimalloc",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -4321,6 +4359,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",
