@@ -38,6 +38,10 @@ const MIGRATIONS: &[Migration] = &[
 		version: 6,
 		sql: include_str!("migrations/0006_http_cache.sql"),
 	},
+	Migration {
+		version: 7,
+		sql: include_str!("migrations/0007_adopted_apps.sql"),
+	},
 ];
 
 /// The schema version this build understands.

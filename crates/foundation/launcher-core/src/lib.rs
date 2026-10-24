@@ -3,6 +3,7 @@
 //! Nothing here knows about windows. The interface submits typed commands
 //! and listens for events, and the same engine can sit behind a CLI.
 
+mod adopt;
 mod browse;
 mod catalog;
 mod config;
@@ -24,6 +25,7 @@ mod updates;
 #[cfg(test)]
 mod flow_tests;
 
+pub use adopt::{AdoptedApp, AdoptionCandidate, AdoptionRequest};
 pub use browse::{Changelog, PlatformReport, TrustStatus, VariantSupport};
 pub use catalog::{CatalogService, CatalogState, Origin, Problem, ProblemKind};
 pub use config::{CatalogConfig, EngineConfig};

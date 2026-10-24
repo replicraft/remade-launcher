@@ -68,6 +68,7 @@ pub(crate) fn classify(code: ErrorCode) -> (&'static str, ExitStatus) {
 		ErrorCode::LaunchFailed => ("LAUNCH_FAILED", Unsupported),
 		ErrorCode::OperationInProgress => ("OPERATION_IN_PROGRESS", Conflict),
 		ErrorCode::Cancelled => ("CANCELLED", ApprovalRequired),
+		ErrorCode::AdoptionRefused => ("ADOPTION_REFUSED", Conflict),
 		ErrorCode::ConfirmationRequired => ("APPROVAL_REQUIRED", ApprovalRequired),
 		ErrorCode::ConsentRequired => ("CONSENT_REQUIRED", ApprovalRequired),
 		ErrorCode::SourceApprovalRequired => {
@@ -118,6 +119,7 @@ mod tests {
 			ErrorCode::LaunchFailed,
 			ErrorCode::OperationInProgress,
 			ErrorCode::Cancelled,
+			ErrorCode::AdoptionRefused,
 			ErrorCode::ConfirmationRequired,
 			ErrorCode::ConsentRequired,
 			ErrorCode::SourceApprovalRequired,

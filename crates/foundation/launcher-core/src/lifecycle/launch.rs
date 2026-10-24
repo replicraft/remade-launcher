@@ -53,7 +53,7 @@ fn launch_failed() -> LauncherError {
 	LauncherError::new(ErrorCode::LaunchFailed, "The app could not be started.")
 }
 
-fn spawn(target: PathBuf, root: &std::path::Path) -> Result<(), LauncherError> {
+pub(crate) fn spawn(target: PathBuf, root: &std::path::Path) -> Result<(), LauncherError> {
 	let mut command =
 		if cfg!(target_os = "macos") && target.extension().is_some_and(|ext| ext == "app") {
 			let mut command = Command::new("/usr/bin/open");
