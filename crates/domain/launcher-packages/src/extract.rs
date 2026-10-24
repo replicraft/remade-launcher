@@ -77,15 +77,30 @@ pub fn extract(
 		}
 	}
 
+	// Every directory the extraction created, including the ones that only
+	// exist because a file needed a parent. Removal needs them all.
+	let mut directories = std::collections::BTreeSet::new();
+
 	for entry in &inventory.entries {
 		if entry.kind == EntryKind::Directory {
-			owned.push(OwnedFile {
-				path: entry.path.clone(),
-				kind: OwnedKind::Directory,
-				size: 0,
-				sha256: String::new(),
-			});
+			directories.insert(entry.path.clone());
 		}
+
+		let mut parent = entry.path.as_str();
+
+		while let Some((head, _)) = parent.rsplit_once('/') {
+			directories.insert(head.to_owned());
+			parent = head;
+		}
+	}
+
+	for path in directories {
+		owned.push(OwnedFile {
+			path,
+			kind: OwnedKind::Directory,
+			size: 0,
+			sha256: String::new(),
+		});
 	}
 
 	owned.sort_by(|a, b| a.path.cmp(&b.path));

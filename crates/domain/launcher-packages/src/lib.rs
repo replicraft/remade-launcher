@@ -18,3 +18,4 @@ pub use error::PackageError;
 pub use extract::{OwnedFile, OwnedKind, extract};
 pub use format::{Format, detect_magic};
 pub use inspect::{Entry, EntryKind, Inventory, Limits, inspect};
+pub use path::is_safe_relative_path;

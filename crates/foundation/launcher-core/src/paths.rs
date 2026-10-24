@@ -35,6 +35,17 @@ impl DataDirectory {
 		self.root.join("launcher.sqlite")
 	}
 
+	/// Where installed apps live. Staging sits beside it on the same
+	/// filesystem so finishing an install is one atomic rename.
+	pub fn apps_dir(&self) -> PathBuf {
+		self.root.join("apps")
+	}
+
+	/// Scratch space for in-flight operations, one folder per operation.
+	pub fn staging_dir(&self) -> PathBuf {
+		self.root.join("staging")
+	}
+
 	/// Creates the directory if it does not exist.
 	pub fn ensure_exists(&self) -> Result<(), LauncherError> {
 		std::fs::create_dir_all(&self.root).map_err(|error| {

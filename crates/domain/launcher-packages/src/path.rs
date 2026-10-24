@@ -115,6 +115,12 @@ pub(crate) fn symlink_target_is_contained(entry_path: &str, target: &str) -> boo
 	true
 }
 
+/// True if `path` is a safe relative path with no stripping applied. For
+/// callers that must re-validate a path read back from the database.
+pub fn is_safe_relative_path(path: &str) -> bool {
+	matches!(normalize(path, 0), Ok(Some(normalized)) if normalized == path)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

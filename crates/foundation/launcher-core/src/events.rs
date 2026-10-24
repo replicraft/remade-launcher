@@ -1,4 +1,4 @@
-use launcher_model::ThemePreference;
+use launcher_model::{InstallationId, OperationId, ThemePreference};
 use tokio::sync::broadcast;
 
 /// How many events a slow listener may fall behind before it starts to miss
@@ -9,10 +9,44 @@ const EVENT_BACKLOG: usize = 256;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EngineEvent {
 	ThemeChanged(ThemePreference),
+	Operation(OperationEvent),
+}
+
+/// Progress of one install, update, or removal. Terminal events are never
+/// coalesced away; byte progress is throttled before it is published.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OperationEvent {
+	pub operation: OperationId,
+	pub installation: InstallationId,
+	pub stage: Stage,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Stage {
+	Accepted,
+	Downloading { received: u64, total: Option<u64> },
+	Verifying,
+	Inspecting,
+	Extracting,
+	Applying,
+	Removing,
+	Completed,
+	Failed { message: String },
+	RecoveryRequired { message: String },
+}
+
+impl Stage {
+	pub fn is_terminal(&self) -> bool {
+		matches!(
+			self,
+			Self::Completed | Self::Failed { .. } | Self::RecoveryRequired { .. }
+		)
+	}
 }
 
 /// A bounded fan-out channel. Publishing never blocks and never allocates
 /// without limit.
+#[derive(Clone)]
 pub(crate) struct EventBus {
 	sender: broadcast::Sender<EngineEvent>,
 }

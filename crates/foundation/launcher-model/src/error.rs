@@ -50,6 +50,12 @@ pub enum ErrorCode {
 	ProviderResponseMalformed,
 	SourceIdentityChanged,
 	InvalidSourceUrl,
+	ArtifactDigestMismatch,
+	PackageUnsafe,
+	PackageUnsupported,
+	InstallationNotFound,
+	InstallationChanged,
+	LaunchFailed,
 	StorageUnavailable,
 	StorageMigrationFailed,
 	StorageNewerThanApp,
@@ -68,6 +74,12 @@ impl ErrorCode {
 			Self::ProviderResponseMalformed => "provider.response_malformed",
 			Self::SourceIdentityChanged => "provider.source_identity_changed",
 			Self::InvalidSourceUrl => "source.invalid_url",
+			Self::ArtifactDigestMismatch => "artifact.digest_mismatch",
+			Self::PackageUnsafe => "package.unsafe",
+			Self::PackageUnsupported => "package.unsupported",
+			Self::InstallationNotFound => "installation.not_found",
+			Self::InstallationChanged => "installation.changed",
+			Self::LaunchFailed => "installation.launch_failed",
 			Self::StorageUnavailable => "storage.unavailable",
 			Self::StorageMigrationFailed => "storage.migration_failed",
 			Self::StorageNewerThanApp => "storage.newer_than_app",
@@ -83,7 +95,11 @@ impl ErrorCode {
 			| Self::ProviderRateLimited
 			| Self::ProviderNotFound
 			| Self::ProviderResponseMalformed => ErrorCategory::Network,
-			Self::SourceIdentityChanged => ErrorCategory::Trust,
+			Self::SourceIdentityChanged | Self::ArtifactDigestMismatch => ErrorCategory::Trust,
+			Self::PackageUnsafe | Self::PackageUnsupported => ErrorCategory::Compatibility,
+			Self::InstallationNotFound | Self::InstallationChanged | Self::LaunchFailed => {
+				ErrorCategory::LocalOwnership
+			}
 			Self::InvalidSourceUrl => ErrorCategory::Ambiguity,
 			Self::StorageUnavailable | Self::StorageMigrationFailed | Self::StorageNewerThanApp => {
 				ErrorCategory::Storage
@@ -100,7 +116,12 @@ impl ErrorCode {
 			| Self::ProviderDenied
 			| Self::ProviderNotFound
 			| Self::ProviderResponseMalformed
-			| Self::SourceIdentityChanged => Retry::Never,
+			| Self::SourceIdentityChanged
+			| Self::ArtifactDigestMismatch
+			| Self::PackageUnsafe
+			| Self::PackageUnsupported
+			| Self::InstallationNotFound => Retry::Never,
+			Self::InstallationChanged | Self::LaunchFailed => Retry::AfterUserAction,
 			Self::InvalidSourceUrl => Retry::AfterUserAction,
 			Self::StorageUnavailable | Self::StorageNewerThanApp => Retry::AfterUserAction,
 			Self::InternalInvariant => Retry::Never,
