@@ -2,7 +2,7 @@
 //! rules are easy to test.
 
 use launcher_catalog::{Maturity, ProjectKind};
-use launcher_core::{Availability, ExploreRow};
+use launcher_core::{Availability, ExploreRow, Match};
 use launcher_model::Os;
 
 use crate::ui::i18n::text;
@@ -117,6 +117,12 @@ pub(super) fn visible<'a>(rows: &'a [ExploreRow], filter: &Filter) -> Vec<&'a Ex
 				.is_none_or(|wanted| row.platforms.contains(&wanted))
 		})
 		.collect();
+
+	// Close matches come best-first from the search. Re-sorting them by name
+	// would bury the best one.
+	if shown.iter().any(|row| row.matched == Match::Close) {
+		return shown;
+	}
 
 	match filter.sort {
 		Sort::NameAscending => shown.sort_by_key(|row| row.name.to_lowercase()),
@@ -289,6 +295,7 @@ mod tests {
 			platforms: Vec::new(),
 			featured,
 			added_at,
+			matched: Match::Exact,
 		}
 	}
 
@@ -308,6 +315,30 @@ mod tests {
 
 	fn names(rows: &[&ExploreRow]) -> Vec<String> {
 		rows.iter().map(|row| row.name.clone()).collect()
+	}
+
+	#[test]
+	fn close_matches_keep_the_searchs_best_first_order() {
+		let mut rows = sample();
+
+		for row in &mut rows {
+			row.matched = Match::Close;
+		}
+
+		let order =
+			|rows: &[ExploreRow]| rows.iter().map(|row| row.name.clone()).collect::<Vec<_>>();
+		let filter = Filter {
+			sort: Sort::NameDescending,
+			..Filter::default()
+		};
+
+		assert_eq!(
+			visible(&rows, &filter)
+				.iter()
+				.map(|row| row.name.clone())
+				.collect::<Vec<_>>(),
+			order(&rows)
+		);
 	}
 
 	#[test]

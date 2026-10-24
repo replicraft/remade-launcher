@@ -110,3 +110,4 @@ explore-category-education = Bildung
 explore-category-media = Medien
 explore-category-security = Sicherheit
 explore-category-communication = Kommunikation
+explore-close-matches = Keine genauen Treffer. Das sind die ähnlichsten nach Schreibweise.

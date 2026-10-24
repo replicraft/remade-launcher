@@ -1,3 +1,6 @@
+use std::sync::OnceLock;
+
+use rayon::prelude::*;
 use time::OffsetDateTime;
 
 use crate::manifest::{Manifest, Project};
@@ -25,6 +28,8 @@ pub struct VerifiedCatalog {
 	pub(crate) issued_at: OffsetDateTime,
 	pub(crate) expires_at: OffsetDateTime,
 	pub(crate) verified_by: Vec<String>,
+	/// Lowercase search text per project, built the first time it is needed.
+	pub(crate) search: OnceLock<Vec<String>>,
 }
 
 impl VerifiedCatalog {
@@ -77,6 +82,35 @@ impl VerifiedCatalog {
 			.projects
 			.iter()
 			.map(|(slug, project)| (slug.as_str(), project))
+	}
+
+	/// What each project can be found by, lowercase, in [`Self::projects`]
+	/// order: its slug, name, summary, owner, repository, and categories.
+	///
+	/// It is built once, in parallel, the first time it is asked for. Typing in
+	/// a search box then costs a scan, not thousands of small allocations.
+	pub fn search_texts(&self) -> &[String] {
+		self.search.get_or_init(|| {
+			let projects: Vec<_> = self.projects().collect();
+
+			projects
+				.par_iter()
+				.map(|(slug, project)| {
+					let display = &project.display;
+					let mut parts = vec![
+						*slug,
+						display.name.as_str(),
+						display.summary.as_str(),
+						project.source.owner.as_str(),
+						project.source.repository.as_str(),
+					];
+
+					parts.extend(display.categories.iter().map(String::as_str));
+
+					parts.join("\n").to_lowercase()
+				})
+				.collect()
+		})
 	}
 
 	pub fn project(&self, slug: &str) -> Option<&Project> {

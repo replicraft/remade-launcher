@@ -107,3 +107,4 @@ explore-category-education = 教育
 explore-category-media = 媒体
 explore-category-security = 安全
 explore-category-communication = 通讯
+explore-close-matches = 没有完全匹配的结果。以下是拼写最接近的应用。

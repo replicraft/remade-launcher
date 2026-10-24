@@ -40,7 +40,7 @@ pub use credentials::{Keychain, MemorySecret, SecretError, SecretStore, TokenSta
 pub use download::DownloadedFile;
 pub use engine::Engine;
 pub use events::{EngineEvent, OperationEvent, Stage};
-pub use explore::{Availability, ExploreQuery, ExploreRow};
+pub use explore::{Availability, ExploreQuery, ExploreRow, Match};
 pub use inspect::{CacheStatus, DoctorReport, VerifyReport};
 pub use launcher_catalog::{
 	Freshness, Maturity, PackageFormat, Project, State, VerificationLevel, VerifiedCatalog,

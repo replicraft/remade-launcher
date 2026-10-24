@@ -17,6 +17,7 @@ launcher-providers.workspace = true
 launcher-resolver.workspace = true
 launcher-storage.workspace = true
 futures-util.workspace = true
+fuzzy-matcher.workspace = true
 hex.workspace = true
 rayon.workspace = true
 semver.workspace = true

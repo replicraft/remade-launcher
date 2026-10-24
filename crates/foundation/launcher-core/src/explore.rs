@@ -6,6 +6,8 @@
 
 use std::sync::Arc;
 
+use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::skim::SkimMatcherV2;
 use launcher_catalog::{Maturity, Project, ProjectKind, State, VerifiedCatalog};
 use launcher_model::{HostTarget, Os};
 use rayon::prelude::*;
@@ -16,6 +18,18 @@ pub struct ExploreQuery {
 	pub text: String,
 	/// Hide apps with no package for this device.
 	pub compatible_only: bool,
+}
+
+/// How a result matched what was typed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Match {
+	/// Every word appears in the app's name, address, summary, or categories.
+	#[default]
+	Exact,
+	/// Nothing matched exactly, so this is the closest by spelling: letters in
+	/// order but not together, such as `vscode` for Visual Studio Code or
+	/// `frefox` for Firefox.
+	Close,
 }
 
 /// Whether an app has a package for the machine the launcher runs on.
@@ -53,6 +67,7 @@ pub struct ExploreRow {
 	pub featured: bool,
 	/// When the app joined the catalog, as Unix seconds, if it says.
 	pub added_at: Option<i64>,
+	pub matched: Match,
 }
 
 /// Runs `query` against `catalog`.
@@ -90,45 +105,99 @@ pub(crate) fn search_blocking(
 		.map(str::to_lowercase)
 		.collect();
 	let projects: Vec<_> = catalog.projects().collect();
+	let texts = catalog.search_texts();
+	let usable =
+		|row: &ExploreRow| !query.compatible_only || row.availability == Availability::ThisDevice;
 
 	let mut rows: Vec<ExploreRow> = projects
 		.par_iter()
-		.filter(|(slug, project)| matches(slug, project, &terms))
-		.map(|(slug, project)| row(slug, project, host, supported))
-		.filter(|row| !query.compatible_only || row.availability == Availability::ThisDevice)
+		.zip(texts.par_iter())
+		.filter(|(_, text)| terms.iter().all(|term| text.contains(term.as_str())))
+		.map(|((slug, project), _)| row(slug, project, host, supported))
+		.filter(&usable)
 		.collect();
 
 	rows.par_sort_by_cached_key(|row| row.name.to_lowercase());
 
+	// Nothing matched as typed. Offer what is closest by spelling, rather
+	// than an empty page, but never mixed in with exact results.
+	if rows.is_empty() && !terms.is_empty() {
+		rows = close_matches(&projects, texts, &terms, host, supported)
+			.into_iter()
+			.filter(&usable)
+			.collect();
+	}
+
 	rows
 }
 
-fn matches(slug: &str, project: &Project, terms: &[String]) -> bool {
-	if terms.is_empty() {
-		return true;
-	}
+/// A word has to be at least this long to be matched by spelling. Shorter
+/// ones would match nearly anything.
+const MIN_FUZZY_CHARS: usize = 3;
 
-	let display = &project.display;
-	let haystack = [
-		slug,
-		&display.name,
-		&display.summary,
-		&project.source.owner,
-		&project.source.repository,
-	]
-	.iter()
-	.chain(
-		&display
-			.categories
-			.iter()
-			.map(String::as_str)
-			.collect::<Vec<_>>(),
-	)
-	.map(|part| part.to_lowercase())
-	.collect::<Vec<_>>()
-	.join("\n");
+/// How well a word has to match, per character of it. A good match scores
+/// around 16 a character; scattered ones fall well below this.
+const MIN_SCORE_PER_CHAR: i64 = 12;
 
-	terms.iter().all(|term| haystack.contains(term.as_str()))
+/// How far apart the matched letters may be, as a multiple of the word.
+const MAX_SPREAD_PER_CHAR: usize = 4;
+
+/// Apps whose name, slug, and repository contain each word's letters in order,
+/// best first. The matching is the `fuzzy-matcher` crate's.
+fn close_matches(
+	projects: &[(&str, &Project)],
+	texts: &[String],
+	terms: &[String],
+	host: Option<HostTarget>,
+	supported: &[&str],
+) -> Vec<ExploreRow> {
+	let matcher = SkimMatcherV2::default().ignore_case();
+
+	let mut scored: Vec<(i64, ExploreRow)> = projects
+		.par_iter()
+		.zip(texts.par_iter())
+		.filter_map(|((slug, project), text)| {
+			// What people type is a name, so match against names only. The
+			// repository is included because it usually repeats the name.
+			let names = format!(
+				"{} {} {}",
+				project.display.name, slug, project.source.repository
+			);
+			let mut total = 0;
+
+			for term in terms {
+				let chars = term.chars().count();
+
+				total += if chars < MIN_FUZZY_CHARS {
+					// Too short to guess at. It has to be there as typed.
+					text.contains(term.as_str()).then_some(0)?
+				} else {
+					let (score, at) = matcher.fuzzy_indices(&names, term)?;
+					let spread = at.last()? - at.first()?;
+					let wide = spread > MAX_SPREAD_PER_CHAR * chars + 2;
+
+					if wide || score < MIN_SCORE_PER_CHAR * i64::try_from(chars).ok()? {
+						return None;
+					}
+
+					score
+				};
+			}
+
+			let mut found = row(slug, project, host, supported);
+
+			found.matched = Match::Close;
+
+			Some((total, found))
+		})
+		.collect();
+
+	scored.par_sort_by(|a, b| {
+		b.0.cmp(&a.0)
+			.then_with(|| a.1.name.to_lowercase().cmp(&b.1.name.to_lowercase()))
+	});
+
+	scored.into_iter().map(|(_, row)| row).collect()
 }
 
 fn row(slug: &str, project: &Project, host: Option<HostTarget>, supported: &[&str]) -> ExploreRow {
@@ -146,6 +215,7 @@ fn row(slug: &str, project: &Project, host: Option<HostTarget>, supported: &[&st
 		platforms: platforms(project),
 		featured: project.display.featured,
 		added_at: project.display.added_at_unix(),
+		matched: Match::Exact,
 	}
 }
 
@@ -326,5 +396,49 @@ mod tests {
 			.len(),
 			1
 		);
+	}
+
+	fn found(text: &str) -> Vec<ExploreRow> {
+		search_blocking(&sample(), &query(text, false), Some(LINUX), &[])
+	}
+
+	#[test]
+	fn skipped_swapped_and_abbreviated_spellings_still_find_the_app() {
+		for typed in ["samle", "smpl", "sampel", "sample edtr", "sample-edtr"] {
+			let rows = found(typed);
+
+			assert_eq!(rows.len(), 1, "{typed}");
+			assert_eq!(rows[0].matched, Match::Close, "{typed}");
+		}
+	}
+
+	#[test]
+	fn an_exact_match_is_never_labelled_close_and_close_is_only_a_fallback() {
+		let rows = found("sample");
+
+		assert_eq!(rows.len(), 1);
+		assert_eq!(rows[0].matched, Match::Exact);
+		assert_eq!(found("graphics")[0].matched, Match::Exact);
+	}
+
+	#[test]
+	fn words_with_nothing_like_them_find_nothing() {
+		for typed in ["zzzz", "xqzv", "banana", "sample banana"] {
+			assert!(found(typed).is_empty(), "{typed}");
+		}
+	}
+
+	#[test]
+	fn very_short_words_are_never_guessed_at() {
+		// "sm" is in the name only as separated letters, and two letters would
+		// match almost anything, so no guess is made.
+		assert!(found("se").is_empty() || found("se")[0].matched == Match::Exact);
+		assert!(found("sxe").is_empty());
+	}
+
+	#[test]
+	fn letters_in_the_wrong_order_are_not_close() {
+		assert!(found("rdts").is_empty());
+		assert!(found("lpmas").is_empty());
 	}
 }

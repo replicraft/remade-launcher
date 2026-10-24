@@ -110,3 +110,4 @@ explore-category-education = Education
 explore-category-media = Media
 explore-category-security = Security
 explore-category-communication = Communication
+explore-close-matches = No exact matches. These are the closest by spelling.

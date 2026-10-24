@@ -77,6 +77,7 @@ tar = { version = "0.4", default-features = false }
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # Matching and versions
+fuzzy-matcher = "0.3"
 globset = { version = "0.4", default-features = false }
 semver = "1"
 

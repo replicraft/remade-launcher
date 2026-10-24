@@ -254,6 +254,7 @@ impl Remade {
 				"summary": row.summary,
 				"source": row.repository,
 				"has_package_for_this_computer": row.availability == launcher_core::Availability::ThisDevice,
+				"match": if row.matched == launcher_core::Match::Close { "close" } else { "exact" },
 			})).collect::<Vec<_>>(),
 			"total_matches": rows.len(),
 		})))

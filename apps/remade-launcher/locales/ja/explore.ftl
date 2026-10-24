@@ -107,3 +107,4 @@ explore-category-education = 教育
 explore-category-media = メディア
 explore-category-security = セキュリティ
 explore-category-communication = コミュニケーション
+explore-close-matches = 完全に一致するものはありません。綴りが近いものを表示しています。

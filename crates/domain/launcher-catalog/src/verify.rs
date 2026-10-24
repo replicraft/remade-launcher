@@ -120,6 +120,7 @@ pub fn verify(
 			issued_at,
 			expires_at,
 			verified_by,
+			search: std::sync::OnceLock::new(),
 		},
 		change,
 	})

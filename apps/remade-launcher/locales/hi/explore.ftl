@@ -110,3 +110,4 @@ explore-category-education = शिक्षा
 explore-category-media = मीडिया
 explore-category-security = सुरक्षा
 explore-category-communication = संचार
+explore-close-matches = कोई सटीक मिलान नहीं मिला। ये वर्तनी में सबसे नज़दीकी हैं।

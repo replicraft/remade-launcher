@@ -11,7 +11,7 @@ mod detail;
 mod filters;
 
 use egui::{RichText, ScrollArea, Ui};
-use launcher_core::{CatalogState, ExploreQuery, ExploreRow};
+use launcher_core::{CatalogState, ExploreQuery, ExploreRow, Match};
 
 use self::banner::{banner, demo_banner};
 use self::cards::{
@@ -326,6 +326,10 @@ impl ExploreView {
 				};
 
 				section_title(ui, None, &title, Some(&app_count(shown.len())));
+
+				if shown.iter().any(|row| row.matched == Match::Close) {
+					ui.label(RichText::new(t!("explore-close-matches")).color(theme::muted(ui)));
+				}
 
 				if shown.is_empty() {
 					ui.label(RichText::new(t!("explore-none-for-filters")).color(theme::muted(ui)));

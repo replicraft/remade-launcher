@@ -110,3 +110,4 @@ explore-category-education = Educación
 explore-category-media = Multimedia
 explore-category-security = Seguridad
 explore-category-communication = Comunicación
+explore-close-matches = No hay coincidencias exactas. Estas son las más cercanas por su escritura.

@@ -110,3 +110,4 @@ explore-category-education = Educação
 explore-category-media = Mídia
 explore-category-security = Segurança
 explore-category-communication = Comunicação
+explore-close-matches = Nenhuma correspondência exata. Estes são os mais próximos pela grafia.

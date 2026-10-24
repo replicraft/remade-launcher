@@ -280,6 +280,7 @@ fn catalog(now: i64) -> Vec<ExploreRow> {
 		languages: Vec::new(),
 		platforms: Vec::new(),
 		added_at: days_ago.map(|days| now - days * day),
+		matched: launcher_core::Match::Exact,
 	};
 	let device = Availability::ThisDevice;
 

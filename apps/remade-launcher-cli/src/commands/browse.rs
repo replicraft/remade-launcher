@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use launcher_core::{Availability, Engine, ExploreQuery, ExploreRow, ReleaseStatus, State};
+use launcher_core::{Availability, Engine, ExploreQuery, ExploreRow, Match, ReleaseStatus, State};
 use serde_json::{Value, json};
 
 use super::shared::ensure_catalog;
@@ -77,6 +77,10 @@ async fn catalog_results(
 		return Ok(ExitStatus::Success);
 	}
 
+	if rows.iter().any(|row| row.matched == Match::Close) {
+		ctx.note("No exact matches. These are the closest by spelling.");
+	}
+
 	let table: Vec<Vec<String>> = rows
 		.iter()
 		.map(|row| {
@@ -120,6 +124,10 @@ fn row_json(row: &ExploreRow, installed: bool) -> Value {
 		"availability": availability_word(&row.availability),
 		"compatible_with_this_device": row.availability == Availability::ThisDevice,
 		"installed": installed,
+		"match": match row.matched {
+			Match::Exact => "exact",
+			Match::Close => "close",
+		},
 		"trust": "listed in the verified Remade catalog",
 	})
 }
