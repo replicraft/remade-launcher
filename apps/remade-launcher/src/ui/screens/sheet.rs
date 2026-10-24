@@ -9,7 +9,8 @@ use launcher_core::{InstalledApp, OperatorUpdate, Ready, RemovalReport};
 use launcher_model::{InstallationId, UpdateMode};
 use launcher_resolver::{Candidate, EvidenceLevel};
 
-use crate::ui::components::danger_button;
+use crate::ui::components::{Choice, Confirm, dialog_buttons};
+use crate::ui::icons;
 use crate::ui::theme;
 
 pub(crate) enum Sheet {
@@ -106,15 +107,13 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 				ui.heading(format!("Uninstall {}?", app.name));
 				ui.label("The launcher removes the files it installed. Files the app saved in its own folder, and any file you edited, are kept and listed afterwards.");
 
-				ui.horizontal(|ui| {
-					if ui.button("Cancel").clicked() {
-						outcome = Outcome::Close;
-					}
+				ui.add_space(14.0);
 
-					if ui.button("Uninstall").clicked() {
-						outcome = Outcome::Uninstall(app.clone());
-					}
-				});
+				match dialog_buttons(ui, &Confirm { label: "Uninstall", destructive: true, enabled: true }) {
+					Choice::Pending => {}
+					Choice::Cancel => outcome = Outcome::Close,
+					Choice::Confirm => outcome = Outcome::Uninstall(app.clone()),
+				}
 			}
 			Sheet::ConfirmMode { mode, acknowledged } => {
 				ui.heading(mode.label());
@@ -137,15 +136,13 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 				ui.add_space(6.0);
 				ui.checkbox(acknowledged, "I understand, and I want automatic updates");
 
-				ui.horizontal(|ui| {
-					if ui.button("Cancel").clicked() {
-						outcome = Outcome::Close;
-					}
+				ui.add_space(14.0);
 
-					if ui.add_enabled(*acknowledged, egui::Button::new("Turn on")).clicked() {
-						outcome = Outcome::SetMode { mode: *mode, acknowledged: *acknowledged };
-					}
-				});
+				match dialog_buttons(ui, &Confirm { label: "Turn on", destructive: false, enabled: *acknowledged }) {
+					Choice::Pending => {}
+					Choice::Cancel => outcome = Outcome::Close,
+					Choice::Confirm => outcome = Outcome::SetMode { mode: *mode, acknowledged: *acknowledged },
+				}
 			}
 			Sheet::ConfirmUpdateAll(updates) => {
 				ui.heading("Update everything?");
@@ -185,19 +182,30 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 				}
 			}
 			Sheet::ConfirmRestore => {
-				ui.heading("Restore defaults?");
-				ui.label("Appearance goes back to the system setting, updates go back to manual with a one-hour minimum age, and every app's own update settings are cleared. A background updater is turned off.");
+				heading_with_icon(ui, icons::WARNING, "Restore defaults?");
+				ui.add_space(6.0);
+
+				ui.label("This puts the launcher's own settings back the way a new install has them:");
+				ui.add_space(4.0);
+
+				for line in [
+					"Appearance follows your system again.",
+					"Updates go back to manual, with a one-hour minimum age.",
+					"Every app's own update settings are cleared, including pins.",
+					"A background updater, if you turned one on, is switched off.",
+				] {
+					ui.label(format!("•  {line}"));
+				}
+
+				ui.add_space(8.0);
 				ui.label(RichText::new("Your installed apps and their files are not touched. This cannot be undone.").color(theme::muted(ui)));
+				ui.add_space(14.0);
 
-				ui.horizontal(|ui| {
-					if ui.button("Cancel").clicked() {
-						outcome = Outcome::Close;
-					}
-
-					if danger_button(ui, "Restore defaults").clicked() {
-						outcome = Outcome::RestoreDefaults;
-					}
-				});
+				match dialog_buttons(ui, &Confirm { label: "Restore defaults", destructive: true, enabled: true }) {
+					Choice::Pending => {}
+					Choice::Cancel => outcome = Outcome::Close,
+					Choice::Confirm => outcome = Outcome::RestoreDefaults,
+				}
 			}
 			Sheet::Removed { name, report } => {
 				ui.heading(format!("{name} was uninstalled"));
@@ -382,6 +390,18 @@ pub(crate) fn bytes(size: u64) -> String {
 	} else {
 		format!("{value:.1} {}", UNITS[unit])
 	}
+}
+
+/// A dialog title with a leading icon.
+fn heading_with_icon(ui: &mut Ui, icon: &str, title: &str) {
+	ui.horizontal(|ui| {
+		ui.label(
+			RichText::new(icon)
+				.size(26.0)
+				.color(theme::palette(ui).danger),
+		);
+		ui.heading(title);
+	});
 }
 
 #[cfg(test)]
