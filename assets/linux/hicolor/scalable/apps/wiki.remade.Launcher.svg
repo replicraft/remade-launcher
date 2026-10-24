@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Remade</title>
+  <desc id="desc">Two overlapping geometric squares, one outlined and one filled, in lime green on charcoal.</desc>
+  <rect width="64" height="64" rx="12" fill="#15191F"/>
+  <path d="M11 11H36V36H11Z" fill="none" stroke="#C4F477" stroke-width="5"/>
+  <path d="M28 28H53V53H28Z" fill="#C4F477"/>
+  <path d="M28 28H36V36H28Z" fill="#15191F"/>
+</svg>
