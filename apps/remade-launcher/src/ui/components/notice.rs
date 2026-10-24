@@ -8,6 +8,8 @@ use crate::ui::theme;
 pub(crate) enum Tone {
 	/// Something is off, and the person may want to act.
 	Warning,
+	/// Good news or a heads-up that needs nothing.
+	Info,
 }
 
 /// Returns true when the button, if there is one, was clicked.
@@ -22,6 +24,7 @@ pub(crate) fn notice(
 	let palette = theme::palette(ui);
 	let color = match tone {
 		Tone::Warning => ui.visuals().warn_fg_color,
+		Tone::Info => palette.accent,
 	};
 	let mut clicked = false;
 

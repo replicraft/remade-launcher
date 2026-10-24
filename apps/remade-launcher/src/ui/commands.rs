@@ -11,8 +11,9 @@ use std::sync::mpsc::Sender;
 use launcher_background::control::{self, BackgroundStatus};
 use launcher_core::{
 	CatalogState, CustomPreparation, Engine, EngineEvent, ExploreQuery, ExploreRow, InstalledApp,
-	LaunchOutcome, ModeConsent, OperationSummary, OperatorUpdate, Preparation, RateLimit, Ready,
-	RemovalReport, StorageReport, TokenState, UpdateSettings, UpdateStatus, custom_plan,
+	LaunchOutcome, LauncherUpdateReport, ModeConsent, OperationSummary, OperatorUpdate,
+	Preparation, RateLimit, Ready, RemovalReport, StorageReport, TokenState, UpdateSettings,
+	UpdateStatus, custom_plan,
 };
 use launcher_model::{InstallationId, MinimumAge, Preferences, ThemePreference, UpdateMode};
 use launcher_resolver::Consent;
@@ -62,6 +63,8 @@ pub(crate) enum Message {
 	Token(TokenState),
 	RateLimit(Result<RateLimit, String>),
 	Storage(Box<StorageReport>),
+	/// What is known about the launcher's own updates.
+	LauncherUpdate(Box<LauncherUpdateReport>),
 }
 
 /// A handle for submitting commands.
@@ -93,6 +96,7 @@ impl Commands {
 		commands.refresh_preferences();
 		commands.refresh_update_info();
 		commands.launcher_started();
+		commands.run_launcher_update_cycle();
 
 		commands
 	}
@@ -249,6 +253,66 @@ impl Commands {
 					Message::Notice(text)
 				}
 			})
+		});
+	}
+
+	/// What the launcher does for itself at startup, according to its own
+	/// setting. It may download a new launcher; it never switches to it.
+	fn run_launcher_update_cycle(&self) {
+		self.spawn(|engine| async move {
+			engine.launcher_update_cycle().await;
+
+			Some(Message::LauncherUpdate(Box::new(
+				engine.launcher_update_report().await,
+			)))
+		});
+	}
+
+	pub(crate) fn refresh_launcher_update(&self) {
+		self.spawn(|engine| async move {
+			Some(Message::LauncherUpdate(Box::new(
+				engine.launcher_update_report().await,
+			)))
+		});
+	}
+
+	/// The person asked: look now, and download if the setting says to.
+	pub(crate) fn check_launcher_update(&self) {
+		self.spawn_result(|engine| async move {
+			engine.check_launcher_update(false).await?;
+
+			if engine.preferences().await.launcher_updates.downloads() {
+				// A failed download still leaves the answer of the look.
+				if let Err(error) = engine.stage_launcher_update(&mut |_, _| {}).await {
+					tracing::info!(%error, "the new launcher could not be downloaded");
+				}
+			}
+
+			Ok(Message::LauncherUpdate(Box::new(
+				engine.launcher_update_report().await,
+			)))
+		});
+	}
+
+	/// Download the newest launcher now, whatever the setting says. The person
+	/// pressed the button.
+	pub(crate) fn download_launcher_update(&self) {
+		self.spawn_result(|engine| async move {
+			engine.stage_launcher_update(&mut |_, _| {}).await?;
+
+			Ok(Message::LauncherUpdate(Box::new(
+				engine.launcher_update_report().await,
+			)))
+		});
+	}
+
+	pub(crate) fn roll_back_launcher(&self) {
+		self.spawn_result(|engine| async move {
+			engine.roll_back_launcher().await?;
+
+			Ok(Message::LauncherUpdate(Box::new(
+				engine.launcher_update_report().await,
+			)))
 		});
 	}
 

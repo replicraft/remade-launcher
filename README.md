@@ -17,6 +17,10 @@ test fixtures. Two things stand between this and a public release:
   keys belong to the Remade website's publisher and are added to
   [`crates/domain/launcher-catalog/registry/production.json`](crates/domain/launcher-catalog/registry/production.json)
   once they exist.
+- **The launcher release key.** Updates to the launcher itself are signed with
+  a key of their own, kept apart from the catalog keys. The build trusts none
+  yet, so it checks nothing and installs nothing until one is added to
+  [`crates/domain/launcher-catalog/registry/releases.json`](crates/domain/launcher-catalog/registry/releases.json).
 - **Evidence on every platform.** Everything is tested on macOS. Windows,
   Linux, and FreeBSD builds, runtime tests, and package builds are written but
   have not been run. See [`packaging/README.md`](packaging/README.md).
@@ -39,6 +43,34 @@ each app, and never applied to an update you start yourself). Each app can be
 pinned, paused, or allowed pre-releases. Apps you added yourself are never
 updated unattended. Every skip has a stable reason code, shown by
 `remade updates check` and `remade updates decisions`.
+
+## Launcher updates
+
+The launcher keeps itself current under a setting of its own, apart from how
+apps are updated. Change one and the other does not move.
+
+| Setting | What happens |
+|---|---|
+| Automatic (default) | A new launcher is downloaded in the background and checked. It is switched in when you close the launcher, never while an install is running. |
+| Tell me | The launcher says a new version exists. Nothing is downloaded. |
+| Off | It never looks on its own. |
+
+Set it in Settings, or with `remade config set launcher.updates notify`.
+`remade self-update status | check | apply | rollback` do it by hand, and a
+person asking directly is always answered, whatever the setting.
+
+What keeps it safe: the release is a small document signed by a key that is
+only good for launcher releases. It names, for each system, a GitHub release
+file with its size and SHA-256. The download must match both, the archive is
+unpacked with the same path and size limits as an app, and only the launcher's
+own programs (`remade`, `remade-launcher`, `remade-launcher-daemon`,
+`remade-launcher-mcp`) that already sit in the folder are replaced. The
+running program has to be among them. All files switch together or none do, and
+the previous ones are kept so `rollback` can put them back. An older document
+cannot replace a newer one, an expired one is ignored, and a launcher is never
+moved to an older version. A launcher installed by Homebrew, the Microsoft
+Store, an app bundle, Flatpak, an AppImage, or the system package manager is
+left alone and only told about new releases.
 
 ## The command line
 

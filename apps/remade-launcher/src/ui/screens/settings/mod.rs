@@ -2,6 +2,7 @@
 
 mod about;
 mod general;
+mod launcher;
 mod network;
 mod notifications;
 mod region;
@@ -13,7 +14,7 @@ use std::path::PathBuf;
 
 use egui::{ScrollArea, Sense, Ui};
 use launcher_background::control::BackgroundStatus;
-use launcher_core::{RateLimit, StorageReport, TokenState, UpdateSettings};
+use launcher_core::{LauncherUpdateReport, RateLimit, StorageReport, TokenState, UpdateSettings};
 use launcher_model::{MinimumAge, Preferences, ThemePreference, UpdateMode};
 
 use self::network::NetworkView;
@@ -38,6 +39,9 @@ pub(crate) enum SettingsAction {
 	ClearLeftovers,
 	ClearCache,
 	TestNotification,
+	CheckLauncherUpdate,
+	DownloadLauncherUpdate,
+	RollBackLauncher,
 }
 
 /// Text being typed, which is not a saved setting until it is applied.
@@ -62,6 +66,9 @@ pub(crate) struct SettingsView<'a> {
 	pub(crate) token: &'a TokenState,
 	pub(crate) rate: Option<&'a Result<RateLimit, String>>,
 	pub(crate) storage: Option<&'a StorageReport>,
+	pub(crate) launcher: Option<&'a LauncherUpdateReport>,
+	/// A look for a new launcher is under way.
+	pub(crate) launcher_checking: bool,
 }
 
 pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
@@ -77,6 +84,8 @@ pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
 		token,
 		rate,
 		storage,
+		launcher,
+		launcher_checking,
 	} = view;
 
 	page(ui, "Settings", |ui| {
@@ -97,9 +106,19 @@ pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
 					ui,
 					"Updates",
 					Some(
-						"How installed apps are updated. This does not affect updates to the Launcher itself.",
+						"How installed apps are updated. The Launcher updates itself separately, below.",
 					),
 					|ui| updates::updates(ui, &updates, background, &mut action),
+				);
+				ui.add_space(14.0);
+
+				panel(
+					ui,
+					"Launcher updates",
+					Some(
+						"How the Launcher keeps itself up to date. This does not change how your apps are updated.",
+					),
+					|ui| launcher::launcher(ui, prefs, launcher, launcher_checking, &mut action),
 				);
 				ui.add_space(14.0);
 

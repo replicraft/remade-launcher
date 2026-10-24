@@ -15,7 +15,7 @@ use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
 
 use crate::ui::commands::{Commands, Message};
-use crate::ui::components::{ViewMode, dialog_close, dialog_ok};
+use crate::ui::components::{Tone, ViewMode, dialog_close, dialog_ok, notice};
 use crate::ui::demo::{self, Demo};
 use crate::ui::menu::{AppMenu, MenuCommand};
 use crate::ui::notifications;
@@ -94,6 +94,12 @@ pub(crate) struct LauncherApp {
 	settings_inputs: SettingsInputs,
 	token_state: launcher_core::TokenState,
 	rate_limit: Option<Result<launcher_core::RateLimit, String>>,
+	/// What is known about the launcher's own updates.
+	launcher_update: Option<launcher_core::LauncherUpdateReport>,
+	/// A look for a new launcher is under way.
+	launcher_checking: bool,
+	/// The launcher version whose banner was put away this session.
+	launcher_banner_dismissed: Option<String>,
 	storage: Option<launcher_core::StorageReport>,
 	/// How many updates the last notification mentioned, so the same ones are
 	/// not announced twice.
@@ -158,6 +164,9 @@ impl LauncherApp {
 			settings_inputs: SettingsInputs::default(),
 			token_state: launcher_core::TokenState::Absent,
 			rate_limit: None,
+			launcher_update: None,
+			launcher_checking: false,
+			launcher_banner_dismissed: None,
 			storage: None,
 			notified_updates: 0,
 		}
@@ -167,6 +176,7 @@ impl LauncherApp {
 		while let Ok(message) = self.messages.try_recv() {
 			match message {
 				Message::Failed(text) => {
+					self.launcher_checking = false;
 					self.notice = Some(text);
 					self.add.lookup_failed();
 					self.transfers.drop_waiting();
@@ -195,6 +205,10 @@ impl LauncherApp {
 				}
 				Message::RateLimit(result) => self.rate_limit = Some(result),
 				Message::Storage(report) => self.storage = Some(*report),
+				Message::LauncherUpdate(report) => {
+					self.launcher_update = Some(*report);
+					self.launcher_checking = false;
+				}
 				Message::Prepared(preparation) => self.show_preparation(preparation),
 				Message::CustomLookedUp(lookup) => self.add.set_lookup(lookup),
 				Message::CustomChosen(ready) => {
@@ -890,8 +904,54 @@ impl LauncherApp {
 	}
 
 	fn refresh_settings_data(&mut self) {
+		self.commands.refresh_launcher_update();
 		self.commands.refresh_token();
 		self.commands.refresh_storage();
+	}
+
+	/// A strip on every page when a newer launcher is downloaded or available.
+	/// It points to Settings, where the choice lives.
+	fn show_launcher_banner(&mut self, ui: &mut egui::Ui) {
+		let Some(report) = &self.launcher_update else {
+			return;
+		};
+
+		let (version, ready) = match (&report.staged, &report.available) {
+			(Some(staged), _) => (staged.version.clone(), true),
+			(None, Some(found)) => (found.version.clone(), false),
+			(None, None) => return,
+		};
+
+		if self.launcher_banner_dismissed.as_ref() == Some(&version)
+			|| self.screen == Screen::Settings
+		{
+			return;
+		}
+
+		let headline = if ready {
+			format!("{} {version} is ready", product::NAME)
+		} else {
+			format!("{} {version} is available", product::NAME)
+		};
+		let detail = if ready {
+			"It starts the next time you open the launcher."
+		} else {
+			"Open Settings to download it."
+		};
+
+		if notice(
+			ui,
+			Tone::Info,
+			crate::ui::icons::ARROW_CLOCKWISE,
+			&headline,
+			Some(detail),
+			Some("Details"),
+		) {
+			self.launcher_banner_dismissed = Some(version);
+			self.go(Screen::Settings);
+		}
+
+		ui.add_space(10.0);
 	}
 
 	/// Tells the person, if they asked and are looking elsewhere, that updates
@@ -1173,6 +1233,8 @@ impl eframe::App for LauncherApp {
 				});
 			}
 
+			self.show_launcher_banner(ui);
+
 			match self.screen {
 				Screen::Explore => {
 					action = self.explore.show(
@@ -1221,6 +1283,8 @@ impl eframe::App for LauncherApp {
 						token: &self.token_state,
 						rate: self.rate_limit.as_ref(),
 						storage: self.storage.as_ref(),
+						launcher: self.launcher_update.as_ref(),
+						launcher_checking: self.launcher_checking,
 					};
 
 					match screens::settings(ui, view) {
@@ -1238,6 +1302,15 @@ impl eframe::App for LauncherApp {
 						SettingsAction::ShowFolder(path) => self.show_folder(&path),
 						SettingsAction::ClearLeftovers => self.commands.clear_leftovers(),
 						SettingsAction::ClearCache => self.commands.clear_cache(),
+						SettingsAction::CheckLauncherUpdate => {
+							self.launcher_checking = true;
+							self.commands.check_launcher_update();
+						}
+						SettingsAction::DownloadLauncherUpdate => {
+							self.launcher_checking = true;
+							self.commands.download_launcher_update();
+						}
+						SettingsAction::RollBackLauncher => self.commands.roll_back_launcher(),
 						SettingsAction::TestNotification => {
 							notifications::send(product::NAME, "This is a test notification.");
 						}

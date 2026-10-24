@@ -50,6 +50,18 @@ fn run() -> Result<(), String> {
 	ui::run(Arc::clone(&engine), runtime.handle().clone())
 		.map_err(|error| format!("the window failed: {error}"))?;
 
+	// A launcher downloaded earlier is switched in now that nothing is
+	// running, so the next start is the new version. It waits for any install
+	// to finish, and does nothing at all for a launcher a package manager
+	// owns or when none is waiting.
+	match runtime.block_on(engine.apply_launcher_update()) {
+		Ok(Some(applied)) => {
+			tracing::info!(from = %applied.from, to = %applied.to, "switched launcher")
+		}
+		Ok(None) => {}
+		Err(error) => tracing::warn!(%error, "the new launcher could not be switched in"),
+	}
+
 	// The window is gone, so the interface has dropped its engine handle.
 	if let Some(engine) = Arc::into_inner(engine) {
 		runtime.block_on(engine.shutdown());
