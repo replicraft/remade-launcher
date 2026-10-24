@@ -6,6 +6,7 @@
 mod adopt;
 mod browse;
 mod catalog;
+mod collection;
 mod config;
 mod credentials;
 mod diagnostics;
@@ -29,6 +30,10 @@ mod flow_tests;
 pub use adopt::{AdoptedApp, AdoptionCandidate, AdoptionRequest};
 pub use browse::{Changelog, PlatformReport, TrustStatus, VariantSupport};
 pub use catalog::{CatalogService, CatalogState, Origin, Problem, ProblemKind};
+pub use collection::{
+	Collection, CollectionProblem, Entry as CollectionEntry, EntryOutcome, EntryPreview,
+	collection_max_bytes,
+};
 pub use config::{CatalogConfig, EngineConfig};
 pub use credentials::{Keychain, MemorySecret, SecretError, SecretStore, TokenState};
 pub use download::DownloadedFile;

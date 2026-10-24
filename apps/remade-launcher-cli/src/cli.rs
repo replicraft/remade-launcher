@@ -123,6 +123,11 @@ pub(crate) enum Command {
 	Adopt(AdoptArgs),
 	/// Download and check an app's file without installing or running it.
 	Download(DownloadArgs),
+	/// Share or import a list of apps. Importing installs nothing.
+	Collection {
+		#[command(subcommand)]
+		action: CollectionAction,
+	},
 	/// Hold an app at its current version.
 	Pin(AppArgs),
 	/// Let a pinned app update again.
@@ -219,6 +224,30 @@ pub(crate) struct AppArgs {
 #[derive(Debug, Args)]
 pub(crate) struct OptionalAppArgs {
 	pub(crate) app: Option<String>,
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum CollectionAction {
+	/// Write what you have installed and your favorites as a collection.
+	Export {
+		/// Save to this file instead of printing. It is never overwritten.
+		#[arg(short, long, value_name = "FILE")]
+		out: Option<String>,
+	},
+	/// Read a collection and say what importing it would do.
+	Preview { file: String },
+	/// Add a collection's apps as favorites. Installs nothing.
+	Import {
+		file: String,
+
+		/// Approve without asking.
+		#[arg(short, long)]
+		yes: bool,
+	},
+	/// List your favorites.
+	List,
+	/// Remove a favorite, by catalog name or owner/repository.
+	Remove { reference: String },
 }
 
 #[derive(Debug, Args)]

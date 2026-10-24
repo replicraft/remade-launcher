@@ -641,3 +641,90 @@ fn downloading_offline_says_so_and_saves_nothing() {
 	);
 	assert!(!folder.exists(), "no folder was created");
 }
+
+#[test]
+fn a_collection_is_previewed_then_imported_as_favorites_and_installs_nothing() {
+	let run = run();
+	let file = run._data.path().join("apps.json");
+
+	std::fs::write(&file, r#"{"format":"remade-collection","version":1,"apps":[{"catalog_name":"quill"},{"repository":"owner/repo"}]}"#).unwrap();
+
+	let path = file.to_str().unwrap();
+	let (code, preview, _) = run.json(&["collection", "preview", path]);
+
+	assert_eq!(code, 0);
+	assert_eq!(preview["data"]["effect"], "favorites_only");
+	assert_eq!(
+		preview["data"]["apps"][1]["outcome"],
+		"repository_unreviewed"
+	);
+	assert!(
+		run.json(&["collection", "list"]).1["data"]["favorites"]
+			.as_array()
+			.unwrap()
+			.is_empty()
+	);
+
+	let (code, imported, _) = run.json(&["collection", "import", path, "--yes"]);
+
+	assert_eq!(code, 0, "{imported}");
+	assert_eq!(
+		(
+			imported["data"]["added"].as_u64(),
+			imported["data"]["installed"].as_u64()
+		),
+		(Some(2), Some(0))
+	);
+	assert_eq!(
+		run.json(&["collection", "import", path, "--yes"]).1["data"]["added"],
+		0
+	);
+	assert!(
+		run.json(&["list"]).1["data"]["managed"]
+			.as_array()
+			.unwrap()
+			.is_empty()
+	);
+
+	// Export carries references and nothing private, and never overwrites.
+	let out = run._data.path().join("out.json");
+	let (code, saved, _) = run.json(&["collection", "export", "--out", out.to_str().unwrap()]);
+
+	assert_eq!((code, saved["data"]["apps"].as_u64()), (0, Some(2)));
+	assert!(
+		!std::fs::read_to_string(&out)
+			.unwrap()
+			.contains(run._data.path().to_str().unwrap())
+	);
+	assert_ne!(
+		run.json(&["collection", "export", "--out", out.to_str().unwrap()])
+			.0,
+		0,
+		"no overwriting"
+	);
+
+	assert_eq!(run.json(&["collection", "remove", "quill"]).0, 0);
+	assert_eq!(
+		run.json(&["collection", "remove", "quill"]).0,
+		2,
+		"no longer a favorite"
+	);
+}
+
+#[test]
+fn a_collection_with_anything_unexpected_is_refused_whole() {
+	let run = run();
+	let file = run._data.path().join("bad.json");
+
+	std::fs::write(&file, r#"{"format":"remade-collection","version":1,"apps":[{"catalog_name":"quill","run":"rm -rf ~"}]}"#).unwrap();
+
+	let (code, error, _) = run.json(&["collection", "import", file.to_str().unwrap(), "--yes"]);
+
+	assert_eq!(code, 2, "{error}");
+	assert!(
+		run.json(&["collection", "list"]).1["data"]["favorites"]
+			.as_array()
+			.unwrap()
+			.is_empty()
+	);
+}

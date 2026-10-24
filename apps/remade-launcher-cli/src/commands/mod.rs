@@ -1,6 +1,7 @@
 mod adopt;
 mod browse;
 mod catalog;
+mod collection;
 mod daemon;
 mod installed;
 mod lifecycle;
@@ -12,7 +13,7 @@ use std::sync::Arc;
 
 use launcher_core::Engine;
 
-use crate::cli::{Cli, Command, OperationsAction};
+use crate::cli::{Cli, CollectionAction, Command, OperationsAction};
 use crate::context::Ctx;
 use crate::errors::CliError;
 use crate::exit::ExitStatus;
@@ -50,6 +51,13 @@ pub(crate) fn name(command: &Command) -> &'static str {
 		Command::Repair(_) => "repair",
 		Command::Adopt(_) => "adopt",
 		Command::Download(_) => "download",
+		Command::Collection { action } => match action {
+			CollectionAction::Export { .. } => "collection export",
+			CollectionAction::Preview { .. } => "collection preview",
+			CollectionAction::Import { .. } => "collection import",
+			CollectionAction::List => "collection list",
+			CollectionAction::Remove { .. } => "collection remove",
+		},
 		Command::Pin(_) => "pin",
 		Command::Unpin(_) => "unpin",
 		Command::Pins => "pins",
@@ -96,6 +104,7 @@ pub(crate) async fn dispatch(
 		Command::Repair(args) => lifecycle::repair(ctx, engine, args).await,
 		Command::Adopt(args) => adopt::adopt(ctx, engine, args).await,
 		Command::Download(args) => lifecycle::download(ctx, engine, args).await,
+		Command::Collection { action } => collection::run(ctx, engine, action).await,
 		Command::Pin(args) => lifecycle::pin(ctx, engine, args, true).await,
 		Command::Unpin(args) => lifecycle::pin(ctx, engine, args, false).await,
 		Command::Pins => installed::pins(ctx, engine).await,
