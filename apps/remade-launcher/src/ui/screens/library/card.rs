@@ -193,7 +193,7 @@ pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 
 	app_tile(&mut row, &item.app.name, 48.0);
 
-	row.vertical(|ui| {
+	row.allocate_ui_with_layout(vec2(220.0, 56.0), Layout::top_down(Align::Min), |ui| {
 		ui.set_width(220.0);
 		title(ui, item.app);
 		ui.label(
@@ -207,12 +207,18 @@ pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 		);
 	});
 
-	row.vertical(|ui| {
-		ui.set_width((inner.width() - 48.0 - 220.0 - 340.0).max(120.0));
-		status_line(ui, item);
-	});
+	let status_width = (inner.width() - 48.0 - 220.0 - 340.0).max(120.0);
 
-	row.vertical(|ui| {
+	row.allocate_ui_with_layout(
+		vec2(status_width, 56.0),
+		Layout::top_down(Align::Min),
+		|ui| {
+			ui.set_width(status_width);
+			status_line(ui, item);
+		},
+	);
+
+	row.allocate_ui_with_layout(vec2(330.0, 32.0), Layout::top_down(Align::Min), |ui| {
 		ui.set_width(330.0);
 		action = actions(ui, item);
 	});

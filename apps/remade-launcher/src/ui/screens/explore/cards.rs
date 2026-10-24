@@ -1,7 +1,7 @@
 //! How a catalog app looks as a card, a list row, or a category tile.
 
 use egui::text::LayoutJob;
-use egui::{Align2, FontId, Rect, RichText, Sense, Ui, UiBuilder, vec2};
+use egui::{Align, Align2, FontId, Layout, Rect, RichText, Sense, Ui, UiBuilder, vec2};
 use launcher_core::{Availability, ExploreRow};
 
 use super::filters::category_label;
@@ -145,28 +145,35 @@ pub(super) fn list_row(ui: &mut Ui, row: &ExploreRow, selected: bool) -> bool {
 
 	app_tile(&mut content, &row.name, 40.0);
 
-	content.vertical(|ui| {
-		ui.spacing_mut().item_spacing.y = 1.0;
-		ui.set_max_width(inner.width() - 200.0);
+	// Nested layouts do not centre themselves in a row, so give the block a
+	// definite size and let the row centre that.
+	content.allocate_ui_with_layout(
+		vec2((inner.width() - 260.0).max(100.0), 44.0),
+		Layout::top_down(Align::Min),
+		|ui| {
+			ui.spacing_mut().item_spacing.y = 1.0;
 
-		ui.horizontal(|ui| {
+			ui.horizontal(|ui| {
+				ui.add(
+					egui::Label::new(
+						RichText::new(&row.name)
+							.size(15.5)
+							.family(theme::semibold()),
+					)
+					.truncate(),
+				);
+				verified_badge(ui, true);
+				ui.label(
+					RichText::new(&row.repository)
+						.small()
+						.color(palette.text_muted),
+				);
+			});
 			ui.add(
-				egui::Label::new(
-					RichText::new(&row.name)
-						.size(15.5)
-						.family(theme::semibold()),
-				)
-				.truncate(),
+				egui::Label::new(RichText::new(&row.summary).color(palette.text_muted)).truncate(),
 			);
-			verified_badge(ui, true);
-			ui.label(
-				RichText::new(&row.repository)
-					.small()
-					.color(palette.text_muted),
-			);
-		});
-		ui.add(egui::Label::new(RichText::new(&row.summary).color(palette.text_muted)).truncate());
-	});
+		},
+	);
 
 	ui.painter().text(
 		inner.right_center(),
@@ -198,18 +205,22 @@ pub(super) fn category_tile(ui: &mut Ui, slug: &str, count: usize, selected: boo
 	);
 
 	app_tile(&mut content, &label, 36.0);
-	content.vertical(|ui| {
-		ui.spacing_mut().item_spacing.y = 0.0;
-		ui.label(RichText::new(&label).family(theme::semibold()));
-		ui.label(
-			RichText::new(format!(
-				"{count} {}",
-				if count == 1 { "app" } else { "apps" }
-			))
-			.small()
-			.color(palette.text_muted),
-		);
-	});
+	content.allocate_ui_with_layout(
+		vec2((inner.width() - 48.0).max(60.0), 40.0),
+		Layout::top_down(Align::Min),
+		|ui| {
+			ui.spacing_mut().item_spacing.y = 0.0;
+			ui.label(RichText::new(&label).family(theme::semibold()));
+			ui.label(
+				RichText::new(format!(
+					"{count} {}",
+					if count == 1 { "app" } else { "apps" }
+				))
+				.small()
+				.color(palette.text_muted),
+			);
+		},
+	);
 
 	response.clicked()
 }

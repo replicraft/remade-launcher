@@ -499,7 +499,10 @@ impl LauncherApp {
 
 				action = self.add.show(ui);
 
-				if dialog_close(ui, origin, 520.0) {
+				ui.add_space(14.0);
+
+				// Both the corner × and a button, so it is easy to leave.
+				if dialog_ok(ui, "Close") || dialog_close(ui, origin, 520.0) {
 					close = true;
 				}
 			});
