@@ -56,6 +56,7 @@ pub enum ErrorCode {
 	InstallationNotFound,
 	InstallationChanged,
 	LaunchFailed,
+	OperationInProgress,
 	StorageUnavailable,
 	StorageMigrationFailed,
 	StorageNewerThanApp,
@@ -80,6 +81,7 @@ impl ErrorCode {
 			Self::InstallationNotFound => "installation.not_found",
 			Self::InstallationChanged => "installation.changed",
 			Self::LaunchFailed => "installation.launch_failed",
+			Self::OperationInProgress => "operation.in_progress",
 			Self::StorageUnavailable => "storage.unavailable",
 			Self::StorageMigrationFailed => "storage.migration_failed",
 			Self::StorageNewerThanApp => "storage.newer_than_app",
@@ -97,9 +99,10 @@ impl ErrorCode {
 			| Self::ProviderResponseMalformed => ErrorCategory::Network,
 			Self::SourceIdentityChanged | Self::ArtifactDigestMismatch => ErrorCategory::Trust,
 			Self::PackageUnsafe | Self::PackageUnsupported => ErrorCategory::Compatibility,
-			Self::InstallationNotFound | Self::InstallationChanged | Self::LaunchFailed => {
-				ErrorCategory::LocalOwnership
-			}
+			Self::InstallationNotFound
+			| Self::InstallationChanged
+			| Self::LaunchFailed
+			| Self::OperationInProgress => ErrorCategory::LocalOwnership,
 			Self::InvalidSourceUrl => ErrorCategory::Ambiguity,
 			Self::StorageUnavailable | Self::StorageMigrationFailed | Self::StorageNewerThanApp => {
 				ErrorCategory::Storage
@@ -122,6 +125,7 @@ impl ErrorCode {
 			| Self::PackageUnsupported
 			| Self::InstallationNotFound => Retry::Never,
 			Self::InstallationChanged | Self::LaunchFailed => Retry::AfterUserAction,
+			Self::OperationInProgress => Retry::Later,
 			Self::InvalidSourceUrl => Retry::AfterUserAction,
 			Self::StorageUnavailable | Self::StorageNewerThanApp => Retry::AfterUserAction,
 			Self::InternalInvariant => Retry::Never,

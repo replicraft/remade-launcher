@@ -884,3 +884,56 @@ async fn recovery_is_idempotent() {
 	assert_eq!(first.rolled_back, 1);
 	assert_eq!(second, RecoveryReport::default());
 }
+
+#[tokio::test]
+async fn a_running_operation_in_another_process_blocks_recovery_and_new_installs() {
+	let fixture = fixture().await;
+	journal(
+		&fixture,
+		"install",
+		state::EXTRACTING,
+		Some(InstallationId::new()),
+		None,
+	)
+	.await;
+
+	// Stands in for the other process, which is mid-operation.
+	let held = super::lock::acquire(&fixture.data).unwrap();
+
+	let report = fixture.service.recover(NOW + 1).await.unwrap();
+	assert_eq!(
+		report,
+		RecoveryReport::default(),
+		"a live operation is not a crashed one"
+	);
+	assert_eq!(
+		fixture
+			.database
+			.unfinished_operations()
+			.await
+			.unwrap()
+			.len(),
+		1
+	);
+
+	let busy = fixture
+		.service
+		.install(&plan(&fixture, 1, None, None), &meta(), NOW)
+		.await
+		.unwrap_err();
+	assert_eq!(busy.code(), ErrorCode::OperationInProgress);
+
+	drop(held);
+
+	assert_eq!(
+		fixture.service.recover(NOW + 2).await.unwrap().rolled_back,
+		1
+	);
+	assert!(
+		fixture
+			.service
+			.install(&plan(&fixture, 1, None, None), &meta(), NOW)
+			.await
+			.is_ok()
+	);
+}

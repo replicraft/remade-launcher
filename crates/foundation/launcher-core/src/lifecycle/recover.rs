@@ -24,6 +24,14 @@ impl LifecycleService {
 	pub async fn recover(&self, now: i64) -> Result<RecoveryReport, LauncherError> {
 		let mut report = RecoveryReport::default();
 
+		// If another process holds the lock, its operations are alive, not
+		// crashed. Leave them alone and try again at the next start.
+		let Some(_lock) = super::lock::try_acquire(&self.data) else {
+			tracing::info!("skipping recovery: another operation is running");
+
+			return Ok(report);
+		};
+
 		for operation in self.database.unfinished_operations().await? {
 			match self.recover_one(&operation, now).await {
 				Ok(Outcome::RolledBack) => report.rolled_back += 1,

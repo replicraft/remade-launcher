@@ -92,6 +92,9 @@ impl LifecycleService {
 		previous: Option<InstallationRecord>,
 		now: i64,
 	) -> Result<InstallationId, LauncherError> {
+		// One operation at a time, across the app and the CLI.
+		let _lock = super::lock::acquire(&self.data)?;
+
 		let plan = approved.plan();
 		let body = plan.body();
 		let operation = OperationId::new();

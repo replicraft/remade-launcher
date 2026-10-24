@@ -8,6 +8,7 @@
 mod artifact;
 mod install;
 mod launch;
+mod lock;
 mod meta;
 mod recover;
 mod remove;
