@@ -13,14 +13,14 @@ use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
 
 use crate::ui::commands::{Commands, Message};
-use crate::ui::components::dialog_close;
+use crate::ui::components::{ViewMode, dialog_close, dialog_ok};
 use crate::ui::demo::{self, Demo};
 use crate::ui::menu::{AppMenu, MenuCommand};
 use crate::ui::screens::navigation::{self, NavAction, Sidebar};
 use crate::ui::screens::sheet::{self, Outcome, Sheet};
 use crate::ui::screens::{
-	self, Action, AddView, ExploreView, LibraryView, Screen, SettingsAction, SettingsView,
-	UpdatesView,
+	self, Action, AddView, ExploreView, LibraryState, LibraryView, Screen, SettingsAction,
+	SettingsView, UpdatesView,
 };
 use crate::ui::{branding, theme};
 
@@ -38,11 +38,13 @@ pub(crate) struct LauncherApp {
 
 	screen: Screen,
 	explore: ExploreView,
+	view_mode: ViewMode,
 	add: AddView,
 	/// The Add from GitHub dialog is showing.
 	adding: bool,
-	/// What the Library's search field holds.
-	library_search: String,
+	library: LibraryState,
+	/// The app whose update settings dialog is open.
+	app_settings: Option<InstallationId>,
 	history: Vec<OperationSummary>,
 	/// An update check has finished this session.
 	checked: bool,
@@ -86,9 +88,11 @@ impl LauncherApp {
 			show_about: false,
 			screen: Screen::Explore,
 			explore: ExploreView::new(),
+			view_mode: ViewMode::default(),
 			add: AddView::default(),
 			adding: false,
-			library_search: String::new(),
+			library: LibraryState::default(),
+			app_settings: None,
 			history: Vec::new(),
 			checked: false,
 			installed: Vec::new(),
@@ -245,6 +249,7 @@ impl LauncherApp {
 				});
 			}
 			Action::CheckUpdates | Action::Cancel => {}
+			Action::OpenAppSettings(id) => self.app_settings = Some(id),
 			Action::LookUp(_) => {
 				self.add.lookup_failed();
 				self.sheet = Some(say("Looking up repositories is turned off in demo mode."));
@@ -337,6 +342,7 @@ impl LauncherApp {
 			Action::SetPolicy(id, policy) => self.commands.set_app_policy(id, policy),
 			Action::Pin(id, pinned) => self.commands.set_pinned(id, pinned),
 			Action::CheckUpdates => self.commands.check_updates(),
+			Action::OpenAppSettings(id) => self.app_settings = Some(id),
 			Action::Cancel => self.commands.cancel_operation(),
 			Action::UpdateAll => {
 				self.sheet = Some(Sheet::Working("Checking what can be updated…".into()));
@@ -428,6 +434,51 @@ impl LauncherApp {
 		}
 
 		self.screen = screen;
+	}
+
+	/// One app's update settings, in a dialog.
+	fn show_app_settings(&mut self, context: &Context) {
+		let Some(id) = self.app_settings else {
+			return;
+		};
+
+		let Some(app) = self.installed.iter().find(|app| app.id == id).cloned() else {
+			self.app_settings = None;
+
+			return;
+		};
+
+		let policy = self.policies.get(&id).cloned().unwrap_or_default();
+		let global_age = self.update_settings.minimum_age;
+		let mut action = None;
+		let mut close = false;
+
+		let response = egui::Modal::new(egui::Id::unique("app-settings"))
+			.frame(theme::dialog_frame(context))
+			.show(context, |ui| {
+				ui.set_width(420.0);
+
+				let origin = ui.cursor().min;
+
+				ui.heading(format!("{} update settings", app.name));
+				ui.add_space(10.0);
+
+				action = screens::app_settings::app_settings(ui, &app, &policy, global_age);
+
+				ui.add_space(14.0);
+
+				if dialog_ok(ui, "Done") || dialog_close(ui, origin, 420.0) {
+					close = true;
+				}
+			});
+
+		if close || response.should_close() {
+			self.app_settings = None;
+		}
+
+		if let Some(action) = action {
+			self.perform(action);
+		}
 	}
 
 	/// The Add from GitHub dialog.
@@ -552,6 +603,7 @@ impl eframe::App for LauncherApp {
 						ui,
 						&self.commands,
 						self.demo.as_ref().map(|demo| demo.catalog.as_slice()),
+						&mut self.view_mode,
 					);
 				}
 				Screen::Library => {
@@ -563,8 +615,8 @@ impl eframe::App for LauncherApp {
 							statuses: &self.statuses,
 							policies: &self.policies,
 							mode: self.update_settings.mode,
-							global_age: self.update_settings.minimum_age,
-							search: &mut self.library_search,
+							state: &mut self.library,
+							view: &mut self.view_mode,
 						},
 					);
 				}
@@ -606,6 +658,7 @@ impl eframe::App for LauncherApp {
 			self.perform(action);
 		}
 
+		self.show_app_settings(&context);
 		self.show_add(&context);
 		self.show_sheet(&context);
 	}

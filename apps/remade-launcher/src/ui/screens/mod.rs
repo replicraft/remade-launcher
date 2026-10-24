@@ -1,6 +1,7 @@
 //! The screens. Each one is a plain function or small struct over `egui::Ui`.
 
 pub(crate) mod add;
+pub(crate) mod app_settings;
 mod explore;
 pub(crate) mod library;
 pub(crate) mod navigation;
@@ -10,7 +11,7 @@ pub(crate) mod updates;
 
 pub(crate) use add::AddView;
 pub(crate) use explore::ExploreView;
-pub(crate) use library::{LibraryView, library};
+pub(crate) use library::{LibraryState, LibraryView, library};
 pub(crate) use navigation::navigation;
 pub(crate) use settings::{SettingsAction, SettingsView, settings};
 pub(crate) use updates::{UpdatesView, updates};
@@ -62,6 +63,8 @@ pub(crate) enum Action {
 	UpdateAll,
 	/// Stop the running install or update at the next safe point.
 	Cancel,
+	/// Open one app's update settings.
+	OpenAppSettings(InstallationId),
 	ReleaseNotes {
 		slug: String,
 		tag: String,

@@ -79,6 +79,8 @@ the exact `owner/repository`. `--no-input` makes any question an error.
 
 ```sh
 cargo run -p remade-launcher          # the desktop app
+packaging/macos/dev-app.sh            # the same, inside an app bundle so macOS shows the real name
+REMADE_DEMO=1 cargo run -p remade-launcher   # the interface with made-up apps
 cargo run -p remade-launcher-cli -- --help
 cargo test --workspace
 cargo clippy --workspace --all-targets
