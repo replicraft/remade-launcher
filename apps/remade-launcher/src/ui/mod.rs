@@ -13,6 +13,7 @@ mod icons;
 mod menu;
 mod screens;
 mod theme;
+mod transfers;
 
 use std::sync::Arc;
 

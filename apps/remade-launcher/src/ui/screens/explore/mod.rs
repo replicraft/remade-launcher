@@ -72,6 +72,14 @@ impl ExploreView {
 		}
 	}
 
+	/// An app's display name, if it is among the rows.
+	pub(crate) fn name_of(&self, slug: &str) -> Option<String> {
+		self.rows
+			.iter()
+			.find(|row| row.slug == slug)
+			.map(|row| row.name.clone())
+	}
+
 	/// Opens an app's page, such as from the Library.
 	pub(crate) fn select(&mut self, slug: String) {
 		self.selected = Some(slug);

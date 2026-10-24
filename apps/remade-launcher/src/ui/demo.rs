@@ -417,3 +417,15 @@ pub(crate) fn description(name: &str) -> String {
 		This text is invented. If you are reading it in the launcher, you are looking at demo data."
 	)
 }
+
+/// A status for an app that has just been installed or updated.
+pub(crate) fn up_to_date(app: &InstalledApp) -> UpdateStatus {
+	status(app, (UpdateState::UpToDate, None))
+}
+
+/// About how big a demo download is, so each one takes a believable time.
+pub(crate) fn download_size(slug: &str) -> u64 {
+	let megabytes = 24 + (slug.bytes().map(u64::from).sum::<u64>() % 60);
+
+	megabytes * 1_000_000
+}

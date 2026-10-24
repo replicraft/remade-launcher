@@ -22,7 +22,19 @@ use crate::ui::screens::{
 	self, Action, AddView, ExploreView, LibraryState, LibraryView, Screen, SettingsAction,
 	SettingsView, UpdatesView,
 };
+use crate::ui::transfers::{TransferKey, Transfers};
 use crate::ui::{branding, theme};
+
+/// A pretend download, played out over a few seconds.
+struct DemoDownload {
+	key: TransferKey,
+	slug: String,
+	name: String,
+	/// The installed app being updated, if this is an update.
+	updating: Option<InstallationId>,
+	total: u64,
+	started: std::time::Instant,
+}
 
 pub(crate) struct LauncherApp {
 	commands: Commands,
@@ -47,6 +59,10 @@ pub(crate) struct LauncherApp {
 	app_settings: Option<InstallationId>,
 	/// The person has picked a screen, so startup must not move them.
 	navigated: bool,
+	/// Installs and updates in flight, shown in the tray at the bottom.
+	transfers: Transfers,
+	/// Demo downloads in flight, so a download can be watched.
+	demo_downloads: Vec<DemoDownload>,
 	/// Demo uninstalls in flight, so the removal can be watched.
 	demo_removals: Vec<(InstalledApp, std::time::Instant)>,
 	history: Vec<OperationSummary>,
@@ -99,6 +115,8 @@ impl LauncherApp {
 			app_settings: None,
 			navigated: false,
 			demo_removals: Vec::new(),
+			transfers: Transfers::default(),
+			demo_downloads: Vec::new(),
 			history: Vec::new(),
 			checked: false,
 			installed: Vec::new(),
@@ -123,6 +141,7 @@ impl LauncherApp {
 				Message::Failed(text) => {
 					self.notice = Some(text);
 					self.add.lookup_failed();
+					self.transfers.drop_waiting();
 
 					// A failed lookup or plan should not leave a spinner up.
 					if matches!(self.sheet, Some(Sheet::Working(_))) {
@@ -231,7 +250,154 @@ impl LauncherApp {
 		self.checked = true;
 
 		self.open_library_if_any();
+		self.advance_demo_downloads();
 		self.advance_demo_removals();
+	}
+
+	/// Starts a pretend download for a catalog app, or for an installed one
+	/// that is being updated.
+	fn start_demo_download(&mut self, slug: String, updating: Option<InstallationId>) {
+		let Some(demo) = &self.demo else {
+			return;
+		};
+
+		let name = demo
+			.catalog
+			.iter()
+			.find(|row| row.slug == slug)
+			.map_or_else(|| slug.clone(), |row| row.name.clone());
+		let key = match updating {
+			Some(id) => TransferKey::Installation(id),
+			None => TransferKey::Slug(slug.clone()),
+		};
+
+		// Installing something twice at once would only confuse the demo.
+		if self
+			.demo_downloads
+			.iter()
+			.any(|download| download.key == key)
+		{
+			return;
+		}
+
+		self.transfers
+			.begin(key.clone(), name.clone(), Some(slug.clone()), "Starting");
+		self.demo_downloads.push(DemoDownload {
+			total: demo::download_size(&slug),
+			key,
+			slug,
+			name,
+			updating,
+			started: std::time::Instant::now(),
+		});
+	}
+
+	/// Plays each pretend download: a download at a steady speed, a check,
+	/// then unpacking, and then the app appears in the Library.
+	fn advance_demo_downloads(&mut self) {
+		const SPEED: f64 = 9_500_000.0;
+
+		if self.demo_downloads.is_empty() {
+			return;
+		}
+
+		let mut finished = Vec::new();
+
+		for download in &self.demo_downloads {
+			let seconds = download.started.elapsed().as_secs_f64();
+			let download_time = download.total as f64 / SPEED;
+			let total = Some(download.total);
+
+			if seconds < download_time {
+				let label = format!(
+					"Downloading {}",
+					screens::sheet::bytes((seconds * SPEED) as u64)
+				);
+
+				self.transfers
+					.set(&download.key, &label, (seconds * SPEED) as u64, total);
+			} else if seconds < download_time + 0.8 {
+				self.transfers.set(
+					&download.key,
+					"Checking the download",
+					download.total,
+					total,
+				);
+			} else if seconds < download_time + 2.0 {
+				self.transfers
+					.set(&download.key, "Unpacking", download.total, total);
+			} else {
+				finished.push(download.key.clone());
+			}
+		}
+
+		self.context.request_repaint();
+
+		for key in finished {
+			let Some(position) = self
+				.demo_downloads
+				.iter()
+				.position(|download| download.key == key)
+			else {
+				continue;
+			};
+
+			let download = self.demo_downloads.remove(position);
+
+			self.transfers.complete(&key);
+			self.finish_demo_download(&download);
+		}
+	}
+
+	/// Puts a finished demo download into the in-memory Library.
+	fn finish_demo_download(&mut self, download: &DemoDownload) {
+		let now = time::OffsetDateTime::now_utc().unix_timestamp();
+		let Some(demo) = &mut self.demo else {
+			return;
+		};
+
+		match download.updating {
+			Some(id) => {
+				let new_version = demo
+					.statuses
+					.get(&id)
+					.and_then(|status| status.available.as_ref())
+					.map(|update| update.version.clone());
+
+				if let (Some(app), Some(version)) = (
+					demo.installed.iter_mut().find(|app| app.id == id),
+					new_version,
+				) {
+					app.version = version;
+					app.installed_at = now;
+
+					let fresh = demo::up_to_date(app);
+
+					demo.statuses.insert(id, fresh);
+				}
+			}
+			None => {
+				let Some(row) = demo.catalog.iter().find(|row| row.slug == download.slug) else {
+					return;
+				};
+
+				let app = InstalledApp {
+					id: InstallationId::new(),
+					name: download.name.clone(),
+					repository: row.repository.clone(),
+					version: "v1.0.0".into(),
+					curated: true,
+					catalog_slug: Some(download.slug.clone()),
+					root: format!("/demo/apps/{}", download.slug),
+					launchable: true,
+					evidence: "local-observed".into(),
+					installed_at: now,
+				};
+
+				demo.statuses.insert(app.id, demo::up_to_date(&app));
+				demo.installed.push(app);
+			}
+		}
 	}
 
 	/// Plays an uninstall: a progress bar for a moment, then the app is gone
@@ -315,6 +481,18 @@ impl LauncherApp {
 					version: tag,
 				});
 			}
+			Action::Install { slug } => self.start_demo_download(slug, None),
+			Action::Update(id) => {
+				let slug = self
+					.installed
+					.iter()
+					.find(|app| app.id == id)
+					.and_then(|app| app.catalog_slug.clone());
+
+				if let Some(slug) = slug {
+					self.start_demo_download(slug, Some(id));
+				}
+			}
 			Action::Uninstall(app) => self.sheet = Some(Sheet::ConfirmUninstall(app)),
 			Action::CheckUpdates | Action::Cancel => {}
 			Action::OpenAppSettings(id) => self.app_settings = Some(id),
@@ -331,18 +509,36 @@ impl LauncherApp {
 	}
 
 	fn show_preparation(&mut self, preparation: Preparation) {
-		self.sheet = Some(match preparation {
-			Preparation::Ready(ready) => Sheet::Review {
-				ready,
-				update_of: self.update_of.take(),
-				acknowledged: false,
-			},
-			Preparation::Choose(candidates) => Sheet::Choose(candidates),
-			Preparation::Unavailable(reason) => Sheet::Message {
-				title: "Not available".into(),
-				lines: vec![reason],
-			},
-		});
+		let update_of = self.update_of.take();
+
+		match preparation {
+			// A reviewed app with nothing unusual about it installs at once.
+			// The tray shows how it goes. Anything that needs a decision, an
+			// unreviewed source or a file that changed under the same version,
+			// still gets a dialog.
+			Preparation::Ready(ready) if !ready.unreviewed && !ready.rebuilt => {
+				self.commands.install(*ready, false, update_of);
+			}
+			Preparation::Ready(ready) => {
+				self.transfers.drop_waiting();
+				self.sheet = Some(Sheet::Review {
+					ready,
+					update_of,
+					acknowledged: false,
+				});
+			}
+			Preparation::Choose(candidates) => {
+				self.transfers.drop_waiting();
+				self.sheet = Some(Sheet::Choose(candidates));
+			}
+			Preparation::Unavailable(reason) => {
+				self.transfers.drop_waiting();
+				self.sheet = Some(Sheet::Message {
+					title: "Not available".into(),
+					lines: vec![reason],
+				});
+			}
+		}
 	}
 
 	fn handle_event(&mut self, event: EngineEvent) {
@@ -350,17 +546,18 @@ impl LauncherApp {
 			return;
 		};
 
-		let (label, fraction) = match &event.stage {
-			Stage::Accepted => ("Starting".to_owned(), None),
+		let (label, received, total) = match &event.stage {
+			Stage::Accepted => ("Starting".to_owned(), 0, None),
 			Stage::Downloading { received, total } => (
 				format!("Downloading {}", screens::sheet::bytes(*received)),
-				total.map(|total| (*received as f64 / total.max(1) as f64) as f32),
+				*received,
+				*total,
 			),
-			Stage::Verifying => ("Checking the download".into(), None),
-			Stage::Inspecting => ("Inspecting the package".into(), None),
-			Stage::Extracting => ("Unpacking".into(), None),
-			Stage::Applying => ("Finishing".into(), None),
-			Stage::Removing => ("Removing".into(), None),
+			Stage::Verifying => ("Checking the download".into(), 0, None),
+			Stage::Inspecting => ("Inspecting the package".into(), 0, None),
+			Stage::Extracting => ("Unpacking".into(), 0, None),
+			Stage::Applying => ("Finishing".into(), 0, None),
+			Stage::Removing => ("Removing".into(), 0, None),
 			Stage::Completed | Stage::Failed { .. } | Stage::RecoveryRequired { .. } => {
 				self.progress.remove(&event.installation);
 				// What was true before this operation no longer is.
@@ -368,10 +565,16 @@ impl LauncherApp {
 				self.commands.refresh_installed();
 				self.commands.refresh_history();
 
-				if let Stage::Failed { message } | Stage::RecoveryRequired { message } =
-					&event.stage
-				{
-					self.notice = Some(message.clone());
+				match &event.stage {
+					Stage::Completed => self.transfers.finish(event.installation),
+					Stage::Failed { message } => {
+						self.transfers.fail(event.installation, message.clone());
+					}
+					Stage::RecoveryRequired { message } => {
+						self.transfers.fail(event.installation, message.clone());
+						self.notice = Some(message.clone());
+					}
+					_ => {}
 				}
 
 				return;
@@ -379,15 +582,35 @@ impl LauncherApp {
 		};
 
 		let stoppable = !matches!(event.stage, Stage::Applying | Stage::Removing);
+		let fraction = total.map(|total: u64| (received as f64 / total.max(1) as f64) as f32);
 
 		self.progress.insert(
 			event.installation,
 			screens::library::Progress {
-				label,
+				label: label.clone(),
 				fraction,
 				stoppable,
 			},
 		);
+
+		// Removals have their own card progress; the tray is for downloads.
+		if !matches!(event.stage, Stage::Removing) {
+			let installed = &self.installed;
+
+			self.transfers.progress(
+				event.installation,
+				|| {
+					installed
+						.iter()
+						.find(|app| app.id == event.installation)
+						.map_or_else(|| "An app".to_owned(), |app| app.name.clone())
+				},
+				label,
+				received,
+				total,
+				stoppable,
+			);
+		}
 	}
 
 	fn perform(&mut self, action: Action) {
@@ -405,13 +628,29 @@ impl LauncherApp {
 
 		match action {
 			Action::Install { slug } => {
+				let name = self.explore.name_of(&slug).unwrap_or_else(|| slug.clone());
+
 				self.update_of = None;
-				self.sheet = Some(Sheet::Working("Checking the latest release…".into()));
+				self.transfers.begin(
+					TransferKey::Slug(slug.clone()),
+					name,
+					Some(slug.clone()),
+					"Checking the latest release…",
+				);
 				self.commands.prepare_install(slug);
 			}
 			Action::Update(id) => {
+				let app = self.installed.iter().find(|app| app.id == id);
+				let name = app.map_or_else(|| "An app".to_owned(), |app| app.name.clone());
+				let slug = app.and_then(|app| app.catalog_slug.clone());
+
 				self.update_of = Some(id);
-				self.sheet = Some(Sheet::Working("Checking for a newer version…".into()));
+				self.transfers.begin(
+					TransferKey::Installation(id),
+					name,
+					slug,
+					"Checking for a newer version…",
+				);
 				self.commands.prepare_update(id);
 			}
 			Action::Launch(id) => self.commands.launch(id),
@@ -660,6 +899,29 @@ impl eframe::App for LauncherApp {
 				0.15,
 			),
 		);
+
+		// The downloads tray runs along the bottom, like a store's.
+		let busy = self.transfers.prune();
+
+		if busy {
+			context.request_repaint_after(std::time::Duration::from_millis(250));
+
+			let mut stop = false;
+
+			Panel::bottom("transfers")
+				.frame(
+					egui::Frame::new()
+						.fill(sidebar_fill)
+						.stroke(egui::Stroke::new(1.0, theme::palette(ui).border))
+						.inner_margin(egui::Margin::symmetric(24, 14)),
+				)
+				.resizable(false)
+				.show(ui, |ui| stop = self.transfers.show(ui));
+
+			if stop {
+				self.commands.cancel_operation();
+			}
+		}
 
 		Panel::left("navigation")
 			.frame(egui::Frame::new().fill(sidebar_fill))
