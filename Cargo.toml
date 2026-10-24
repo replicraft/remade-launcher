@@ -46,7 +46,7 @@ launcher-ui = { path = "crates/ui/launcher-ui" }
 rayon = "1"
 
 # Async runtime
-tokio = { version = "1", default-features = false, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1", default-features = false, features = ["fs", "io-util", "macros", "rt-multi-thread", "sync", "time"] }
 
 # Networking
 reqwest = { version = "0.13", default-features = false, features = ["brotli", "gzip", "http2", "rustls", "stream"] }
@@ -80,6 +80,7 @@ sha2 = "0.11"
 
 # Testing
 tempfile = "3"
+url = "2"
 
 # Errors and diagnostics
 thiserror = "2"

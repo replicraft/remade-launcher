@@ -2114,9 +2114,12 @@ name = "launcher-net"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "hex",
  "launcher-model",
  "reqwest",
+ "sha2",
  "tokio",
+ "url",
 ]
 
 [[package]]

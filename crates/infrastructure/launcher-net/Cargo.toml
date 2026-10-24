@@ -8,11 +8,13 @@ publish.workspace = true
 
 [dependencies]
 futures-util.workspace = true
+hex.workspace = true
 launcher-model.workspace = true
 reqwest.workspace = true
-
-[dev-dependencies]
+sha2.workspace = true
 tokio.workspace = true
+url.workspace = true
+
 
 [lints]
 workspace = true

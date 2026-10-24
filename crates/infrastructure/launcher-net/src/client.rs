@@ -11,6 +11,10 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const IDLE_CONNECTION_TIMEOUT: Duration = Duration::from_secs(90);
 const MAX_REDIRECTS: usize = 5;
+/// Longest a transfer may sit idle before it fails.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// Hard ceiling for one artifact download.
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(6 * 60 * 60);
 
 /// A cheaply cloneable HTTPS client.
 #[derive(Clone)]
@@ -23,7 +27,8 @@ impl HttpClient {
 		let inner = Client::builder()
 			.user_agent(product::user_agent())
 			.https_only(true)
-			.redirect(redirect::Policy::limited(MAX_REDIRECTS))
+			.redirect(redirect_policy())
+			.read_timeout(READ_TIMEOUT)
 			.connect_timeout(CONNECT_TIMEOUT)
 			.timeout(REQUEST_TIMEOUT)
 			.pool_idle_timeout(IDLE_CONNECTION_TIMEOUT)
@@ -56,6 +61,148 @@ impl HttpClient {
 		}
 
 		Ok(buffer.into_vec())
+	}
+}
+
+/// Follows a bounded number of redirects, and only to public HTTPS hosts.
+///
+/// GitHub serves release assets from another host, so redirects must work,
+/// but a redirect must never reach a loopback, private, or link-local address
+/// or a bare `localhost`. This checks the host text. It does not stop DNS
+/// rebinding, which needs resolver-level control.
+fn redirect_policy() -> redirect::Policy {
+	redirect::Policy::custom(|attempt| {
+		if attempt.previous().len() >= MAX_REDIRECTS {
+			return attempt.error("too many redirects");
+		}
+
+		if is_public_https(attempt.url()) {
+			attempt.follow()
+		} else {
+			attempt.error("redirect to a non-public destination")
+		}
+	})
+}
+
+pub(crate) fn is_public_https(url: &Url) -> bool {
+	use std::net::IpAddr;
+
+	if url.scheme() != "https" {
+		return false;
+	}
+
+	match url.host() {
+		Some(url::Host::Domain(domain)) => {
+			let domain = domain.to_ascii_lowercase();
+
+			!(domain == "localhost" || domain.ends_with(".localhost") || domain.ends_with(".local") || domain.ends_with(".internal"))
+		}
+		Some(url::Host::Ipv4(address)) => is_public_ip(IpAddr::V4(address)),
+		Some(url::Host::Ipv6(address)) => is_public_ip(IpAddr::V6(address)),
+		None => false,
+	}
+}
+
+fn is_public_ip(address: std::net::IpAddr) -> bool {
+	match address {
+		std::net::IpAddr::V4(v4) => {
+			!(v4.is_loopback()
+				|| v4.is_private()
+				|| v4.is_link_local()
+				|| v4.is_unspecified()
+				|| v4.is_broadcast()
+				|| v4.is_multicast()
+				|| v4.octets()[0] == 0
+				// Carrier-grade NAT, 100.64.0.0/10.
+				|| (v4.octets()[0] == 100 && (64..128).contains(&v4.octets()[1])))
+		}
+		std::net::IpAddr::V6(v6) => {
+			!(v6.is_loopback()
+				|| v6.is_unspecified()
+				|| v6.is_multicast()
+				// Unique local fc00::/7 and link-local fe80::/10.
+				|| (v6.segments()[0] & 0xfe00) == 0xfc00
+				|| (v6.segments()[0] & 0xffc0) == 0xfe80
+				|| v6.to_ipv4_mapped().is_some_and(|mapped| !is_public_ip(std::net::IpAddr::V4(mapped))))
+		}
+	}
+}
+
+/// What a finished download produced.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Downloaded {
+	pub size: u64,
+	/// Lowercase hex SHA-256 of the bytes written.
+	pub sha256: String,
+}
+
+impl HttpClient {
+	/// Streams `url` into `file`, hashing as it goes.
+	///
+	/// Fails if the body exceeds `max_bytes`. The caller owns `file`: it is
+	/// flushed and synced here, but never deleted, so the caller decides
+	/// what an incomplete file means.
+	pub async fn download_to(
+		&self,
+		url: Url,
+		file: &mut tokio::fs::File,
+		max_bytes: u64,
+		mut progress: impl FnMut(u64, Option<u64>) + Send,
+	) -> Result<Downloaded, LauncherError> {
+		use sha2::{Digest, Sha256};
+		use tokio::io::AsyncWriteExt;
+
+		let io_failed = |error: std::io::Error| {
+			LauncherError::new(ErrorCode::StorageUnavailable, "The download could not be saved to disk.")
+				.with_source(error)
+		};
+
+		let response = self
+			.inner
+			.get(url)
+			.timeout(DOWNLOAD_TIMEOUT)
+			.send()
+			.await
+			.and_then(|response| response.error_for_status())
+			.map_err(request_failed)?;
+
+		let total = response.content_length();
+
+		if total.is_some_and(|total| total > max_bytes) {
+			return Err(LauncherError::new(
+				ErrorCode::NetworkResponseTooLarge,
+				"The file is larger than the launcher allows.",
+			));
+		}
+
+		let mut hasher = Sha256::new();
+		let mut written = 0u64;
+		let mut stream = response.bytes_stream();
+
+		while let Some(chunk) = stream.next().await {
+			let chunk = chunk.map_err(request_failed)?;
+
+			written += chunk.len() as u64;
+
+			if written > max_bytes {
+				return Err(LauncherError::new(
+					ErrorCode::NetworkResponseTooLarge,
+					"The file is larger than the launcher allows.",
+				));
+			}
+
+			hasher.update(&chunk);
+			file.write_all(&chunk).await.map_err(io_failed)?;
+			progress(written, total);
+		}
+
+		file.flush().await.map_err(io_failed)?;
+		file.sync_all().await.map_err(io_failed)?;
+
+		Ok(Downloaded {
+			size: written,
+			sha256: hex::encode(hasher.finalize()),
+		})
 	}
 }
 
@@ -187,6 +334,38 @@ fn request_failed(error: reqwest::Error) -> LauncherError {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn only_public_https_destinations_are_followed() {
+		for allowed in [
+			"https://github.com/a",
+			"https://objects.githubusercontent.com/x",
+			"https://8.8.8.8/x",
+		] {
+			assert!(is_public_https(&Url::parse(allowed).unwrap()), "{allowed}");
+		}
+
+		for refused in [
+			"http://github.com/a",
+			"https://localhost/a",
+			"https://foo.localhost/a",
+			"https://printer.local/a",
+			"https://127.0.0.1/a",
+			"https://10.0.0.5/a",
+			"https://192.168.1.1/a",
+			"https://172.16.0.1/a",
+			"https://169.254.169.254/latest/meta-data",
+			"https://100.64.0.1/a",
+			"https://0.0.0.0/a",
+			"https://[::1]/a",
+			"https://[fd00::1]/a",
+			"https://[fe80::1]/a",
+			"https://[::ffff:127.0.0.1]/a",
+			"ftp://github.com/a",
+		] {
+			assert!(!is_public_https(&Url::parse(refused).unwrap()), "{refused}");
+		}
+	}
 
 	#[test]
 	fn finds_the_next_page_link() {
