@@ -539,8 +539,17 @@ async fn the_launcher_setting_and_the_app_setting_do_not_touch_each_other() {
 #[tokio::test]
 async fn this_build_has_no_release_key_so_it_checks_nothing() {
 	let directory = tempfile::tempdir().unwrap();
+	let no_keys = KeyRegistry::from_test_release_fixture(&format!(
+		r#"{{"schema_version":1,"feed_id":"{FEED}","test_only":true,"keys":[]}}"#
+	))
+	.unwrap();
 	let config = EngineConfig {
 		secrets: Some(Arc::new(MemorySecret::default())),
+		releases: ReleaseConfig {
+			feed_id: FEED.into(),
+			registry: Arc::new(no_keys),
+			..ReleaseConfig::production()
+		},
 		..EngineConfig::production()
 	};
 	let engine = Engine::open_with(&DataDirectory::at(directory.path().join("data")), config)

@@ -1,5 +1,13 @@
 {
 	"schema_version": 1,
 	"feed_id": "wiki.remade.launcher-catalog",
-	"keys": []
+	"keys": [
+		{
+			"key_id": "remade-catalog-2026",
+			"algorithm": "ed25519",
+            "role": "catalog",
+			"status": "active",
+			"public_key": "asYzYD0jtZ0evfixPhml4kKQN74zaC28TvDvuftPXAM="
+		}
+	]
 }

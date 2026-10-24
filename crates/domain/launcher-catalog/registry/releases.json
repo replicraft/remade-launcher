@@ -1,5 +1,13 @@
 {
 	"schema_version": 1,
 	"feed_id": "wiki.remade.launcher-releases",
-	"keys": []
+	"keys": [
+		{
+			"key_id": "remade-updater-2026",
+			"algorithm": "ed25519",
+            "role": "updater",
+			"status": "active",
+			"public_key": "6ZMCrD+5wCHG1e0Sw9NMrqP5fOLCawbS0OtKKM57vJQ="
+		}
+	]
 }

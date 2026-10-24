@@ -111,7 +111,20 @@ async fn status(ctx: &Ctx, engine: &Engine) -> ExitStatus {
 	ExitStatus::Success
 }
 
+fn offline(ctx: &Ctx) -> ExitStatus {
+	refuse(
+		ctx,
+		"OFFLINE",
+		ExitStatus::Network,
+		"Looking for a new launcher needs the network.",
+	)
+}
+
 async fn check(ctx: &Ctx, engine: &Engine) -> Result<ExitStatus, CliError> {
+	if ctx.offline {
+		return Ok(offline(ctx));
+	}
+
 	let outcome = engine.check_launcher_update(false).await?;
 
 	match outcome {
@@ -178,6 +191,7 @@ async fn apply(ctx: &Arc<Ctx>, engine: &Engine, yes: bool) -> Result<ExitStatus,
 	// A launcher downloaded earlier needs no second download.
 	let version = match report.staged {
 		Some(staged) => staged.version,
+		None if ctx.offline => return Ok(offline(ctx)),
 		None => match engine.check_launcher_update(false).await? {
 			LauncherCheck::Available(release) => {
 				if !prompt::confirm(

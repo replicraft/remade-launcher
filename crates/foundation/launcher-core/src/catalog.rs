@@ -663,8 +663,15 @@ mod tests {
 				.await
 				.unwrap(),
 		);
+		let no_keys = launcher_catalog::KeyRegistry::from_test_fixture(
+			r#"{"schema_version":1,"feed_id":"test.feed","test_only":true,"keys":[]}"#,
+		)
+		.unwrap();
 		let service = CatalogService::new(
-			CatalogConfig::production(),
+			CatalogConfig {
+				registry: Arc::new(no_keys),
+				..CatalogConfig::production()
+			},
 			database,
 			HttpClient::new().unwrap(),
 		);

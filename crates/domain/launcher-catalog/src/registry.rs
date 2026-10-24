@@ -240,11 +240,18 @@ mod tests {
 	}
 
 	#[test]
-	fn the_release_registry_loads_and_lists_no_keys_yet() {
+	fn the_release_registry_loads_with_its_own_key() {
 		let registry = KeyRegistry::production_releases();
 
 		assert_eq!(registry.feed_id(), "wiki.remade.launcher-releases");
-		assert_eq!(registry.active_key_count(), 0);
+		assert!(registry.active_key_count() >= 1);
+		assert!(
+			registry
+				.active_key_ids()
+				.iter()
+				.all(|id| !KeyRegistry::production().active_key_ids().contains(id)),
+			"the release keys and the catalog keys are different keys"
+		);
 	}
 
 	#[test]

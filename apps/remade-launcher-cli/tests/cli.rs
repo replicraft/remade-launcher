@@ -144,13 +144,13 @@ fn json_results_are_one_versioned_object() {
 
 #[test]
 fn json_errors_are_one_typed_object_and_humans_get_stderr() {
-	let (code, value, stderr) = run().json(&["search", "editor"]);
+	let (code, value, stderr) = run().json(&["--offline", "search", "editor"]);
 
-	assert_eq!(code, 6, "no trusted keys is a trust failure");
+	assert_eq!(code, 5, "nothing saved and no network is a network failure");
 	assert_eq!(value["ok"], false);
-	assert_eq!(value["error"]["code"], "CATALOG_KEYS_NOT_CONFIGURED");
-	assert_eq!(value["error"]["exit_status"], 6);
-	assert!(stderr.contains("no catalog signing keys"), "{stderr}");
+	assert_eq!(value["error"]["code"], "CATALOG_UNAVAILABLE_OFFLINE");
+	assert_eq!(value["error"]["exit_status"], 5);
+	assert!(stderr.contains("error:"), "{stderr}");
 	assert!(value.get("data").is_none(), "an error carries no results");
 }
 
@@ -431,37 +431,37 @@ fn settings_can_be_read_and_changed_through_config() {
 }
 
 #[test]
-fn this_build_has_no_release_key_so_the_launcher_does_not_update_itself() {
+fn looking_for_a_new_launcher_needs_the_network() {
 	let run = run();
 
-	let (code, value, _) = run.json(&["self-update", "check"]);
-	assert_eq!(
-		(code, value["error"]["code"].as_str()),
-		(4, Some("SELF_UPDATE_UNAVAILABLE"))
-	);
-
 	for action in [
-		&["self-update", "apply", "--yes"][..],
-		&["self-update", "rollback", "--yes"],
+		&["--offline", "self-update", "check"][..],
+		&["--offline", "self-update", "apply", "--yes"],
 	] {
 		let (code, value, _) = run.json(action);
 		assert_eq!(
 			(code, value["error"]["code"].as_str()),
-			(4, Some("SELF_UPDATE_UNAVAILABLE")),
+			(5, Some("OFFLINE")),
 			"{action:?}"
 		);
 	}
 
-	let (code, value, _) = run.json(&["self-update", "status"]);
+	let (code, value, _) = run.json(&["self-update", "rollback", "--yes"]);
+	assert_eq!(
+		(code, value["error"]["code"].as_str()),
+		(4, Some("SELF_UPDATE_UNAVAILABLE")),
+		"there is nothing to go back to"
+	);
+}
+
+#[test]
+fn the_launcher_update_status_works_offline_and_shows_the_setting() {
+	let (code, value, _) = run().json(&["self-update", "status"]);
+
 	assert_eq!(code, 0);
 	assert_eq!(value["data"]["mode"], "automatic");
 	assert_eq!(value["data"]["available"], serde_json::Value::Null);
 	assert_eq!(value["data"]["can_roll_back"], false);
-	assert!(
-		value["data"]["unavailable_reason"]
-			.as_str()
-			.is_some_and(|reason| reason.contains("release key"))
-	);
 }
 
 #[test]
@@ -495,12 +495,17 @@ fn the_launchers_own_updates_are_a_setting_apart_from_app_updates() {
 }
 
 #[test]
-fn trust_status_lists_no_keys_in_this_build() {
+fn trust_status_lists_the_catalog_keys_this_build_trusts() {
 	let (code, value, _) = run().json(&["trust", "status"]);
 
 	assert_eq!(code, 0);
 	assert_eq!(value["data"]["feed_id"], "wiki.remade.launcher-catalog");
-	assert_eq!(value["data"]["trusted_key_ids"], serde_json::json!([]));
+	assert!(
+		value["data"]["trusted_key_ids"]
+			.as_array()
+			.is_some_and(|keys| !keys.is_empty() && keys.iter().all(Value::is_string)),
+		"the official catalog key is compiled in"
+	);
 }
 
 #[test]
