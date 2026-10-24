@@ -10,20 +10,15 @@ one shared engine.
 ## Status
 
 Early development. The engine, desktop app, and CLI work end to end against
-test fixtures. Two things stand between this and a public release:
+test fixtures. The catalog and launcher-release signing keys are compiled in.
+What stands between this and a public release:
 
-- **The official catalog keys.** The build trusts no catalog signing keys yet,
-  so it will not accept any catalog from the network. That is deliberate: the
-  keys belong to the Remade website's publisher and are added to
-  [`crates/domain/launcher-catalog/registry/production.json`](crates/domain/launcher-catalog/registry/production.json)
-  once they exist.
-- **The launcher release key.** Updates to the launcher itself are signed with
-  a key of their own, kept apart from the catalog keys. The build trusts none
-  yet, so it checks nothing and installs nothing until one is added to
-  [`crates/domain/launcher-catalog/registry/releases.json`](crates/domain/launcher-catalog/registry/releases.json).
+- **A first real run.** The release workflows (`build.yml`, `release-feed.yml`)
+  have not run on a runner yet, and the website's catalog has not been
+  published and signed. See [`packaging/README.md`](packaging/README.md).
 - **Evidence on every platform.** Everything is tested on macOS. Windows,
   Linux, and FreeBSD builds, runtime tests, and package builds are written but
-  have not been run. See [`packaging/README.md`](packaging/README.md).
+  have not been run.
 
 ## Automatic updates
 
