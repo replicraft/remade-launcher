@@ -24,8 +24,7 @@ rust-version = "1.99"
 publish = false
 homepage = "https://remade.wiki"
 repository = "https://github.com/PixelSoftwareStudios/remade-launcher"
-# The code license is an owner decision that has not been made yet.
-# Add `license` here once it has.
+license = "MIT"
 
 # ---------------------------------------------------------------------------
 # Dependencies

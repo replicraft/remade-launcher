@@ -4,7 +4,7 @@
 	<name>Remade Launcher</name>
 	<summary>The official launcher for unofficial apps.</summary>
 	<metadata_license>CC0-1.0</metadata_license>
-	<!-- TODO(owner): add <project_license> once the code license is chosen. -->
+	<project_license>MIT</project_license>
 	<launchable type="desktop-id">wiki.remade.Launcher.desktop</launchable>
 	<url type="homepage">https://remade.wiki</url>
 	<description>
