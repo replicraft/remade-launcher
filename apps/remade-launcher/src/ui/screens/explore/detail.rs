@@ -175,11 +175,22 @@ fn page(ui: &mut Ui, facts: &Facts<'_>) -> Option<Action> {
 
 			let label = format!("{}  Install", icons::DOWNLOAD);
 
-			if quiet_button(ui, &label, installable, vec2(140.0, 38.0)).clicked() {
-				action = Some(Action::Install {
-					slug: facts.slug.to_owned(),
-				});
-			}
+			ui.horizontal(|ui| {
+				if quiet_button(ui, &label, installable, vec2(140.0, 38.0)).clicked() {
+					action = Some(Action::Install {
+						slug: facts.slug.to_owned(),
+					});
+				}
+
+				let report = format!("{}  Report entry", icons::FLAG);
+
+				if quiet_button(ui, &report, true, vec2(160.0, 38.0))
+					.on_hover_text("Tell us if something about this entry is wrong")
+					.clicked()
+				{
+					ui.ctx().open_url(egui::OpenUrl::new_tab(report_url(facts)));
+				}
+			});
 
 			ui.add_space(24.0);
 		});
@@ -390,5 +401,60 @@ pub(super) fn availability_text(availability: &Availability) -> String {
 			)
 		}
 		Availability::NoPackages => "No managed package yet.".into(),
+	}
+}
+
+/// The launcher's issue form, with the entry named in the title so a report
+/// says which listing it is about. Only public catalog facts are included.
+fn report_url(facts: &Facts<'_>) -> String {
+	let base = format!("{}/issues/new", env!("CARGO_PKG_REPOSITORY"));
+
+	match launcher_net::Url::parse(&base) {
+		Ok(mut url) => {
+			url.query_pairs_mut().append_pair(
+				"title",
+				&format!("Catalog entry: {} ({})", facts.name, facts.slug),
+			);
+
+			url.into()
+		}
+		Err(_) => base,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn the_report_link_goes_to_the_launcher_issue_form_and_names_the_entry() {
+		let facts = Facts {
+			slug: "lumen-notes",
+			name: "Lumen & Notes",
+			summary: "",
+			kind: "Desktop app",
+			source: String::new(),
+			categories: &[],
+			maturity: None,
+			languages: &[],
+			platforms: Vec::new(),
+			license: None,
+			links: Vec::new(),
+			packages: Vec::new(),
+			hold: None,
+			availability: None,
+			active: true,
+		};
+		let link = report_url(&facts);
+
+		assert!(
+			link.starts_with("https://github.com/replicraft/remade-launcher/issues/new?title="),
+			"{link}"
+		);
+		assert!(link.contains("lumen-notes"), "{link}");
+		assert!(
+			!link.contains("Lumen & Notes"),
+			"the title must be escaped: {link}"
+		);
 	}
 }

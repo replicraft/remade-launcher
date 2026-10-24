@@ -17,6 +17,7 @@ launcher-background.workspace = true
 launcher-catalog.workspace = true
 launcher-core.workspace = true
 launcher-model.workspace = true
+launcher-net.workspace = true
 launcher-resolver.workspace = true
 launcher-storage.workspace = true
 mimalloc.workspace = true

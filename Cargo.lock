@@ -3728,6 +3728,7 @@ dependencies = [
  "launcher-catalog",
  "launcher-core",
  "launcher-model",
+ "launcher-net",
  "launcher-resolver",
  "launcher-storage",
  "mimalloc",
