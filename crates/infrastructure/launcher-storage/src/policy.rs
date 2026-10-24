@@ -147,6 +147,19 @@ impl Database {
 			.map_err(unavailable)
 	}
 
+	/// Forgets every app's own update preferences, so each follows the global
+	/// settings again. Pins go with them.
+	pub async fn clear_app_policies(&self) -> Result<(), LauncherError> {
+		self.writer()
+			.call(|connection| -> DbResult<()> {
+				connection.execute("DELETE FROM app_update_policy", [])?;
+
+				Ok(())
+			})
+			.await
+			.map_err(unavailable)
+	}
+
 	/// Records that `asset` was seen at `now` and returns where its
 	/// minimum-age clock starts.
 	///

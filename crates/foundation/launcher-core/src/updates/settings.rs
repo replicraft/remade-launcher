@@ -1,7 +1,8 @@
 //! Global and per-app update settings.
 
 use launcher_model::{
-	CONSENT_POLICY_VERSION, ErrorCode, InstallationId, LauncherError, MinimumAge, UpdateMode,
+	CONSENT_POLICY_VERSION, ErrorCode, InstallationId, LauncherError, MinimumAge, ThemePreference,
+	UpdateMode,
 };
 use launcher_storage::{AppPolicy, ConsentRecord};
 
@@ -95,6 +96,26 @@ impl Engine {
 			.await
 	}
 
+	/// Puts appearance and update preferences back to what a new install has.
+	/// Installed apps and downloaded files are not touched.
+	///
+	/// A background updater registered with the system is the caller's to
+	/// remove first, since this crate does not talk to the operating system.
+	pub async fn restore_defaults(&self) -> Result<(), LauncherError> {
+		self.set_update_mode(
+			UpdateMode::Manual,
+			&ModeConsent {
+				actor: "restore-defaults".into(),
+				acknowledged_risks: false,
+			},
+		)
+		.await?;
+		self.set_minimum_age(MinimumAge::default()).await?;
+		self.database.clear_app_policies().await?;
+
+		self.set_theme(ThemePreference::default()).await
+	}
+
 	pub async fn app_update_policy(
 		&self,
 		installation: InstallationId,
@@ -185,6 +206,29 @@ mod tests {
 
 		assert_eq!(settings.mode, UpdateMode::Manual);
 		assert_eq!(settings.minimum_age.seconds(), 3_600);
+	}
+
+	#[tokio::test]
+	async fn restoring_defaults_resets_preferences_and_leaves_apps_alone() {
+		let (_directory, engine) = engine().await;
+
+		engine
+			.set_update_mode(UpdateMode::OnLaunch, &yes())
+			.await
+			.unwrap();
+		engine
+			.set_minimum_age(MinimumAge::from_seconds(86_400).unwrap())
+			.await
+			.unwrap();
+		engine.set_theme(ThemePreference::Dark).await.unwrap();
+
+		engine.restore_defaults().await.unwrap();
+
+		let settings = engine.update_settings().await;
+
+		assert_eq!(settings.mode, UpdateMode::Manual);
+		assert_eq!(settings.minimum_age, MinimumAge::default());
+		assert_eq!(engine.theme().await, ThemePreference::default());
 	}
 
 	#[tokio::test]
