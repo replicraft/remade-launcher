@@ -4,6 +4,8 @@ use launcher_catalog::{KeyRegistry, SUPPORTED_CAPABILITIES};
 use launcher_model::product;
 use launcher_net::Url;
 
+use crate::lifecycle::ArtifactSource;
+
 /// Where the catalog lives and which keys may sign it.
 #[derive(Clone)]
 pub struct CatalogConfig {
@@ -35,12 +37,16 @@ impl CatalogConfig {
 #[derive(Clone)]
 pub struct EngineConfig {
 	pub catalog: CatalogConfig,
+	/// Where artifact bytes come from. `None` downloads over HTTPS; tests
+	/// supply local files.
+	pub artifacts: Option<Arc<dyn ArtifactSource>>,
 }
 
 impl EngineConfig {
 	pub fn production() -> Self {
 		Self {
 			catalog: CatalogConfig::production(),
+			artifacts: None,
 		}
 	}
 }

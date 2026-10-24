@@ -9,7 +9,12 @@ use crate::catalog::CatalogService;
 use crate::config::EngineConfig;
 use crate::events::{EngineEvent, EventBus};
 use crate::explore::{self, ExploreQuery, ExploreRow};
+use crate::lifecycle::{HttpArtifacts, InstalledApp, LifecycleService};
 use crate::paths::DataDirectory;
+
+pub(crate) fn now_unix() -> i64 {
+	time::OffsetDateTime::now_utc().unix_timestamp()
+}
 
 const THEME_KEY: &str = "theme";
 
@@ -18,10 +23,11 @@ const THEME_KEY: &str = "theme";
 /// Share it behind an `Arc`. Every method is async and none block, so it is
 /// safe to call from a task spawned by the interface.
 pub struct Engine {
-	database: Arc<Database>,
-	http: HttpClient,
+	pub(crate) database: Arc<Database>,
+	pub(crate) http: HttpClient,
 	catalog: CatalogService,
-	events: EventBus,
+	lifecycle: LifecycleService,
+	pub(crate) events: EventBus,
 }
 
 impl Engine {
@@ -44,12 +50,46 @@ impl Engine {
 
 		catalog.load_cached().await;
 
+		let events = EventBus::new();
+		let artifacts = config
+			.artifacts
+			.unwrap_or_else(|| Arc::new(HttpArtifacts(http.clone())));
+		let lifecycle = LifecycleService::new(
+			data.clone(),
+			Arc::clone(&database),
+			artifacts,
+			events.clone(),
+		);
+
+		// A crash can leave half-finished work. Settle it before anything new
+		// starts, so the first screen reflects the real state.
+		match lifecycle.recover(now_unix()).await {
+			Ok(report) => tracing::info!(?report, "startup recovery finished"),
+			Err(error) => tracing::warn!(%error, "startup recovery could not run"),
+		}
+
 		Ok(Self {
 			database,
 			http,
 			catalog,
-			events: EventBus::new(),
+			lifecycle,
+			events,
 		})
+	}
+
+	/// Everything installed, by name.
+	pub async fn installed(&self) -> Result<Vec<InstalledApp>, LauncherError> {
+		Ok(self
+			.database
+			.installations()
+			.await?
+			.into_iter()
+			.map(InstalledApp::from)
+			.collect())
+	}
+
+	pub fn lifecycle(&self) -> &LifecycleService {
+		&self.lifecycle
 	}
 
 	pub fn catalog(&self) -> &CatalogService {
@@ -102,6 +142,7 @@ impl Engine {
 	/// Flushes and closes storage. Call once, when the app is quitting.
 	pub async fn shutdown(self) {
 		drop(self.catalog);
+		drop(self.lifecycle);
 
 		if let Some(database) = Arc::into_inner(self.database) {
 			database.close().await;

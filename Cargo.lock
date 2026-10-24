@@ -2166,16 +2166,25 @@ name = "launcher-core"
 version = "0.1.0"
 dependencies = [
  "directories",
+ "flate2",
+ "hex",
  "launcher-catalog",
  "launcher-model",
  "launcher-net",
+ "launcher-packages",
+ "launcher-providers",
+ "launcher-resolver",
  "launcher-storage",
  "rayon",
+ "serde",
  "serde_json",
+ "sha2",
+ "tar",
  "tempfile",
  "time",
  "tokio",
  "tracing",
+ "zip",
 ]
 
 [[package]]

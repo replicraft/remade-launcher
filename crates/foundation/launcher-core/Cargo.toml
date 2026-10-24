@@ -11,13 +11,23 @@ directories.workspace = true
 launcher-catalog.workspace = true
 launcher-model.workspace = true
 launcher-net.workspace = true
+launcher-packages.workspace = true
+launcher-providers.workspace = true
+launcher-resolver.workspace = true
 launcher-storage.workspace = true
+hex.workspace = true
 rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 time.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+flate2.workspace = true
+tar.workspace = true
+zip.workspace = true
 launcher-catalog = { workspace = true, features = ["test-keys"] }
 serde_json.workspace = true
 tempfile.workspace = true

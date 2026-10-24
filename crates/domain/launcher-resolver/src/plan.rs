@@ -139,8 +139,9 @@ impl Plan {
 		})
 	}
 
-	/// A curated install of `candidate`.
-	pub fn curated(
+	/// A plan for `candidate`, from whichever authority `origin` names.
+	pub fn for_candidate(
+		operation: Operation,
 		origin: Origin,
 		source: SourceBinding,
 		candidate: &Candidate,
@@ -149,7 +150,7 @@ impl Plan {
 	) -> Result<Self, PlanError> {
 		Self::seal(PlanBody {
 			schema_version: PLAN_SCHEMA_VERSION,
-			operation: Operation::Install,
+			operation,
 			origin,
 			source,
 			release: ReleaseBinding {

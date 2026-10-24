@@ -39,6 +39,9 @@ pub use verify::{
 	Change, FreshnessPolicy, HighWater, Verification as VerifyOutcome, VerifyContext, verify,
 };
 
-/// Capabilities this build can execute. Nothing installs yet, so the list is
-/// empty: variants that need a capability are shown as unavailable.
-pub const SUPPORTED_CAPABILITIES: &[&str] = &[];
+/// Capabilities this build can execute. Variants that need anything else are
+/// shown as unavailable rather than half-supported.
+///
+/// `safe-archive-v1` is the bounded zip and tar.gz inspection and extraction
+/// in `launcher-packages`.
+pub const SUPPORTED_CAPABILITIES: &[&str] = &["safe-archive-v1"];

@@ -5,20 +5,20 @@
 //! immutable, hashed record that a user approves, so what they approved is
 //! exactly what later executes.
 
-mod heuristics;
+pub mod heuristics;
 mod matching;
 mod plan;
 mod resolve;
 mod version;
 
-pub use heuristics::{Guess, classify_asset, custom_candidates};
+pub use heuristics::{CustomOption, Fit, Guess, classify_asset, custom_candidates};
 pub use matching::Matcher;
 pub use plan::{
 	ApprovedPlan, AssetBinding, Consent, EvidenceLevel, InstallBinding, Operation, Origin, Plan,
 	PlanBody, PlanError, ReleaseBinding, SourceBinding,
 };
 pub use resolve::{
-	AssetRef, Candidate, NoCompatible, Outcome, ReleaseRef, Resolution, SkippedRelease,
+	AssetRef, Candidate, NoCompatible, OrderBasis, Outcome, ReleaseRef, Resolution, SkippedRelease,
 	resolve_curated,
 };
 pub use version::{Version, VersionOrder};

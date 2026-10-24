@@ -8,11 +8,21 @@ mod config;
 mod engine;
 mod events;
 mod explore;
+mod lifecycle;
 mod paths;
+mod prepare;
+
+#[cfg(test)]
+mod flow_tests;
 
 pub use catalog::{CatalogService, CatalogState, Origin, Problem, ProblemKind};
 pub use config::{CatalogConfig, EngineConfig};
 pub use engine::Engine;
-pub use events::EngineEvent;
+pub use events::{EngineEvent, OperationEvent, Stage};
 pub use explore::{Availability, ExploreQuery, ExploreRow};
+pub use lifecycle::{
+	ArtifactSource, HttpArtifacts, InstallMeta, InstalledApp, LifecycleService, RecoveryReport,
+	RemovalReport,
+};
 pub use paths::DataDirectory;
+pub use prepare::{CustomPreparation, Preparation, Ready, custom_plan};
