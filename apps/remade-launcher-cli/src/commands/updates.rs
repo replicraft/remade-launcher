@@ -113,30 +113,17 @@ async fn mode_set(
 		return Err(CliError::approval("Cancelled. The mode was not changed."));
 	}
 
-	// The daemon needs an operating-system login registration. Do that first,
-	// so the saved mode never claims something that is not true.
-	if mode == UpdateMode::Daemon {
-		crate::background::register(engine).await?;
-	}
-
 	let previous = engine.update_settings().await.mode;
 	let consent = ModeConsent {
 		actor: "cli".into(),
 		acknowledged_risks: acknowledged,
 	};
 
-	if let Err(error) = engine.set_update_mode(mode, &consent).await {
-		if mode == UpdateMode::Daemon {
-			let _ = crate::background::unregister(engine).await;
-		}
-
-		return Err(error.into());
-	}
-
-	// Leaving the daemon mode removes its registration too.
-	if previous == UpdateMode::Daemon && mode != UpdateMode::Daemon {
-		crate::background::unregister(engine).await?;
-	}
+	// For the background mode this registers the login item first, so the
+	// saved mode never claims something the system has not done.
+	launcher_background::control::apply_mode(engine, mode, &consent, None)
+		.await
+		.map_err(crate::background::cli_error)?;
 
 	if ctx.machine() {
 		ctx.emit(json!({ "update_mode": mode.as_str(), "previous": previous.as_str(), "started_an_update": false }));

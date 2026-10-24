@@ -9,6 +9,7 @@
 //! share: registering and unregistering the login item on each operating
 //! system, the local protocol, and the scheduling rules.
 
+pub mod control;
 pub mod ipc;
 pub mod paths;
 pub mod registration;
