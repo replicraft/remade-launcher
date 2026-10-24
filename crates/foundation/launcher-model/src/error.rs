@@ -1,0 +1,162 @@
+//! The error taxonomy.
+//!
+//! Every error carries a stable machine-readable code, a category, a retry
+//! hint, and a message that is safe to show to a user. Raw causes stay in the
+//! source chain for diagnostics and must be redacted before they are shown or
+//! exported.
+
+use std::error::Error as StdError;
+
+use serde::{Deserialize, Serialize};
+
+pub type Result<T, E = LauncherError> = std::result::Result<T, E>;
+
+/// Broad families of failure, each with its own recovery story.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ErrorCategory {
+	Network,
+	Trust,
+	Compatibility,
+	Ambiguity,
+	LocalOwnership,
+	Resource,
+	Privilege,
+	NativeInstaller,
+	Recovery,
+	Storage,
+	Internal,
+}
+
+/// Whether trying again can help.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Retry {
+	/// Retrying will not change the outcome.
+	Never,
+	/// Retry after a delay, for example a timeout or a rate limit.
+	Later,
+	/// Retry once the user has changed something, such as freeing disk space.
+	AfterUserAction,
+}
+
+/// Stable identifiers for specific failures. Localized text is keyed off
+/// these, so existing variants must never be renamed or reused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ErrorCode {
+	NetworkRequestFailed,
+	NetworkResponseTooLarge,
+	StorageUnavailable,
+	StorageMigrationFailed,
+	StorageNewerThanApp,
+	InternalInvariant,
+}
+
+impl ErrorCode {
+	/// The stable string form used in logs and diagnostics.
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::NetworkRequestFailed => "network.request_failed",
+			Self::NetworkResponseTooLarge => "network.response_too_large",
+			Self::StorageUnavailable => "storage.unavailable",
+			Self::StorageMigrationFailed => "storage.migration_failed",
+			Self::StorageNewerThanApp => "storage.newer_than_app",
+			Self::InternalInvariant => "internal.invariant",
+		}
+	}
+
+	pub const fn category(self) -> ErrorCategory {
+		match self {
+			Self::NetworkRequestFailed | Self::NetworkResponseTooLarge => ErrorCategory::Network,
+			Self::StorageUnavailable | Self::StorageMigrationFailed | Self::StorageNewerThanApp => {
+				ErrorCategory::Storage
+			}
+			Self::InternalInvariant => ErrorCategory::Internal,
+		}
+	}
+
+	pub const fn retry(self) -> Retry {
+		match self {
+			Self::NetworkRequestFailed => Retry::Later,
+			Self::NetworkResponseTooLarge | Self::StorageMigrationFailed => Retry::Never,
+			Self::StorageUnavailable | Self::StorageNewerThanApp => Retry::AfterUserAction,
+			Self::InternalInvariant => Retry::Never,
+		}
+	}
+}
+
+/// An error with a stable code and a user-safe message.
+#[derive(Debug, thiserror::Error)]
+#[error("{code}: {message}", code = .code.as_str())]
+pub struct LauncherError {
+	code: ErrorCode,
+	message: String,
+	#[source]
+	source: Option<Box<dyn StdError + Send + Sync>>,
+}
+
+impl LauncherError {
+	/// Creates an error. `message` must be safe to show to a user: no paths,
+	/// tokens, or raw upstream text.
+	pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
+		Self {
+			code,
+			message: message.into(),
+			source: None,
+		}
+	}
+
+	/// Attaches the underlying cause for diagnostics.
+	pub fn with_source(mut self, source: impl StdError + Send + Sync + 'static) -> Self {
+		self.source = Some(Box::new(source));
+		self
+	}
+
+	pub fn code(&self) -> ErrorCode {
+		self.code
+	}
+
+	pub fn category(&self) -> ErrorCategory {
+		self.code.category()
+	}
+
+	pub fn retry(&self) -> Retry {
+		self.code.retry()
+	}
+
+	/// The message that is safe to show in the interface.
+	pub fn user_message(&self) -> &str {
+		&self.message
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn exposes_code_category_and_retry() {
+		let error = LauncherError::new(
+			ErrorCode::NetworkRequestFailed,
+			"The server did not answer.",
+		);
+
+		assert_eq!(error.category(), ErrorCategory::Network);
+		assert_eq!(error.retry(), Retry::Later);
+		assert_eq!(
+			error.to_string(),
+			"network.request_failed: The server did not answer."
+		);
+	}
+
+	#[test]
+	fn keeps_the_cause_out_of_the_user_message() {
+		let cause = std::io::Error::other("/Users/someone/secret/path");
+		let error = LauncherError::new(
+			ErrorCode::StorageUnavailable,
+			"Storage could not be opened.",
+		)
+		.with_source(cause);
+
+		assert!(!error.user_message().contains("secret"));
+		assert!(std::error::Error::source(&error).is_some());
+	}
+}
