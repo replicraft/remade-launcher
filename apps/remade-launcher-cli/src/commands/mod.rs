@@ -7,6 +7,7 @@ mod daemon;
 mod installed;
 mod lifecycle;
 mod misc;
+mod self_update;
 mod shared;
 mod updates;
 
@@ -125,7 +126,7 @@ pub(crate) async fn dispatch(
 		Command::Updates { action } => updates::run(ctx, engine, action).await,
 		Command::Daemon { action } => daemon::run(ctx, engine, action).await,
 		Command::Config { action } => misc::config(ctx, engine, action).await,
-		Command::SelfUpdate { action } => Ok(misc::self_update(ctx, action)),
+		Command::SelfUpdate { action } => self_update::run(ctx, engine, action).await,
 		Command::Cache { action } => misc::cache(ctx, engine, action).await,
 		Command::Completions { shell } => Ok(misc::completions(*shell)),
 		Command::About => Ok(misc::about(ctx, engine)),

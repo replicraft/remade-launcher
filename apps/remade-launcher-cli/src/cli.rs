@@ -649,9 +649,22 @@ pub(crate) enum ConfigAction {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum SelfUpdateAction {
-	Check,
-	Apply,
+	/// What is known about the launcher's own updates, without going online.
 	Status,
+	/// Look for a newer launcher. Nothing is downloaded.
+	Check,
+	/// Download a newer launcher, check it, and switch to it.
+	Apply {
+		/// Approve without asking.
+		#[arg(short, long)]
+		yes: bool,
+	},
+	/// Go back to the launcher that was running before the last switch.
+	Rollback {
+		/// Approve without asking.
+		#[arg(short, long)]
+		yes: bool,
+	},
 }
 
 #[derive(Debug, Subcommand)]

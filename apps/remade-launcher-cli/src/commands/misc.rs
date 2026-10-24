@@ -11,11 +11,11 @@ use launcher_model::{
 };
 use serde_json::json;
 
-use crate::cli::{CacheAction, Cli, ConfigAction, SelfUpdateAction};
+use crate::cli::{CacheAction, Cli, ConfigAction};
 use crate::context::Ctx;
 use crate::errors::CliError;
 use crate::exit::ExitStatus;
-use crate::output::{bytes, refuse};
+use crate::output::bytes;
 
 /// Every setting `config` knows, as `(key, value, what it accepts)`.
 fn setting_entries(
@@ -94,6 +94,11 @@ fn setting_entries(
 			"on or off",
 		),
 		(
+			"launcher.updates",
+			prefs.launcher_updates.as_str().to_owned(),
+			"automatic, notify, or off. Apart from the app update mode",
+		),
+		(
 			"network.proxy",
 			match &prefs.network.proxy {
 				Proxy::System => "system".to_owned(),
@@ -167,6 +172,11 @@ fn change_preference(prefs: &mut Preferences, key: &str, value: &str) -> Result<
 				"last_used" | "last-used" => StartPage::LastUsed,
 				_ => return Err(wrong("auto, library, explore, or last_used")),
 			};
+		}
+		"launcher.updates" => {
+			prefs.launcher_updates = value
+				.parse()
+				.map_err(|()| wrong("automatic, notify, or off"))?;
 		}
 		"notifications.updates" => prefs.notifications.updates_available = parse_switch(value)?,
 		"notifications.installs" => prefs.notifications.install_finished = parse_switch(value)?,
@@ -316,31 +326,6 @@ pub(crate) fn about(ctx: &Ctx, engine: &Arc<Engine>) -> ExitStatus {
 	}
 
 	ExitStatus::Success
-}
-
-pub(crate) fn self_update(ctx: &Ctx, action: &SelfUpdateAction) -> ExitStatus {
-	let reason = "Launcher updates come through a separate signed pipeline that is not available yet. Install a newer launcher from the project's releases page.";
-
-	match action {
-		SelfUpdateAction::Status => {
-			if ctx.machine() {
-				ctx.emit(
-					json!({ "available": false, "reason": reason, "current_version": product::VERSION }),
-				);
-			} else {
-				println!("{} {}", product::NAME, product::VERSION);
-				println!("{reason}");
-			}
-
-			ExitStatus::Success
-		}
-		SelfUpdateAction::Check | SelfUpdateAction::Apply => refuse(
-			ctx,
-			"SELF_UPDATE_UNAVAILABLE",
-			ExitStatus::Unsupported,
-			reason,
-		),
-	}
 }
 
 pub(crate) async fn cache(

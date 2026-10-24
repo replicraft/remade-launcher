@@ -25,7 +25,7 @@ use crate::context::Ctx;
 use crate::errors::CliError;
 use crate::exit::ExitStatus;
 use crate::output::{bytes, iso, refuse, when};
-use crate::progress::Printer;
+use crate::progress::{DownloadProgress, Printer};
 use crate::prompt;
 
 // ---------------------------------------------------------------------------
@@ -655,44 +655,14 @@ pub(crate) async fn download(
 
 	print_review(ctx, &ready);
 
-	let bar = indicatif::ProgressBar::hidden();
-
-	if ctx.format == crate::context::Format::Text
-		&& !ctx.quiet
-		&& !ctx.no_progress
-		&& std::io::stderr().is_terminal()
-	{
-		bar.set_draw_target(indicatif::ProgressDrawTarget::stderr());
-		bar.set_style(
-			indicatif::ProgressStyle::with_template("Downloading [{bar:30}] {bytes}/{total_bytes}")
-				.unwrap_or_else(|_| indicatif::ProgressStyle::default_bar())
-				.progress_chars("=> "),
-		);
-	}
-
-	let ndjson = ctx.format == crate::context::Format::Ndjson;
-	let mut last_percent = u64::MAX;
-	let progress_ctx = Arc::clone(ctx);
-	let progress_bar = bar.clone();
-
-	let mut progress = move |received: u64, total: Option<u64>| {
-		progress_bar.set_length(total.unwrap_or(0));
-		progress_bar.set_position(received);
-
-		let percent = total.map_or(received >> 22, |total| received * 20 / total.max(1));
-
-		if ndjson && percent != last_percent {
-			last_percent = percent;
-			progress_ctx
-				.event(json!({ "phase": "downloading", "received": received, "total": total }));
-		}
-	};
+	let download = DownloadProgress::start(ctx);
+	let mut progress = download.callback();
 
 	let saved = engine
 		.download_artifact(&ready, std::path::Path::new(&args.out), &mut progress)
 		.await;
 
-	bar.finish_and_clear();
+	download.finish();
 
 	let saved = saved?;
 

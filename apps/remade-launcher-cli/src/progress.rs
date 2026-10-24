@@ -130,6 +130,61 @@ impl Printer {
 	}
 }
 
+/// The bar and events for one plain download, such as `remade download` or a
+/// new launcher: a bar on a terminal, a line per few percent for programs.
+pub(crate) struct DownloadProgress {
+	bar: ProgressBar,
+	ctx: Arc<Ctx>,
+}
+
+impl DownloadProgress {
+	pub(crate) fn start(ctx: &Arc<Ctx>) -> Self {
+		let bar = ProgressBar::hidden();
+
+		if ctx.format == Format::Text
+			&& !ctx.quiet
+			&& !ctx.no_progress
+			&& std::io::stderr().is_terminal()
+		{
+			bar.set_draw_target(indicatif::ProgressDrawTarget::stderr());
+			bar.set_style(
+				ProgressStyle::with_template("Downloading [{bar:30}] {bytes}/{total_bytes}")
+					.unwrap_or_else(|_| ProgressStyle::default_bar())
+					.progress_chars("=> "),
+			);
+		}
+
+		Self {
+			bar,
+			ctx: Arc::clone(ctx),
+		}
+	}
+
+	/// What the engine calls as bytes arrive.
+	pub(crate) fn callback(&self) -> impl FnMut(u64, Option<u64>) + Send + use<> {
+		let bar = self.bar.clone();
+		let ctx = Arc::clone(&self.ctx);
+		let ndjson = ctx.format == Format::Ndjson;
+		let mut last_percent = u64::MAX;
+
+		move |received, total| {
+			bar.set_length(total.unwrap_or(0));
+			bar.set_position(received);
+
+			let percent = total.map_or(received >> 22, |total| received * 20 / total.max(1));
+
+			if ndjson && percent != last_percent {
+				last_percent = percent;
+				ctx.event(json!({ "phase": "downloading", "received": received, "total": total }));
+			}
+		}
+	}
+
+	pub(crate) fn finish(&self) {
+		self.bar.finish_and_clear();
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

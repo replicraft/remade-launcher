@@ -427,12 +427,12 @@ fn settings_can_be_read_and_changed_through_config() {
 			.as_array()
 			.unwrap()
 			.len(),
-		12
+		13
 	);
 }
 
 #[test]
-fn the_launcher_cannot_update_itself_yet_and_says_so() {
+fn this_build_has_no_release_key_so_the_launcher_does_not_update_itself() {
 	let run = run();
 
 	let (code, value, _) = run.json(&["self-update", "check"]);
@@ -441,11 +441,58 @@ fn the_launcher_cannot_update_itself_yet_and_says_so() {
 		(4, Some("SELF_UPDATE_UNAVAILABLE"))
 	);
 
+	for action in [
+		&["self-update", "apply", "--yes"][..],
+		&["self-update", "rollback", "--yes"],
+	] {
+		let (code, value, _) = run.json(action);
+		assert_eq!(
+			(code, value["error"]["code"].as_str()),
+			(4, Some("SELF_UPDATE_UNAVAILABLE")),
+			"{action:?}"
+		);
+	}
+
 	let (code, value, _) = run.json(&["self-update", "status"]);
-	assert_eq!(
-		(code, value["data"]["available"].as_bool()),
-		(0, Some(false))
+	assert_eq!(code, 0);
+	assert_eq!(value["data"]["mode"], "automatic");
+	assert_eq!(value["data"]["available"], serde_json::Value::Null);
+	assert_eq!(value["data"]["can_roll_back"], false);
+	assert!(
+		value["data"]["unavailable_reason"]
+			.as_str()
+			.is_some_and(|reason| reason.contains("release key"))
 	);
+}
+
+#[test]
+fn the_launchers_own_updates_are_a_setting_apart_from_app_updates() {
+	let run = run();
+
+	assert_eq!(
+		run.json(&["config", "get", "launcher.updates"]).1["data"]["value"],
+		"automatic"
+	);
+
+	let (code, _, _) = run.json(&["config", "set", "launcher.updates", "notify"]);
+	assert_eq!(code, 0);
+	assert_eq!(
+		run.json(&["config", "get", "launcher.updates"]).1["data"]["value"],
+		"notify"
+	);
+	assert_eq!(
+		run.json(&["config", "get", "update.mode"]).1["data"]["value"],
+		"manual",
+		"the app update mode did not move"
+	);
+	assert_eq!(
+		run.json(&["self-update", "status"]).1["data"]["mode"],
+		"notify"
+	);
+
+	let (code, value, _) = run.json(&["config", "set", "launcher.updates", "sometimes"]);
+	assert_eq!(code, 2);
+	assert_eq!(value["error"]["code"], "USAGE");
 }
 
 #[test]
