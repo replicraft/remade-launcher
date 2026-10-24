@@ -18,7 +18,7 @@ pub use plan::{
 	PlanBody, PlanError, ReleaseBinding, SourceBinding,
 };
 pub use resolve::{
-	AssetRef, Candidate, NoCompatible, OrderBasis, Outcome, ReleaseRef, Resolution, SkippedRelease,
-	resolve_curated, resolve_curated_on,
+	AssetRef, Candidate, NoCompatible, OrderBasis, Outcome, Recency, ReleaseRef, Resolution,
+	SkippedRelease, compare_tags, resolve_curated, resolve_curated_on,
 };
 pub use version::{Version, VersionOrder};

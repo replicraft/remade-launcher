@@ -165,6 +165,8 @@ pub fn custom_candidates(release: &Release, host: HostTarget) -> Vec<CustomOptio
 				size: asset.size,
 				download_url: asset.download_url.clone(),
 				host_sha256: asset.host_sha256.clone(),
+				created_at: asset.created_at,
+				updated_at: asset.updated_at,
 			},
 			fit: fit(guess, host),
 			managed: guess.format.is_some_and(is_managed_format),

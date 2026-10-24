@@ -21,6 +21,8 @@ pub struct ReleaseRef {
 	pub page_url: String,
 	pub prerelease: bool,
 	pub order: OrderBasis,
+	/// When the provider says the release was published, as Unix seconds.
+	pub published_at: Option<i64>,
 }
 
 /// A serializable stand-in for [`VersionOrder`].
@@ -38,6 +40,10 @@ pub struct AssetRef {
 	pub download_url: String,
 	/// The host's claimed SHA-256. Not publisher evidence.
 	pub host_sha256: Option<String>,
+	/// When the host says the file was uploaded, as Unix seconds.
+	pub created_at: Option<i64>,
+	/// When the host says it last changed, as Unix seconds.
+	pub updated_at: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -190,6 +196,44 @@ fn resolve_outcome(
 	Outcome::NoCompatible(NoCompatible::NoMatchingAsset {
 		checked: observation.releases.len(),
 	})
+}
+
+/// How a candidate release compares with the one already installed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Recency {
+	Newer,
+	Same,
+	Older,
+	/// The project's version labels have no defined order, or one of the tags
+	/// does not follow its rules, so "newer" cannot be claimed.
+	Unordered,
+}
+
+/// Orders two release tags under `project`'s own version rules.
+pub fn compare_tags(project: &Project, installed: &str, candidate: &str) -> Recency {
+	if installed == candidate {
+		return Recency::Same;
+	}
+
+	let Some(rules) = TagRules::new(project) else {
+		return Recency::Unordered;
+	};
+
+	let parse = |tag: &str| {
+		let prefix = rules.allowed_prefix(tag)?;
+
+		Version::parse_with_prefix(tag, prefix, project.release_policy.version_strategy)
+	};
+
+	match (parse(installed), parse(candidate)) {
+		(Some(old), Some(new)) => match new.compare(&old) {
+			Some(Ordering::Greater) => Recency::Newer,
+			Some(Ordering::Equal) => Recency::Same,
+			Some(Ordering::Less) => Recency::Older,
+			None => Recency::Unordered,
+		},
+		_ => Recency::Unordered,
+	}
 }
 
 fn capabilities_met(variant: &Variant, supported: &[&str]) -> bool {
@@ -383,6 +427,7 @@ fn candidate(
 			page_url: release.page_url.clone(),
 			prerelease: release.prerelease,
 			order,
+			published_at: release.published_at_unix,
 		},
 		variant_id: variant.id.clone(),
 		asset: AssetRef {
@@ -391,6 +436,8 @@ fn candidate(
 			size: asset.size,
 			download_url: asset.download_url.clone(),
 			host_sha256: asset.host_sha256.clone(),
+			created_at: asset.created_at,
+			updated_at: asset.updated_at,
 		},
 		explanation,
 		skipped_newer: skipped_newer.to_vec(),
@@ -524,6 +571,38 @@ mod tests {
 		assert_eq!(candidate.release.tag, "v1.10.0");
 		assert_eq!(candidate.asset.name, "app-1.10.0-linux-x64.tar.gz");
 		assert!(!candidate.explanation.is_empty());
+	}
+
+	#[test]
+	fn tags_compare_under_the_projects_own_rules() {
+		let project = linux_project();
+
+		assert_eq!(compare_tags(&project, "v1.9.0", "v1.10.0"), Recency::Newer);
+		assert_eq!(compare_tags(&project, "v1.10.0", "v1.9.0"), Recency::Older);
+		assert_eq!(compare_tags(&project, "v1.0.0", "v1.0.0"), Recency::Same);
+		assert_eq!(
+			compare_tags(&project, "v1.0.0", "1.0.0"),
+			Recency::Unordered,
+			"the second tag fails the include rule"
+		);
+		assert_eq!(
+			compare_tags(&project, "nightly", "v1.0.0"),
+			Recency::Unordered
+		);
+	}
+
+	#[test]
+	fn opaque_tags_are_never_called_newer() {
+		let project = project_with(
+			vec![variant("linux", "linux", "x86_64", "*.tar.gz")],
+			json!({"version_strategy": "opaque", "tag_include": ["build-*"]}),
+		);
+
+		assert_eq!(
+			compare_tags(&project, "build-1", "build-2"),
+			Recency::Unordered
+		);
+		assert_eq!(compare_tags(&project, "build-1", "build-1"), Recency::Same);
 	}
 
 	#[test]

@@ -382,6 +382,7 @@ pub fn custom_plan(
 			page_url: String::new(),
 			prerelease: preparation.prerelease,
 			order: launcher_resolver::OrderBasis::ProviderOrder,
+			published_at: None,
 		},
 		variant_id: "custom".into(),
 		asset: option.asset.clone(),
