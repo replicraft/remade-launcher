@@ -39,11 +39,14 @@ pub(crate) fn navigation(ui: &mut Ui, sidebar: Sidebar<'_>) -> NavAction {
 		ui.spacing_mut().item_spacing.y = 6.0;
 
 		if compact {
-			brand(ui, sidebar.logo, true);
+			// Everything in the strip shares one centre line.
+			ui.vertical_centered(|ui| {
+				ui.image((sidebar.logo.id(), egui::vec2(34.0, 34.0)));
 
-			if icon_button(ui, icons::SIDEBAR, "Show sidebar", 34.0).clicked() {
-				action = NavAction::ToggleCollapsed;
-			}
+				if icon_button(ui, icons::SIDEBAR, "Show sidebar", 34.0).clicked() {
+					action = NavAction::ToggleCollapsed;
+				}
+			});
 		} else {
 			ui.horizontal(|ui| {
 				brand(ui, sidebar.logo, false);
