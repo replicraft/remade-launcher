@@ -1,7 +1,6 @@
 //! Saved plans and recorded consents.
 
 use launcher_model::{ErrorCode, InstallationId, LauncherError};
-use rusqlite::OptionalExtension;
 
 use crate::Database;
 use crate::error::{DbResult, unavailable};

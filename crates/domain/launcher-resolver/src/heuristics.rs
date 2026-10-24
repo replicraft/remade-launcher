@@ -285,6 +285,8 @@ mod tests {
 			size: 1,
 			content_type: String::new(),
 			host_sha256: None,
+			created_at: None,
+			updated_at: None,
 			download_url: format!("https://github.com/o/r/releases/download/v1/{name}"),
 		}
 	}
@@ -296,6 +298,7 @@ mod tests {
 			name: None,
 			prerelease: false,
 			published_at: None,
+			published_at_unix: None,
 			notes: None,
 			page_url: String::new(),
 			assets: names

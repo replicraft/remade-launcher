@@ -168,6 +168,14 @@ impl<T: Transport> GithubProvider<T> {
 	}
 }
 
+/// GitHub's RFC 3339 timestamps as Unix seconds. Anything else is `None`,
+/// and callers treat a missing time as unknown, never as zero.
+fn unix_time(text: &str) -> Option<i64> {
+	time::OffsetDateTime::parse(text, &time::format_description::well_known::Rfc3339)
+		.ok()
+		.map(|time| time.unix_timestamp())
+}
+
 fn is_rate_limited(response: &HttpResponse) -> bool {
 	response.status == 429
 		|| response.rate_limit_remaining == Some(0)
@@ -227,6 +235,8 @@ struct RawAsset {
 	state: String,
 	digest: Option<String>,
 	browser_download_url: String,
+	created_at: Option<String>,
+	updated_at: Option<String>,
 }
 
 impl From<RawRelease> for Release {
@@ -236,6 +246,7 @@ impl From<RawRelease> for Release {
 			tag: raw.tag_name,
 			name: raw.name,
 			prerelease: raw.prerelease,
+			published_at_unix: raw.published_at.as_deref().and_then(unix_time),
 			published_at: raw.published_at,
 			notes: raw
 				.body
@@ -264,6 +275,8 @@ impl From<RawAsset> for Asset {
 				.and_then(|digest| digest.strip_prefix("sha256:").map(str::to_lowercase))
 				.filter(|hex| hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit())),
 			download_url: raw.browser_download_url,
+			created_at: raw.created_at.as_deref().and_then(unix_time),
+			updated_at: raw.updated_at.as_deref().and_then(unix_time),
 		}
 	}
 }
@@ -341,6 +354,14 @@ mod tests {
 			]}}"#,
 			digest = "AB".repeat(32)
 		)
+	}
+
+	#[test]
+	fn provider_timestamps_become_unix_seconds_or_nothing() {
+		assert_eq!(unix_time("2030-01-15T00:00:00Z"), Some(1_894_665_600));
+		assert_eq!(unix_time("2030-01-15T01:00:00+01:00"), Some(1_894_665_600));
+		assert_eq!(unix_time("yesterday"), None);
+		assert_eq!(unix_time(""), None);
 	}
 
 	#[tokio::test]

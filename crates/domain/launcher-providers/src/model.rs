@@ -26,6 +26,10 @@ pub struct Asset {
 	/// not publisher evidence.
 	pub host_sha256: Option<String>,
 	pub download_url: String,
+	/// When the host says the file was uploaded, as Unix seconds.
+	pub created_at: Option<i64>,
+	/// When the host says it last changed, as Unix seconds.
+	pub updated_at: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -35,6 +39,8 @@ pub struct Release {
 	pub name: Option<String>,
 	pub prerelease: bool,
 	pub published_at: Option<String>,
+	/// `published_at` as Unix seconds, when it parses.
+	pub published_at_unix: Option<i64>,
 	pub notes: Option<String>,
 	pub page_url: String,
 	pub assets: Vec<Asset>,

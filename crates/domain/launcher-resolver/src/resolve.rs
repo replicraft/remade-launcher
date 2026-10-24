@@ -97,7 +97,22 @@ pub fn resolve_curated(
 	host: HostTarget,
 	supported_capabilities: &[&str],
 ) -> Resolution {
-	let outcome = resolve_outcome(project, observation, host, supported_capabilities);
+	resolve_curated_on(project, observation, host, supported_capabilities, None)
+}
+
+/// Like [`resolve_curated`], with the user's own channel choice for this app.
+///
+/// A choice can only widen what a signed `stable` policy allows by opting in
+/// to prereleases. Nothing here can select a release the tag rules, pin, or
+/// platform rules exclude.
+pub fn resolve_curated_on(
+	project: &Project,
+	observation: &ReleaseObservation,
+	host: HostTarget,
+	supported_capabilities: &[&str],
+	channel: Option<Channel>,
+) -> Resolution {
+	let outcome = resolve_outcome(project, observation, host, supported_capabilities, channel);
 
 	Resolution {
 		outcome,
@@ -110,6 +125,7 @@ fn resolve_outcome(
 	observation: &ReleaseObservation,
 	host: HostTarget,
 	supported: &[&str],
+	channel: Option<Channel>,
 ) -> Outcome {
 	if project.status.state != State::Active {
 		return Outcome::Blocked(project.status.state);
@@ -138,7 +154,7 @@ fn resolve_outcome(
 		return Outcome::NoCompatible(NoCompatible::InvalidRule);
 	};
 
-	let eligible = eligible_releases(project, observation, &rules);
+	let eligible = eligible_releases(project, observation, &rules, channel);
 
 	if eligible.is_empty() {
 		return Outcome::NoCompatible(NoCompatible::NoEligibleRelease {
@@ -254,8 +270,10 @@ fn eligible_releases<'a>(
 	project: &Project,
 	observation: &'a ReleaseObservation,
 	rules: &TagRules,
+	channel: Option<Channel>,
 ) -> Vec<Eligible<'a>> {
 	let policy = &project.release_policy;
+	let channel = channel.unwrap_or(policy.channel);
 
 	let mut eligible: Vec<Eligible<'a>> = observation
 		.releases
@@ -447,6 +465,8 @@ mod tests {
 			size: 1,
 			content_type: String::new(),
 			host_sha256: None,
+			created_at: None,
+			updated_at: None,
 			download_url: format!("https://github.com/o/r/releases/download/x/{name}"),
 		}
 	}
@@ -458,6 +478,7 @@ mod tests {
 			name: None,
 			prerelease,
 			published_at: Some(format!("2030-01-{id:02}T00:00:00Z")),
+			published_at_unix: None,
 			notes: None,
 			page_url: format!("https://github.com/o/r/releases/tag/{tag}"),
 			assets: names
@@ -542,6 +563,49 @@ mod tests {
 			chosen(resolve_curated(&linux_project(), &observation, LINUX, CAPS))
 				.release
 				.tag,
+			"v1.0.0"
+		);
+	}
+
+	#[test]
+	fn a_users_prerelease_opt_in_widens_a_stable_policy_and_nothing_else() {
+		let observation = observed(
+			vec![
+				release(2, "v2.0.0-rc.1", true, &["app-2.0.0-rc.1-linux-x64.tar.gz"]),
+				release(1, "v1.0.0", false, &["app-1.0.0-linux-x64.tar.gz"]),
+			],
+			true,
+		);
+		let on = |channel| {
+			chosen(resolve_curated_on(
+				&linux_project(),
+				&observation,
+				LINUX,
+				CAPS,
+				channel,
+			))
+			.release
+			.tag
+		};
+
+		assert_eq!(on(None), "v1.0.0");
+		assert_eq!(on(Some(Channel::Stable)), "v1.0.0");
+		assert_eq!(on(Some(Channel::Beta)), "v2.0.0-rc.1");
+
+		// The tag rules still apply to a prerelease.
+		let mut project = linux_project();
+		project.release_policy.tag_exclude = vec!["*-rc.*".into()];
+
+		assert_eq!(
+			chosen(resolve_curated_on(
+				&project,
+				&observation,
+				LINUX,
+				CAPS,
+				Some(Channel::Beta)
+			))
+			.release
+			.tag,
 			"v1.0.0"
 		);
 	}

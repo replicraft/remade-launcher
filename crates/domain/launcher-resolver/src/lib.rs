@@ -19,6 +19,6 @@ pub use plan::{
 };
 pub use resolve::{
 	AssetRef, Candidate, NoCompatible, OrderBasis, Outcome, ReleaseRef, Resolution, SkippedRelease,
-	resolve_curated,
+	resolve_curated, resolve_curated_on,
 };
 pub use version::{Version, VersionOrder};
