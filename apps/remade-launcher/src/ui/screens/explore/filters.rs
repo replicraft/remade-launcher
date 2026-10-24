@@ -14,6 +14,22 @@ pub(super) enum Sort {
 }
 
 impl Sort {
+	/// The stable name saved with the person's preferences.
+	pub(super) const fn key(self) -> &'static str {
+		match self {
+			Self::NameAscending => "name",
+			Self::NameDescending => "name_desc",
+			Self::Newest => "newest",
+		}
+	}
+
+	pub(super) fn from_key(key: &str) -> Option<Self> {
+		Self::OPTIONS
+			.iter()
+			.map(|(sort, _)| *sort)
+			.find(|sort| sort.key() == key)
+	}
+
 	pub(super) const OPTIONS: [(Self, &'static str); 3] = [
 		(Self::NameAscending, "Name A–Z"),
 		(Self::NameDescending, "Name Z–A"),

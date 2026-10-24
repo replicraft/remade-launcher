@@ -11,10 +11,10 @@ use std::sync::mpsc::Sender;
 use launcher_background::control::{self, BackgroundStatus};
 use launcher_core::{
 	CatalogState, CustomPreparation, Engine, EngineEvent, ExploreQuery, ExploreRow, InstalledApp,
-	LaunchOutcome, ModeConsent, OperationSummary, OperatorUpdate, Preparation, Ready,
-	RemovalReport, UpdateSettings, UpdateStatus, custom_plan,
+	LaunchOutcome, ModeConsent, OperationSummary, OperatorUpdate, Preparation, RateLimit, Ready,
+	RemovalReport, StorageReport, TokenState, UpdateSettings, UpdateStatus, custom_plan,
 };
-use launcher_model::{InstallationId, MinimumAge, ThemePreference, UpdateMode};
+use launcher_model::{InstallationId, MinimumAge, Preferences, ThemePreference, UpdateMode};
 use launcher_resolver::Consent;
 use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
@@ -57,6 +57,11 @@ pub(crate) enum Message {
 	UpdatesPlanned(Vec<OperatorUpdate>),
 	/// Preferences are back to their defaults.
 	Restored(Box<UpdateSettings>, Box<BackgroundStatus>),
+	Preferences(Box<Preferences>),
+	/// Whether a GitHub token is set. Never the token.
+	Token(TokenState),
+	RateLimit(Result<RateLimit, String>),
+	Storage(Box<StorageReport>),
 }
 
 /// A handle for submitting commands.
@@ -243,6 +248,83 @@ impl Commands {
 					Message::Notice(text)
 				}
 			})
+		});
+	}
+
+	pub(crate) fn refresh_preferences(&self) {
+		self.spawn(|engine| async move {
+			Some(Message::Preferences(Box::new(engine.preferences().await)))
+		});
+	}
+
+	/// Saves preferences. Nothing comes back: the interface already shows them.
+	pub(crate) fn save_preferences(&self, preferences: Preferences) {
+		self.spawn_result(move |engine| async move {
+			engine.set_preferences(preferences).await?;
+
+			Ok(Message::Notice(String::new()))
+		});
+	}
+
+	pub(crate) fn refresh_token(&self) {
+		self.spawn(|engine| async move { Some(Message::Token(engine.token_state().await)) });
+	}
+
+	pub(crate) fn save_token(&self, pasted: String) {
+		self.spawn_result(move |engine| async move {
+			engine.set_github_token(&pasted).await?;
+
+			Ok(Message::Token(engine.token_state().await))
+		});
+	}
+
+	pub(crate) fn clear_token(&self) {
+		self.spawn_result(|engine| async move {
+			engine.clear_github_token().await?;
+
+			Ok(Message::Token(engine.token_state().await))
+		});
+	}
+
+	pub(crate) fn check_rate_limit(&self) {
+		self.spawn(|engine| async move {
+			Some(Message::RateLimit(
+				engine
+					.rate_limit()
+					.await
+					.map_err(|error| error.user_message().to_owned()),
+			))
+		});
+	}
+
+	pub(crate) fn refresh_storage(&self) {
+		self.spawn_result(|engine| async move {
+			engine
+				.storage_report()
+				.await
+				.map(|report| Message::Storage(Box::new(report)))
+		});
+	}
+
+	pub(crate) fn clear_leftovers(&self) {
+		self.spawn_result(|engine| async move {
+			engine.clear_leftover_downloads().await?;
+
+			engine
+				.storage_report()
+				.await
+				.map(|report| Message::Storage(Box::new(report)))
+		});
+	}
+
+	pub(crate) fn clear_cache(&self) {
+		self.spawn_result(|engine| async move {
+			engine.clear_response_cache().await?;
+
+			engine
+				.storage_report()
+				.await
+				.map(|report| Message::Storage(Box::new(report)))
 		});
 	}
 

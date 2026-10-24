@@ -113,6 +113,19 @@ impl Engine {
 		self.set_minimum_age(MinimumAge::default()).await?;
 		self.database.clear_app_policies().await?;
 
+		// Everything else in Settings goes back too. A saved token is not a
+		// preference, so it stays, and the launcher keeps knowing it is there.
+		let token_saved = self.preferences().await.network.token_saved;
+		let defaults = launcher_model::Preferences {
+			network: launcher_model::Network {
+				token_saved,
+				..launcher_model::Network::default()
+			},
+			..launcher_model::Preferences::default()
+		};
+
+		self.set_preferences(defaults).await?;
+
 		self.set_theme(ThemePreference::default()).await
 	}
 
@@ -221,6 +234,13 @@ mod tests {
 			.await
 			.unwrap();
 		engine.set_theme(ThemePreference::Dark).await.unwrap();
+		engine
+			.set_preferences(launcher_model::Preferences {
+				ui_scale: 150,
+				..launcher_model::Preferences::default()
+			})
+			.await
+			.unwrap();
 
 		engine.restore_defaults().await.unwrap();
 
@@ -229,6 +249,10 @@ mod tests {
 		assert_eq!(settings.mode, UpdateMode::Manual);
 		assert_eq!(settings.minimum_age, MinimumAge::default());
 		assert_eq!(engine.theme().await, ThemePreference::default());
+		assert_eq!(
+			engine.preferences().await,
+			launcher_model::Preferences::default()
+		);
 	}
 
 	#[tokio::test]

@@ -72,6 +72,17 @@ impl ExploreView {
 		}
 	}
 
+	pub(crate) fn sort_key(&self) -> &'static str {
+		self.filter.sort.key()
+	}
+
+	/// Restores a saved sort. An unknown name is ignored.
+	pub(crate) fn set_sort_key(&mut self, key: &str) {
+		if let Some(sort) = Sort::from_key(key) {
+			self.filter.sort = sort;
+		}
+	}
+
 	/// An app's display name, if it is among the rows.
 	pub(crate) fn name_of(&self, slug: &str) -> Option<String> {
 		self.rows

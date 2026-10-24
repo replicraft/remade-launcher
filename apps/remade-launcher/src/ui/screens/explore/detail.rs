@@ -10,7 +10,7 @@ use launcher_model::Os;
 
 use super::filters::category_label;
 use crate::ui::components::{
-	app_tile_for, platform_badges, primary_button, quiet_button, tag, verified_badge,
+	app_tile_for, panel, platform_badges, primary_button, quiet_button, tag, verified_badge,
 };
 use crate::ui::screens::Action;
 use crate::ui::{icons, theme};
@@ -368,22 +368,8 @@ fn packages(ui: &mut Ui, facts: &Facts<'_>) {
 	}
 }
 
-/// A titled panel.
 fn card(ui: &mut Ui, title: &str, contents: impl FnOnce(&mut Ui)) {
-	let palette = theme::palette(ui);
-
-	Frame::new()
-		.fill(palette.surface)
-		.stroke(egui::Stroke::new(1.0, palette.border))
-		.corner_radius(12)
-		.inner_margin(Margin::same(20))
-		.show(ui, |ui| {
-			ui.set_width(ui.available_width());
-			ui.label(RichText::new(title).size(17.0).family(theme::semibold()));
-			ui.add_space(12.0);
-
-			contents(ui);
-		});
+	panel(ui, title, None, contents);
 }
 
 /// One row of the details grid: a muted label, then its value.

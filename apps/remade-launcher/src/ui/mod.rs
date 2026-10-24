@@ -11,6 +11,7 @@ mod components;
 mod demo;
 mod icons;
 mod menu;
+mod notifications;
 mod screens;
 mod theme;
 mod transfers;

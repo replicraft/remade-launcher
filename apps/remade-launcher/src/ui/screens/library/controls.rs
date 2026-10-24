@@ -14,6 +14,22 @@ pub(super) enum Sort {
 }
 
 impl Sort {
+	/// The stable name saved with the person's preferences.
+	pub(super) const fn key(self) -> &'static str {
+		match self {
+			Self::Name => "name",
+			Self::RecentlyInstalled => "recent",
+			Self::UpdatesFirst => "updates",
+		}
+	}
+
+	pub(super) fn from_key(key: &str) -> Option<Self> {
+		Self::OPTIONS
+			.iter()
+			.map(|(sort, _)| *sort)
+			.find(|sort| sort.key() == key)
+	}
+
 	pub(super) const OPTIONS: [(Self, &'static str); 3] = [
 		(Self::Name, "Name"),
 		(Self::RecentlyInstalled, "Recently installed"),
@@ -48,6 +64,17 @@ pub(crate) struct LibraryState {
 }
 
 impl LibraryState {
+	pub(crate) fn sort_key(&self) -> &'static str {
+		self.sort.key()
+	}
+
+	/// Restores a saved sort. An unknown name is ignored.
+	pub(crate) fn set_sort_key(&mut self, key: &str) {
+		if let Some(sort) = Sort::from_key(key) {
+			self.sort = sort;
+		}
+	}
+
 	/// Puts the newest installs first, with no search or filter hiding them.
 	/// Used when the person comes to the Library to find what just finished.
 	pub(crate) fn show_recent(&mut self) {

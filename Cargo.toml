@@ -63,6 +63,7 @@ tokio-rusqlite = "0.8"
 eframe = { version = "0.37", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 egui = { version = "0.37", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
+notify-rust = { version = "4", default-features = false, features = ["z"] }
 muda = { version = "0.21", default-features = false }
 
 # Archives and filesystem

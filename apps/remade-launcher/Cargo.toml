@@ -21,6 +21,7 @@ launcher-net.workspace = true
 launcher-resolver.workspace = true
 launcher-storage.workspace = true
 mimalloc.workspace = true
+notify-rust.workspace = true
 time.workspace = true
 tokio.workspace = true
 tracing.workspace = true
