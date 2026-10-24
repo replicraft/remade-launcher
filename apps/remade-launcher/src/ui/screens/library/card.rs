@@ -11,7 +11,7 @@ use crate::ui::screens::Action;
 use crate::ui::{icons, theme};
 
 pub(super) const CARD_HEIGHT: f32 = 196.0;
-pub(super) const ROW_HEIGHT: f32 = 84.0;
+pub(super) const ROW_HEIGHT: f32 = 92.0;
 
 /// Everything one app's card or row needs.
 pub(super) struct Item<'a> {
@@ -74,7 +74,8 @@ fn status_line(ui: &mut Ui, item: &Item<'_>) {
 }
 
 /// Open, Update, settings, and uninstall; or live progress with a Stop button.
-fn actions(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
+/// `compact` drops the icons from the text buttons so a narrow card fits.
+fn actions(ui: &mut Ui, item: &Item<'_>, compact: bool) -> Option<Action> {
 	let mut action = None;
 	let app = item.app;
 
@@ -101,7 +102,11 @@ fn actions(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 		if ui
 			.add_enabled(
 				app.launchable,
-				egui::Button::new(format!("{}  Open", icons::PLAY)),
+				egui::Button::new(if compact {
+					"Open".to_owned()
+				} else {
+					format!("{}  Open", icons::PLAY)
+				}),
 			)
 			.clicked()
 		{
@@ -109,10 +114,10 @@ fn actions(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 		}
 
 		if app.curated && !item.pinned {
-			let label = if update_ready {
-				format!("{}  Update", icons::ARROW_CLOCKWISE)
-			} else {
-				"Check".to_owned()
+			let label = match (update_ready, compact) {
+				(true, false) => format!("{}  Update", icons::ARROW_CLOCKWISE),
+				(true, true) => "Update".to_owned(),
+				(false, _) => "Check".to_owned(),
 			};
 
 			if ui.button(label).clicked() {
@@ -171,57 +176,85 @@ pub(super) fn grid_card(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 			.layout(Layout::top_down(Align::Min)),
 	);
 
-	action = actions(&mut bottom, item).or(action);
+	action = actions(&mut bottom, item, true).or(action);
 	ui.allocate_rect(rect, Sense::hover());
 
 	action
 }
 
 /// A single row for list view.
+///
+/// The columns are placed by hand: a name block, a status block, and the
+/// actions pinned to the right edge. Each is centred on the row's midline, so
+/// nothing depends on how tall a nested layout happens to come out.
 pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
+	const TITLE_WIDTH: f32 = 250.0;
+	const BLOCK_HEIGHT: f32 = 60.0;
+	const BUTTON_HEIGHT: f32 = 32.0;
+
 	let rect = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), ROW_HEIGHT));
 	let inner = rect.shrink2(vec2(14.0, 12.0));
+	let middle = inner.center().y;
 	let mut action = None;
 
 	surface(ui, rect);
 
-	let mut row = ui.new_child(
-		UiBuilder::new()
-			.max_rect(inner)
-			.layout(Layout::left_to_right(Align::Center)),
+	let column = |ui: &mut Ui, left: f32, top: f32, width: f32, height: f32| {
+		let area = Rect::from_min_size(pos2(left, top), vec2(width.max(1.0), height));
+
+		ui.new_child(
+			UiBuilder::new()
+				.max_rect(area)
+				.layout(Layout::top_down(Align::Min)),
+		)
+	};
+
+	let mut tile = column(ui, inner.left(), middle - 24.0, 48.0, 48.0);
+	app_tile(&mut tile, &item.app.name, 48.0);
+
+	let title_left = inner.left() + 48.0 + 14.0;
+	let mut name = column(
+		ui,
+		title_left,
+		middle - BLOCK_HEIGHT / 2.0,
+		TITLE_WIDTH,
+		BLOCK_HEIGHT,
 	);
 
-	app_tile(&mut row, &item.app.name, 48.0);
-
-	row.allocate_ui_with_layout(vec2(220.0, 56.0), Layout::top_down(Align::Min), |ui| {
-		ui.set_width(220.0);
-		title(ui, item.app);
-		ui.label(
-			RichText::new(format!(
-				"{} · installed {}",
-				item.app.version,
-				launcher_model::local_time::date(item.app.installed_at)
-			))
-			.small()
-			.color(theme::muted(ui)),
-		);
-	});
-
-	let status_width = (inner.width() - 48.0 - 220.0 - 340.0).max(120.0);
-
-	row.allocate_ui_with_layout(
-		vec2(status_width, 56.0),
-		Layout::top_down(Align::Min),
-		|ui| {
-			ui.set_width(status_width);
-			status_line(ui, item);
-		},
+	name.spacing_mut().item_spacing.y = 1.0;
+	title(&mut name, item.app);
+	name.label(
+		RichText::new(format!(
+			"{} · installed {}",
+			item.app.version,
+			launcher_model::local_time::date(item.app.installed_at)
+		))
+		.small()
+		.color(theme::muted(&name)),
 	);
 
-	row.allocate_ui_with_layout(vec2(330.0, 32.0), Layout::top_down(Align::Min), |ui| {
-		ui.set_width(330.0);
-		action = actions(ui, item);
-	});
+	let actions_width = 320.0;
+	let actions_left = inner.right() - actions_width;
+	let status_left = title_left + TITLE_WIDTH + 12.0;
+	let status_width = (actions_left - 12.0 - status_left).max(80.0);
+
+	let mut status = column(
+		ui,
+		status_left,
+		middle - BLOCK_HEIGHT / 2.0,
+		status_width,
+		BLOCK_HEIGHT,
+	);
+	status_line(&mut status, item);
+
+	let mut buttons = column(
+		ui,
+		actions_left,
+		middle - BUTTON_HEIGHT / 2.0,
+		actions_width,
+		BUTTON_HEIGHT,
+	);
+	action = actions(&mut buttons, item, false).or(action);
 
 	ui.allocate_rect(rect, Sense::hover());
 	ui.add_space(8.0);

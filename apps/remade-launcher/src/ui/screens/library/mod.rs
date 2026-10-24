@@ -37,7 +37,7 @@ pub(crate) struct LibraryView<'a> {
 	pub(crate) view: &'a mut ViewMode,
 }
 
-const CARD_MIN_WIDTH: f32 = 300.0;
+const CARD_MIN_WIDTH: f32 = 320.0;
 
 pub(crate) fn library(ui: &mut Ui, view: &mut LibraryView<'_>) -> Option<Action> {
 	let mut action = None;
