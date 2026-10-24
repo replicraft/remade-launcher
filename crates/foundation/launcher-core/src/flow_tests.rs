@@ -1503,3 +1503,129 @@ async fn forget_refuses_a_folder_it_cannot_prove_is_its_own() {
 	assert_eq!(error.code(), ErrorCode::InstallationChanged);
 	assert_eq!(world.engine.installed().await.unwrap().len(), 1);
 }
+
+#[tokio::test]
+async fn switching_to_manual_in_the_middle_of_a_pass_stops_the_next_install() {
+	let (world, _) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	let provider = GithubProvider::new(world.github.clone());
+	let now = at(NOW).unix_timestamp();
+
+	// The pass has looked everything up and decided to apply...
+	let mut evaluated = world
+		.engine
+		.evaluate_apps(
+			&provider,
+			None,
+			crate::updates::Initiator::Automatic,
+			Some(LINUX),
+			now,
+		)
+		.await
+		.unwrap();
+	assert_eq!(evaluated[0].decision, Decision::Apply);
+
+	// ...and then the person turns automatic updates off.
+	let nothing = ModeConsent {
+		actor: "test".into(),
+		acknowledged_risks: false,
+	};
+	world
+		.engine
+		.set_update_mode(UpdateMode::Manual, &nothing)
+		.await
+		.unwrap();
+
+	let outcome = world
+		.engine
+		.settle("cycle", Trigger::OnLaunch, evaluated.remove(0), now)
+		.await;
+
+	assert!(matches!(
+		outcome.result,
+		CycleResult::Skipped(SkipReason::ModeManual)
+	));
+	assert_eq!(
+		installed_version(&world).await,
+		"v1.0.0",
+		"no install may start after the switch"
+	);
+}
+
+#[tokio::test]
+async fn unreadable_publication_times_never_make_a_young_release_instantly_eligible() {
+	let world = world().await;
+	let first = ready(prepare(&world, "sample-editor").await.unwrap());
+	world
+		.engine
+		.install(&first, &consent(&first.source_display, false))
+		.await
+		.unwrap();
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	// A new release whose dates are garbage, which the launcher cannot trust.
+	let (bytes, tag) = (tarball("1.1.0"), "v1.1.0");
+	world
+		.artifacts
+		.0
+		.lock()
+		.unwrap()
+		.insert(asset_url(tag), bytes.clone());
+	let garbage = release_json_at(2, tag, &bytes, true, "not a date");
+	*world.github.releases.lock().unwrap() = format!(
+		"[{garbage},{}]",
+		release_json(1, "v1.0.0", &tarball("1.0.0"), true)
+	);
+
+	let report = cycle(&world, Trigger::OnLaunch, NOW).await;
+
+	assert!(
+		matches!(only_skip(&report), SkipReason::MinReleaseAgeNotMet { eligible_at } if *eligible_at == at(NOW).unix_timestamp() + 3_600)
+	);
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+
+	// Once the launcher has itself watched it for the full age, it is eligible.
+	let later = cycle(&world, Trigger::OnLaunch, "2030-01-15T01:01:00Z").await;
+	assert_eq!(later.updated(), 1);
+}
+
+#[tokio::test]
+async fn a_repository_that_changed_hands_blocks_automatic_updates() {
+	let (world, _) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	let provider = GithubProvider::new(FakeGithub {
+		repo: REPO.replace("\"id\":100002", "\"id\":999999"),
+		releases: world.github.releases.clone(),
+		down: Arc::new(Mutex::new(false)),
+	});
+
+	let report = world
+		.engine
+		.run_update_cycle_with(
+			&provider,
+			Trigger::OnLaunch,
+			Some(LINUX),
+			at(NOW).unix_timestamp(),
+		)
+		.await
+		.unwrap();
+
+	assert!(
+		matches!(only_skip(&report), SkipReason::CheckFailed(why) if why.contains("no longer matches"))
+	);
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+}

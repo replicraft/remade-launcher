@@ -147,7 +147,7 @@ impl Engine {
 	}
 
 	/// Applies or skips one app, and records why.
-	async fn settle(
+	pub(crate) async fn settle(
 		&self,
 		cycle_id: &str,
 		trigger: Trigger,
@@ -191,6 +191,18 @@ impl Engine {
 			policy: policy_snapshot.clone(),
 			plan_digest,
 			decided_at: now,
+		};
+
+		// The mode can change while a pass is running. A person who switches to
+		// Manual must not see another install start afterwards.
+		let decision = match decision {
+			Decision::Apply
+				if trigger.initiator() == Initiator::Automatic
+					&& self.update_settings().await.mode == UpdateMode::Manual =>
+			{
+				Decision::Skip(SkipReason::ModeManual)
+			}
+			other => other,
 		};
 
 		let result = match (decision, outlook) {
