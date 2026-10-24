@@ -1,0 +1,29 @@
+# Windows installer, built with cargo-packager:
+#
+#   cargo install cargo-packager --locked
+#   cargo build --release --locked -p remade-launcher
+#   cargo packager --config packaging/windows/Packager.toml --release
+#
+# Run from the repository root on Windows. Sign the result in a separate,
+# protected job; this file holds no signing configuration.
+
+name = "remade-launcher"
+product-name = "Remade Launcher"
+identifier = "wiki.remade.Launcher"
+version = "0.1.0"
+description = "The official launcher for unofficial apps."
+publisher = "Remade"
+homepage = "https://remade.wiki"
+formats = ["nsis"]
+out-dir = "dist"
+binaries-dir = "target/release"
+icons = ["assets/windows/remade-launcher.ico"]
+
+[[binaries]]
+path = "remade-launcher.exe"
+main = true
+
+[nsis]
+installer-icon = "assets/windows/remade-launcher.ico"
+# Per-user install: the launcher never runs as administrator.
+install-mode = "currentUser"
