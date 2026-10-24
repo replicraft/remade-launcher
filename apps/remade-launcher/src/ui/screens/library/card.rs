@@ -20,6 +20,8 @@ pub(super) struct Item<'a> {
 	pub(super) status: Option<&'a UpdateStatus>,
 	pub(super) mode: UpdateMode,
 	pub(super) pinned: bool,
+	/// Where the repository link goes.
+	pub(super) link: String,
 }
 
 fn surface(ui: &mut Ui, rect: Rect) {
@@ -34,8 +36,11 @@ fn surface(ui: &mut Ui, rect: Rect) {
 	);
 }
 
-/// Name with its seal, and the repository as a link to its GitHub page.
-fn title(ui: &mut Ui, app: &InstalledApp) {
+/// Name with its seal, and the repository as a link to its page.
+fn title(ui: &mut Ui, item: &Item<'_>) {
+	let app = item.app;
+	let palette = theme::palette(ui);
+
 	ui.vertical(|ui| {
 		ui.spacing_mut().item_spacing.y = 1.0;
 
@@ -51,10 +56,23 @@ fn title(ui: &mut Ui, app: &InstalledApp) {
 			verified_badge(ui, app.curated);
 		});
 
-		ui.hyperlink_to(
-			RichText::new(&app.repository).small(),
-			format!("https://github.com/{}", app.repository),
-		);
+		let link = ui
+			.add(
+				egui::Label::new(
+					RichText::new(&app.repository)
+						.small()
+						.color(palette.accent)
+						.underline(),
+				)
+				.sense(Sense::click()),
+			)
+			.on_hover_text(item.link.as_str())
+			.on_hover_cursor(egui::CursorIcon::PointingHand);
+
+		if link.clicked() {
+			ui.ctx()
+				.open_url(egui::OpenUrl::new_tab(item.link.as_str()));
+		}
 	});
 }
 
@@ -155,7 +173,7 @@ pub(super) fn grid_card(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 
 	top.horizontal(|ui| {
 		app_tile(ui, &item.app.name, 44.0);
-		title(ui, item.app);
+		title(ui, item);
 	});
 
 	top.add_space(6.0);
@@ -177,7 +195,7 @@ pub(super) fn grid_card(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	);
 
 	action = actions(&mut bottom, item, true).or(action);
-	ui.allocate_rect(rect, Sense::hover());
+	ui.advance_cursor_after_rect(rect);
 
 	action
 }
@@ -222,7 +240,7 @@ pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	);
 
 	name.spacing_mut().item_spacing.y = 1.0;
-	title(&mut name, item.app);
+	title(&mut name, item);
 	name.label(
 		RichText::new(format!(
 			"{} · installed {}",
@@ -256,7 +274,7 @@ pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	);
 	action = actions(&mut buttons, item, false).or(action);
 
-	ui.allocate_rect(rect, Sense::hover());
+	ui.advance_cursor_after_rect(rect);
 	ui.add_space(8.0);
 
 	action

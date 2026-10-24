@@ -620,6 +620,7 @@ impl eframe::App for LauncherApp {
 							mode: self.update_settings.mode,
 							state: &mut self.library,
 							view: &mut self.view_mode,
+							demo: self.demo.is_some(),
 						},
 					);
 				}

@@ -35,6 +35,8 @@ pub(crate) struct LibraryView<'a> {
 	pub(crate) mode: UpdateMode,
 	pub(crate) state: &'a mut LibraryState,
 	pub(crate) view: &'a mut ViewMode,
+	/// Demo apps are made up, so their links go to a placeholder page.
+	pub(crate) demo: bool,
 }
 
 const CARD_MIN_WIDTH: f32 = 320.0;
@@ -98,6 +100,11 @@ pub(crate) fn library(ui: &mut Ui, view: &mut LibraryView<'_>) -> Option<Action>
 				progress: view.busy.get(&app.id),
 				status: view.statuses.get(&app.id),
 				mode: view.mode,
+				link: if view.demo {
+					"https://example.com".to_owned()
+				} else {
+					format!("https://github.com/{}", app.repository)
+				},
 				pinned: view
 					.policies
 					.get(&app.id)
