@@ -67,8 +67,10 @@ impl Printer {
 					bar.set_length(total.unwrap_or(0));
 					bar.set_position(*received);
 
+					// A line per 5%, or per 4 MiB when the size is unknown: a
+					// stream a program can follow without being flooded.
 					let percent =
-						total.map_or(*received >> 22, |total| received * 100 / total.max(1));
+						total.map_or(*received >> 22, |total| received * 20 / total.max(1));
 
 					if ndjson && percent != last_percent {
 						last_percent = percent;
