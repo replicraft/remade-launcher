@@ -25,7 +25,7 @@ pub(super) fn general(
 
 	setting_row(
 		ui,
-		"Interface size",
+		"Interface scale",
 		Some("Makes everything larger or smaller. Useful on high-resolution screens."),
 		|ui| {
 			let mut chosen = prefs.ui_scale;
