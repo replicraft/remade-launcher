@@ -54,6 +54,11 @@ impl Ctx {
 		}
 	}
 
+	/// The name of the command being run.
+	pub(crate) fn command_name(&self) -> &'static str {
+		self.command
+	}
+
 	/// True for `--json` and `--output ndjson`, where stdout is for programs.
 	pub(crate) fn machine(&self) -> bool {
 		self.format != Format::Text

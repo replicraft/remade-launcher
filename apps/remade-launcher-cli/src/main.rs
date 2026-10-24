@@ -6,6 +6,7 @@
 //! or what it asks first.
 
 mod app_ref;
+mod auto_update;
 mod background;
 mod cli;
 mod commands;
@@ -122,6 +123,12 @@ async fn execute(ctx: &Arc<Ctx>, arguments: &Cli) -> Result<ExitStatus, CliError
 
 	let engine = Arc::new(Engine::open(&data).await?);
 	let result = commands::dispatch(ctx, &engine, arguments).await;
+
+	// A person at a terminal also gets the launcher's own updates, by the
+	// setting. It runs after the command, so it never delays or changes it.
+	if matches!(result, Ok(ExitStatus::Success)) {
+		auto_update::run(ctx, &engine).await;
+	}
 
 	if let Some(engine) = Arc::into_inner(engine) {
 		engine.shutdown().await;
