@@ -1,0 +1,19 @@
+[package]
+name = "launcher-ui"
+description = "The Remade interface: theme, shell, and screens, built on egui."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+eframe.workspace = true
+egui.workspace = true
+image.workspace = true
+launcher-core.workspace = true
+launcher-model.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true
