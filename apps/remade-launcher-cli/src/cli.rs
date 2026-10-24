@@ -132,11 +132,6 @@ pub(crate) enum Command {
 		#[command(subcommand)]
 		action: AuthAction,
 	},
-	/// Read and write community reviews. Not available yet.
-	Reviews {
-		#[command(subcommand)]
-		action: ReviewsAction,
-	},
 	/// Share or import a list of apps. Importing installs nothing.
 	Collection {
 		#[command(subcommand)]
@@ -269,18 +264,6 @@ pub(crate) enum AuthAction {
 	},
 	/// Remove the saved token.
 	Logout,
-}
-
-#[derive(Debug, Subcommand)]
-pub(crate) enum ReviewsAction {
-	/// Read an app's reviews.
-	List { slug: String },
-	/// Write a review.
-	Create { slug: String },
-	/// Change your review.
-	Edit { slug: String },
-	/// Delete your review.
-	Delete { slug: String },
 }
 
 #[derive(Debug, Subcommand)]

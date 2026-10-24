@@ -100,9 +100,6 @@ remade auth login --with-token < token.txt   # optional: raises GitHub's lookup 
 remade config set region.time_format 24h
 ```
 
-Reviews belong to a community service that does not exist yet, so
-`remade reviews` says so instead of pretending.
-
 ## For AI assistants
 
 `remade-launcher-mcp` serves the same engine over the Model Context Protocol

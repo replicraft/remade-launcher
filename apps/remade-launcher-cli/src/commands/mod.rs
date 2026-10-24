@@ -60,7 +60,6 @@ pub(crate) fn name(command: &Command) -> &'static str {
 			AuthAction::Login { .. } => "auth login",
 			AuthAction::Logout => "auth logout",
 		},
-		Command::Reviews { .. } => "reviews",
 		Command::Collection { action } => match action {
 			CollectionAction::Export { .. } => "collection export",
 			CollectionAction::Preview { .. } => "collection preview",
@@ -117,7 +116,6 @@ pub(crate) async fn dispatch(
 		Command::Compatible(args) => browse::compatible(ctx, engine, args).await,
 		Command::Open(args) => browse::open(ctx, engine, args).await,
 		Command::Auth { action } => account::auth(ctx, engine, action).await,
-		Command::Reviews { action } => Ok(account::reviews(ctx, action)),
 		Command::Collection { action } => collection::run(ctx, engine, action).await,
 		Command::Pin(args) => lifecycle::pin(ctx, engine, args, true).await,
 		Command::Unpin(args) => lifecycle::pin(ctx, engine, args, false).await,

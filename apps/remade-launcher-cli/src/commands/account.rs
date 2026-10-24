@@ -1,12 +1,8 @@
-//! `auth` and `reviews`.
+//! `auth`.
 //!
 //! `auth` manages the optional GitHub token that raises the lookup limit.
 //! It is not a Remade account: the launcher never needs to sign in to a
 //! community service to install, update, or remove anything.
-//!
-//! `reviews` belongs to a community service that does not exist yet. The
-//! commands are here so scripts get a clear, typed answer instead of a guess,
-//! and they send nothing anywhere.
 
 use std::io::{IsTerminal, Read};
 use std::sync::Arc;
@@ -14,7 +10,7 @@ use std::sync::Arc;
 use launcher_core::{Engine, TokenState};
 use serde_json::json;
 
-use crate::cli::{AuthAction, ReviewsAction};
+use crate::cli::AuthAction;
 use crate::context::Ctx;
 use crate::errors::CliError;
 use crate::exit::ExitStatus;
@@ -152,16 +148,4 @@ pub(crate) async fn auth(
 			Ok(ExitStatus::Success)
 		}
 	}
-}
-
-pub(crate) fn reviews(ctx: &Ctx, action: &ReviewsAction) -> ExitStatus {
-	// Every action gets the same honest answer.
-	let _ = action;
-
-	refuse(
-		ctx,
-		"COMMUNITY_UNAVAILABLE",
-		ExitStatus::Unsupported,
-		"Reviews need the Remade community service, which does not exist yet. Nothing was sent, and installing, updating, and removing apps never need it.",
-	)
 }

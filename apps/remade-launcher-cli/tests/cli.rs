@@ -106,7 +106,6 @@ fn help_lists_the_commands_of_the_contract() {
 		"compatible",
 		"open",
 		"auth",
-		"reviews",
 	] {
 		assert!(help.contains(command), "help is missing {command}");
 	}
@@ -857,24 +856,6 @@ fn auth_says_what_is_set_and_never_touches_the_keychain_for_nothing() {
 		run.json(&["--offline", "auth", "status"]).1["data"]["github_token"],
 		"none"
 	);
-}
-
-#[test]
-fn reviews_are_honestly_unavailable_and_send_nothing() {
-	for arguments in [
-		["reviews", "list", "quill"],
-		["reviews", "create", "quill"],
-		["reviews", "edit", "quill"],
-		["reviews", "delete", "quill"],
-	] {
-		let (code, value, _) = run().json(&arguments);
-
-		assert_eq!(
-			(code, value["error"]["code"].as_str()),
-			(4, Some("COMMUNITY_UNAVAILABLE")),
-			"{arguments:?}"
-		);
-	}
 }
 
 #[test]
