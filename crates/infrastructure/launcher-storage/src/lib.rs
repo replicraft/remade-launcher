@@ -5,10 +5,12 @@
 //! no database call ever blocks an async task or the render loop. WAL mode
 //! lets the readers run while the writer commits.
 
+mod catalog_trust;
 mod database;
 mod error;
 mod migrations;
 mod pragmas;
 mod settings;
 
+pub use catalog_trust::StoredCatalog;
 pub use database::Database;

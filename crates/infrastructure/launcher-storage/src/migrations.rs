@@ -13,10 +13,16 @@ struct Migration {
 	sql: &'static str,
 }
 
-const MIGRATIONS: &[Migration] = &[Migration {
-	version: 1,
-	sql: include_str!("migrations/0001_settings.sql"),
-}];
+const MIGRATIONS: &[Migration] = &[
+	Migration {
+		version: 1,
+		sql: include_str!("migrations/0001_settings.sql"),
+	},
+	Migration {
+		version: 2,
+		sql: include_str!("migrations/0002_catalog_trust.sql"),
+	},
+];
 
 /// The schema version this build understands.
 pub(crate) fn latest_version() -> u32 {

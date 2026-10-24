@@ -45,8 +45,9 @@ pub(crate) fn apply_reader(connection: &Connection) -> rusqlite::Result<()> {
 	apply_common(connection)?;
 
 	connection.execute_batch(
+		// No `optimize` here: it can run ANALYZE, which writes. The writer
+		// owns statistics maintenance.
 		"PRAGMA query_only = ON;
-		 PRAGMA cache_size = -4096;
-		 PRAGMA optimize = 0x10002;",
+		 PRAGMA cache_size = -4096;",
 	)
 }
