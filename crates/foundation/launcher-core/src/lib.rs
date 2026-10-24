@@ -17,6 +17,7 @@ mod network;
 mod paths;
 mod prepare;
 mod saved_plans;
+mod storage_report;
 mod updates;
 
 #[cfg(test)]
@@ -42,6 +43,7 @@ pub use network::{RateLimit, StoredResponses, TOKEN_VARIABLE};
 pub use paths::DataDirectory;
 pub use prepare::{CustomPreparation, Preparation, Ready, custom_plan};
 pub use saved_plans::{Applied, Approval, SavedPlan, UninstallPlan};
+pub use storage_report::StorageReport;
 pub use updates::{
 	AutoStatus, AvailableUpdate, CycleOutcome, CycleReport, CycleResult, Decision, Initiator,
 	LaunchOutcome, ModeConsent, OperatorUpdate, Outlook, SkipReason, Trigger, UpdateSettings,
