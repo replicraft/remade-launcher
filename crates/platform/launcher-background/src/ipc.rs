@@ -104,6 +104,20 @@ mod unix {
 		let folder = socket.parent().ok_or(IpcError::Unsupported)?;
 
 		std::fs::create_dir_all(folder)?;
+
+		// A folder that is a symlink, or is not a folder, is not ours to use.
+		let meta = std::fs::symlink_metadata(folder)?;
+
+		if !meta.is_dir() {
+			return Err(IpcError::Io(std::io::Error::new(
+				std::io::ErrorKind::PermissionDenied,
+				"the socket folder is not a plain folder",
+			)));
+		}
+
+		// Only the owner can change a folder's permissions, so this call fails
+		// for a folder someone else made first. That makes it the ownership
+		// check, and it leaves the folder private to this user.
 		std::fs::set_permissions(folder, std::fs::Permissions::from_mode(0o700))?;
 
 		if socket.exists() {
@@ -409,6 +423,18 @@ mod unix {
 				"x".repeat(MAX_LINE)
 			);
 			assert!(raw(&socket, huge.as_bytes()).await.contains("too large"));
+		}
+
+		#[tokio::test]
+		async fn a_socket_folder_that_is_a_symlink_is_refused() {
+			let directory = tempfile::tempdir().unwrap();
+			let elsewhere = tempfile::tempdir().unwrap();
+			let link = directory.path().join("folder");
+
+			std::os::unix::fs::symlink(elsewhere.path(), &link).unwrap();
+
+			assert!(bind(&link.join("updater.sock")).await.is_err());
+			assert!(!elsewhere.path().join("updater.sock").exists());
 		}
 
 		#[tokio::test]

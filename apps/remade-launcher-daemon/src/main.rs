@@ -139,6 +139,11 @@ async fn run(data: DataDirectory, paths: BackgroundPaths) -> Result<(), String> 
 		service.request_stop();
 		let _ = socket_task.await;
 		let _ = std::fs::remove_file(&paths.socket);
+		// The folder only ever held the socket. Removing it fails, harmlessly,
+		// if anything else is in there.
+		if let Some(folder) = paths.socket.parent() {
+			let _ = std::fs::remove_dir(folder);
+		}
 	}
 
 	if let Some(engine) = Arc::into_inner(engine) {
