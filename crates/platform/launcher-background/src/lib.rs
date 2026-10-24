@@ -13,9 +13,11 @@ pub mod ipc;
 pub mod paths;
 pub mod registration;
 pub mod schedule;
+pub mod service;
 
 pub use paths::BackgroundPaths;
 pub use registration::{LaunchSpec, Registrar, RegistrationState, host_registrar};
+pub use service::{Backend, BoxFuture, Clock, CycleSummary, Service, SystemClock};
 
 /// The login item's label on every system that has one.
 pub const SERVICE_LABEL: &str = "wiki.remade.Launcher.Updater";
