@@ -1,4 +1,4 @@
-//! Verification of the signed Remade catalog.
+//! Verification of the signed Remade catalog and of signed launcher releases.
 //!
 //! Untrusted bytes go in; a [`VerifiedCatalog`] comes out, or a typed
 //! [`CatalogError`]. There is no other way to build a `VerifiedCatalog`, so
@@ -15,6 +15,7 @@ mod envelope;
 mod error;
 mod manifest;
 mod registry;
+mod release;
 mod semantic;
 mod strict_json;
 mod timestamp;
@@ -34,6 +35,9 @@ pub use manifest::{
 	State, Tracking, Variant, Verification, VerificationLevel, VersionStrategy,
 };
 pub use registry::KeyRegistry;
+pub use release::{
+	MAX_RELEASE_BYTES, ReleaseArtifact, ReleaseContext, VerifiedRelease, verify_release,
+};
 pub use verified::{Freshness, VerifiedCatalog};
 pub use verify::{
 	Change, FreshnessPolicy, HighWater, Verification as VerifyOutcome, VerifyContext, verify,

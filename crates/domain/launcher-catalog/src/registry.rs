@@ -13,6 +13,24 @@ use serde::Deserialize;
 use crate::envelope::is_identifier;
 
 const PRODUCTION_REGISTRY: &str = include_str!("../registry/production.json");
+const RELEASE_REGISTRY: &str = include_str!("../registry/releases.json");
+
+/// What a key may sign. A catalog key cannot sign a launcher release and the
+/// other way round, so losing one signing key never reaches the other.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Role {
+	Catalog,
+	Updater,
+}
+
+impl Role {
+	const fn as_str(self) -> &'static str {
+		match self {
+			Self::Catalog => "catalog",
+			Self::Updater => "updater",
+		}
+	}
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -64,15 +82,29 @@ impl KeyRegistry {
 	/// the production catalog public keys. Until they are added, every
 	/// network catalog fails with `no-trusted-signature`.
 	pub fn production() -> Self {
-		Self::load(PRODUCTION_REGISTRY, false)
+		Self::load(PRODUCTION_REGISTRY, false, Role::Catalog)
 			.expect("the compiled-in production registry is valid, which a unit test checks")
+	}
+
+	/// The keys that may sign launcher releases, compiled in like the catalog
+	/// keys. It lists none until the owner publishes a release signing key, so
+	/// until then no launcher update is ever accepted.
+	pub fn production_releases() -> Self {
+		Self::load(RELEASE_REGISTRY, false, Role::Updater)
+			.expect("the compiled-in release registry is valid, which a unit test checks")
 	}
 
 	/// A registry of test-only keys. Compiled out of builds that do not
 	/// enable the `test-keys` feature.
 	#[cfg(any(test, feature = "test-keys"))]
 	pub fn from_test_fixture(json: &str) -> Result<Self, String> {
-		Self::load(json, true)
+		Self::load(json, true, Role::Catalog)
+	}
+
+	/// The same for launcher release keys.
+	#[cfg(any(test, feature = "test-keys"))]
+	pub fn from_test_release_fixture(json: &str) -> Result<Self, String> {
+		Self::load(json, true, Role::Updater)
 	}
 
 	pub fn feed_id(&self) -> &str {
@@ -93,7 +125,7 @@ impl KeyRegistry {
 		self.active.iter().find(|key| key.key_id == key_id)
 	}
 
-	fn load(json: &str, expect_test_only: bool) -> Result<Self, String> {
+	fn load(json: &str, expect_test_only: bool, role: Role) -> Result<Self, String> {
 		let document: RegistryDocument =
 			serde_json::from_str(json).map_err(|error| error.to_string())?;
 
@@ -108,8 +140,15 @@ impl KeyRegistry {
 		let mut active = Vec::new();
 
 		for key in document.keys {
-			if !is_identifier(&key.key_id) || key.algorithm != "ed25519" || key.role != "catalog" {
-				return Err(format!("key {} is not a valid catalog key", key.key_id));
+			if !is_identifier(&key.key_id)
+				|| key.algorithm != "ed25519"
+				|| key.role != role.as_str()
+			{
+				return Err(format!(
+					"key {} is not a valid {} key",
+					key.key_id,
+					role.as_str()
+				));
 			}
 
 			if active
@@ -160,7 +199,7 @@ mod tests {
 
 	#[test]
 	fn production_refuses_test_only_keys() {
-		assert!(KeyRegistry::load(TEST_REGISTRY, false).is_err());
+		assert!(KeyRegistry::load(TEST_REGISTRY, false, Role::Catalog).is_err());
 	}
 
 	#[test]
@@ -198,5 +237,28 @@ mod tests {
 			 "public_key":"1gcMX2LHyblding3+M4Rv+pwwzkoRDxsZM/PG4WMVhc="}]}"#;
 
 		assert!(KeyRegistry::from_test_fixture(json).is_err());
+	}
+
+	#[test]
+	fn the_release_registry_loads_and_lists_no_keys_yet() {
+		let registry = KeyRegistry::production_releases();
+
+		assert_eq!(registry.feed_id(), "wiki.remade.launcher-releases");
+		assert_eq!(registry.active_key_count(), 0);
+	}
+
+	#[test]
+	fn catalog_keys_cannot_sign_releases_or_the_other_way_round() {
+		let key = |role: &str| {
+			format!(
+				r#"{{"schema_version":1,"feed_id":"f","test_only":true,"keys":[
+				{{"key_id":"k","algorithm":"ed25519","role":"{role}","status":"active",
+				 "public_key":"1gcMX2LHyblding3+M4Rv+pwwzkoRDxsZM/PG4WMVhc="}}]}}"#
+			)
+		};
+
+		assert!(KeyRegistry::from_test_release_fixture(&key("updater")).is_ok());
+		assert!(KeyRegistry::from_test_release_fixture(&key("catalog")).is_err());
+		assert!(KeyRegistry::from_test_fixture(&key("updater")).is_err());
 	}
 }

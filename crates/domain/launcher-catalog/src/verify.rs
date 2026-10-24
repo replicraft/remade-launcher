@@ -129,7 +129,7 @@ pub fn verify(
 ///
 /// This is a one-of-N policy, not a quorum. Unknown key IDs are skipped, and
 /// an invalid signature beside a valid trusted one does not poison the set.
-fn verify_signatures(
+pub(crate) fn verify_signatures(
 	message: &[u8],
 	entries: &[SignatureEntry],
 	registry: &KeyRegistry,

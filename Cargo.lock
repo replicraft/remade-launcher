@@ -2747,6 +2747,7 @@ dependencies = [
  "hex",
  "launcher-model",
  "rayon",
+ "semver",
  "serde",
  "serde_json",
  "serde_json_canonicalizer",
