@@ -38,6 +38,7 @@ pub(crate) const HARD_DRIVES: &str = "\u{E2A0}";
 pub(crate) const NEWSPAPER: &str = "\u{E344}";
 pub(crate) const IMAGE: &str = "\u{E2CA}";
 pub(crate) const PENCIL_LINE: &str = "\u{EBC6}";
+pub(crate) const ARROW_LEFT: &str = "\u{E058}";
 pub(crate) const SIDEBAR: &str = "\u{EC24}";
 
 #[cfg(test)]

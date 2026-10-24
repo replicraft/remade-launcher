@@ -1,4 +1,4 @@
-//! The detail pane beside the cards.
+//! The page for one app, reached by choosing it in the catalog.
 
 use egui::{RichText, ScrollArea, Ui};
 use launcher_catalog::{Project, State, VerificationLevel};
@@ -12,22 +12,13 @@ pub(super) fn detail(
 	slug: &str,
 	project: &Project,
 	availability: Option<&Availability>,
-	selected: &mut Option<String>,
 ) -> Option<Action> {
 	let mut action = None;
 
 	ScrollArea::vertical()
 		.auto_shrink([false, false])
 		.show(ui, |ui| {
-			ui.horizontal(|ui| {
-				ui.heading(&project.display.name);
-
-				ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-					if ui.button("Close").clicked() {
-						*selected = None;
-					}
-				});
-			});
+			ui.heading(&project.display.name);
 
 			ui.label(&project.display.summary);
 			ui.add_space(8.0);
@@ -122,22 +113,10 @@ pub(super) fn detail(
 }
 
 /// The detail pane for a demo row, which has no signed project behind it.
-pub(super) fn demo_detail(
-	ui: &mut Ui,
-	row: &ExploreRow,
-	selected: &mut Option<String>,
-) -> Option<Action> {
+pub(super) fn demo_detail(ui: &mut Ui, row: &ExploreRow) -> Option<Action> {
 	let mut action = None;
 
-	ui.horizontal(|ui| {
-		ui.heading(&row.name);
-
-		ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-			if ui.button("Close").clicked() {
-				*selected = None;
-			}
-		});
-	});
+	ui.heading(&row.name);
 
 	ui.label(&row.summary);
 	ui.add_space(8.0);

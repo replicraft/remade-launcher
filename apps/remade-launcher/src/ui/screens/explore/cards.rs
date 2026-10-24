@@ -111,7 +111,9 @@ pub(super) fn grid_card(
 			.layout(Layout::left_to_right(Align::Center)),
 	);
 
-	platform_badges(&mut footer, &row.platforms);
+	if footer.available_width() >= badge_width(&row.platforms) + 60.0 {
+		platform_badges(&mut footer, &row.platforms);
+	}
 
 	let detail = note.unwrap_or_else(|| row.languages.join(", "));
 
@@ -189,14 +191,21 @@ pub(super) fn list_row(ui: &mut Ui, row: &ExploreRow, selected: bool) -> bool {
 				.small()
 				.color(palette.text_muted),
 		);
-		platform_badges(ui, &row.platforms);
 
-		if !row.languages.is_empty() {
-			ui.label(
-				RichText::new(row.languages.join(", "))
-					.small()
-					.color(palette.text_muted),
-			);
+		// Logos and languages are extras: they appear only if there is room
+		// left after the name and repository, and never push past the card.
+		let extras = badge_width(&row.platforms) + language_width(ui, &row.languages);
+
+		if ui.available_width() >= extras {
+			platform_badges(ui, &row.platforms);
+
+			if !row.languages.is_empty() {
+				ui.label(
+					RichText::new(row.languages.join(", "))
+						.small()
+						.color(palette.text_muted),
+				);
+			}
 		}
 	});
 	text.add(egui::Label::new(RichText::new(&row.summary).color(palette.text_muted)).truncate());
@@ -259,4 +268,24 @@ fn clamped(text: &str, size: f32, color: egui::Color32, width: f32) -> LayoutJob
 	job.wrap.break_anywhere = false;
 
 	job
+}
+
+/// About how wide the platform logos are, with their spacing.
+fn badge_width(platforms: &[launcher_model::Os]) -> f32 {
+	platforms.len() as f32 * 26.0
+}
+
+/// How wide the language text will be, with its spacing.
+fn language_width(ui: &Ui, languages: &[String]) -> f32 {
+	if languages.is_empty() {
+		return 0.0;
+	}
+
+	let galley = ui.painter().layout_no_wrap(
+		languages.join(", "),
+		FontId::proportional(12.0),
+		egui::Color32::WHITE,
+	);
+
+	galley.size().x + 12.0
 }

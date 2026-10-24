@@ -32,8 +32,8 @@ pub fn run(engine: Arc<Engine>, runtime: Handle) -> eframe::Result {
 			.with_title(product::NAME)
 			.with_app_id(product::APP_ID)
 			.with_icon(branding::window_icon())
-			.with_inner_size([1120.0, 720.0])
-			.with_min_inner_size([760.0, 520.0]),
+			.with_inner_size([1280.0, 820.0])
+			.with_min_inner_size([880.0, 600.0]),
 		..Default::default()
 	};
 

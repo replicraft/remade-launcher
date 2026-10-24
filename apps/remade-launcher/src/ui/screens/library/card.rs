@@ -261,12 +261,15 @@ pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	let status_left = title_left + TITLE_WIDTH + 12.0;
 	let status_width = (actions_left - 12.0 - status_left).max(80.0);
 
-	let mut status = column(
-		ui,
-		status_left,
-		middle - BLOCK_HEIGHT / 2.0,
-		status_width,
-		BLOCK_HEIGHT,
+	// The status sits in the middle of the card, whatever its length.
+	let status_area = Rect::from_min_size(
+		pos2(status_left, inner.top()),
+		vec2(status_width, inner.height()),
+	);
+	let mut status = ui.new_child(
+		UiBuilder::new()
+			.max_rect(status_area)
+			.layout(Layout::top_down(Align::Min).with_main_align(Align::Center)),
 	);
 	status_line(&mut status, item);
 

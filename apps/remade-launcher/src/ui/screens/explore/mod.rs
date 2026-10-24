@@ -27,7 +27,6 @@ use crate::ui::components::{
 };
 use crate::ui::{icons, theme};
 
-const DETAIL_WIDTH: f32 = 360.0;
 const CARD_MIN_WIDTH: f32 = 270.0;
 const FEATURED_MIN_WIDTH: f32 = 340.0;
 const RECENT_COUNT: usize = 6;
@@ -93,6 +92,24 @@ impl ExploreView {
 			None => self.search_if_changed(&state, commands),
 		}
 
+		// An app's own page takes the whole width, so there is room for
+		// screenshots and longer descriptions.
+		if let Some(slug) = self.selected.clone() {
+			page(ui, "Explore", |ui| {
+				let back = format!("{}  Back to catalog", icons::ARROW_LEFT);
+
+				if ui.button(back).clicked() {
+					self.selected = None;
+				}
+
+				ui.add_space(10.0);
+
+				action = self.detail_pane(ui, &slug, &state, demo.is_some());
+			});
+
+			return action;
+		}
+
 		page(ui, "Explore", |ui| {
 			if demo.is_some() {
 				ui.label(
@@ -117,28 +134,7 @@ impl ExploreView {
 			}
 
 			ui.add_space(6.0);
-
-			let list_width = if self.selected.is_some() {
-				(ui.available_width() - DETAIL_WIDTH - 24.0).max(320.0)
-			} else {
-				ui.available_width()
-			};
-
-			ui.horizontal_top(|ui| {
-				ui.vertical(|ui| {
-					ui.set_width(list_width);
-					self.results(ui, *mode);
-				});
-
-				if let Some(slug) = self.selected.clone() {
-					ui.separator();
-
-					ui.vertical(|ui| {
-						ui.set_width(DETAIL_WIDTH);
-						action = self.detail_pane(ui, &slug, &state, demo.is_some());
-					});
-				}
-			});
+			self.results(ui, *mode);
 		});
 
 		action
@@ -192,12 +188,13 @@ impl ExploreView {
 				);
 			}
 
-			ui.checkbox(&mut self.compatible_only, "Only apps for this device");
-
 			ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
 				view_toggle(ui, mode);
 			});
 		});
+
+		ui.add_space(6.0);
+		ui.checkbox(&mut self.compatible_only, "Only apps for this device");
 
 		let popular = categories(&self.rows);
 
@@ -375,7 +372,7 @@ impl ExploreView {
 	) -> Option<Action> {
 		if demo {
 			return match self.rows.iter().find(|row| row.slug == slug).cloned() {
-				Some(row) => demo_detail(ui, &row, &mut self.selected),
+				Some(row) => demo_detail(ui, &row),
 				None => {
 					self.selected = None;
 
@@ -395,7 +392,7 @@ impl ExploreView {
 			.as_ref()
 			.and_then(|catalog| catalog.project(slug))
 		{
-			Some(project) => detail(ui, slug, project, availability.as_ref(), &mut self.selected),
+			Some(project) => detail(ui, slug, project, availability.as_ref()),
 			None => {
 				self.selected = None;
 
