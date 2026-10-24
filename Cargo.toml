@@ -3,6 +3,7 @@ resolver = "3"
 members = [
 	"apps/remade-launcher",
 	"crates/domain/launcher-catalog",
+	"crates/domain/launcher-packages",
 	"crates/domain/launcher-providers",
 	"crates/domain/launcher-resolver",
 	"crates/foundation/launcher-model",
@@ -35,6 +36,7 @@ repository = "https://github.com/PixelSoftwareStudios/remade-launcher"
 # Internal crates
 launcher-catalog = { path = "crates/domain/launcher-catalog" }
 launcher-core = { path = "crates/foundation/launcher-core" }
+launcher-packages = { path = "crates/domain/launcher-packages" }
 launcher-providers = { path = "crates/domain/launcher-providers" }
 launcher-resolver = { path = "crates/domain/launcher-resolver" }
 launcher-model = { path = "crates/foundation/launcher-model" }
@@ -60,6 +62,12 @@ tokio-rusqlite = "0.8"
 eframe = { version = "0.37", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 egui = { version = "0.37", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+# Archives and filesystem
+cap-std = "4"
+flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+tar = { version = "0.4", default-features = false }
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # Matching and versions
 globset = { version = "0.4", default-features = false }

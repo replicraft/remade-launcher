@@ -95,7 +95,10 @@ pub(crate) fn is_public_https(url: &Url) -> bool {
 		Some(url::Host::Domain(domain)) => {
 			let domain = domain.to_ascii_lowercase();
 
-			!(domain == "localhost" || domain.ends_with(".localhost") || domain.ends_with(".local") || domain.ends_with(".internal"))
+			!(domain == "localhost"
+				|| domain.ends_with(".localhost")
+				|| domain.ends_with(".local")
+				|| domain.ends_with(".internal"))
 		}
 		Some(url::Host::Ipv4(address)) => is_public_ip(IpAddr::V4(address)),
 		Some(url::Host::Ipv6(address)) => is_public_ip(IpAddr::V6(address)),
@@ -153,8 +156,11 @@ impl HttpClient {
 		use tokio::io::AsyncWriteExt;
 
 		let io_failed = |error: std::io::Error| {
-			LauncherError::new(ErrorCode::StorageUnavailable, "The download could not be saved to disk.")
-				.with_source(error)
+			LauncherError::new(
+				ErrorCode::StorageUnavailable,
+				"The download could not be saved to disk.",
+			)
+			.with_source(error)
 		};
 
 		let response = self
