@@ -1307,6 +1307,10 @@ impl eframe::App for LauncherApp {
 						self.demo.as_ref().map(|demo| demo.catalog.as_slice()),
 						&mut self.view_mode,
 					);
+
+					if self.explore.take_back_to_library() {
+						self.go(Screen::Library);
+					}
 				}
 				Screen::Library => {
 					action = screens::library(

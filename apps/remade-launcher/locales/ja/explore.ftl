@@ -3,6 +3,7 @@
 explore-app-count = { $count } 件のアプリ
 explore-title = 探す
 explore-back = カタログに戻る
+explore-back-library = ライブラリに戻る
 explore-demo-note = デモ用カタログです。これらのアプリは架空で、ここからインストールはできません。
 explore-search-hint = アプリ、またはリメイク元のソフトを検索
 explore-hide-controls = 検索とフィルターを隠す

@@ -3,6 +3,7 @@
 explore-app-count = { $count } 个应用
 explore-title = 探索
 explore-back = 返回目录
+explore-back-library = 返回应用库
 explore-demo-note = 演示目录。这些应用都是虚构的，不会安装任何内容。
 explore-search-hint = 搜索应用，或其复刻的原版软件
 explore-hide-controls = 隐藏搜索和筛选

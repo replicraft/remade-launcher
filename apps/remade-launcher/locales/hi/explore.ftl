@@ -6,6 +6,7 @@ explore-app-count = { $count ->
 }
 explore-title = खोजें
 explore-back = कैटलॉग पर वापस जाएँ
+explore-back-library = लाइब्रेरी पर वापस जाएँ
 explore-demo-note = डेमो कैटलॉग। ये ऐप्स काल्पनिक हैं और यहाँ से कुछ भी इंस्टॉल नहीं होता।
 explore-search-hint = ऐप या उनके मूल सॉफ़्टवेयर को खोजें
 explore-hide-controls = खोज और फ़िल्टर छिपाएँ

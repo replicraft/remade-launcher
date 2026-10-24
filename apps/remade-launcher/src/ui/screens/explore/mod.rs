@@ -44,6 +44,10 @@ pub(crate) struct ExploreView {
 	/// more room for the apps.
 	controls_open: bool,
 	selected: Option<String>,
+	/// The page was opened from the Library, so Back goes there.
+	from_library: bool,
+	/// Back was pressed on a page opened from the Library.
+	back_to_library: bool,
 	next_request: u64,
 	latest_request: u64,
 	asked: Option<SearchKey>,
@@ -68,6 +72,8 @@ impl ExploreView {
 			rows: Vec::new(),
 			controls_open: true,
 			selected: None,
+			from_library: false,
+			back_to_library: false,
 			next_request: 0,
 			latest_request: 0,
 			asked: None,
@@ -96,6 +102,13 @@ impl ExploreView {
 	/// Opens an app's page, such as from the Library.
 	pub(crate) fn select(&mut self, slug: String) {
 		self.selected = Some(slug);
+		self.from_library = true;
+	}
+
+	/// Whether Back was just pressed on a page opened from the Library. Asking
+	/// clears it.
+	pub(crate) fn take_back_to_library(&mut self) -> bool {
+		std::mem::take(&mut self.back_to_library)
 	}
 
 	/// Accepts results, ignoring any that a newer query has superseded.
@@ -126,10 +139,16 @@ impl ExploreView {
 		// screenshots and longer descriptions.
 		if let Some(slug) = self.selected.clone() {
 			page(ui, &t!("explore-title"), |ui| {
-				let back = format!("{}  {}", icons::ARROW_LEFT, t!("explore-back"));
+				let label = if self.from_library {
+					t!("explore-back-library")
+				} else {
+					t!("explore-back")
+				};
+				let back = format!("{}  {}", icons::ARROW_LEFT, label);
 
 				if ui.button(back).clicked() {
 					self.selected = None;
+					self.back_to_library = std::mem::take(&mut self.from_library);
 				}
 
 				ui.add_space(10.0);
@@ -340,6 +359,7 @@ impl ExploreView {
 
 		if let Some(slug) = picked {
 			self.selected = Some(slug);
+			self.from_library = false;
 		}
 
 		if let Some(slug) = category {

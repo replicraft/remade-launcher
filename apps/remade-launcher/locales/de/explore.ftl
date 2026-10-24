@@ -6,6 +6,7 @@ explore-app-count = { $count ->
 }
 explore-title = Entdecken
 explore-back = Zurück zum Katalog
+explore-back-library = Zurück zur Bibliothek
 explore-demo-note = Demo-Katalog. Diese Apps sind erfunden, nichts davon wird installiert.
 explore-search-hint = Apps oder die Original-Software dahinter suchen
 explore-hide-controls = Suche und Filter ausblenden
