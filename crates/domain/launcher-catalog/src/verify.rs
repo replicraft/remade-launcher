@@ -235,7 +235,7 @@ fn check_projects_hash(manifest: &Manifest, value: &serde_json::Value) -> Result
 		CatalogError::new(ErrorKind::SchemaInvalid, "the manifest has no projects")
 	})?;
 
-	let canonical = serde_json_canonicalizer::to_vec(projects)
+	let canonical = canonical_projects(projects)
 		.map_err(|error| CatalogError::new(ErrorKind::SchemaInvalid, error.to_string()))?;
 	let actual = hex::encode(Sha256::digest(canonical));
 
@@ -247,6 +247,61 @@ fn check_projects_hash(manifest: &Manifest, value: &serde_json::Value) -> Result
 			"the projects hash does not match",
 		))
 	}
+}
+
+/// RFC 8785 canonical form of the projects object.
+///
+/// Canonicalizing 10,000 projects one after another dominates verification
+/// time, so each project is canonicalized on its own thread and the results
+/// are joined. That is only valid because a project slug is plain
+/// `[a-z0-9-]` text: its key needs no escaping, and byte order, which the
+/// map iterates in, equals the UTF-16 order the standard requires. Any other
+/// key falls back to the single-threaded library, so the output is always
+/// the standard's.
+pub(crate) fn canonical_projects(
+	projects: &serde_json::Value,
+) -> Result<Vec<u8>, serde_json::Error> {
+	use rayon::prelude::*;
+
+	let plain_keys = |object: &serde_json::Map<String, serde_json::Value>| {
+		object.keys().all(|key| {
+			key.bytes()
+				.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+		})
+	};
+
+	let Some(object) = projects.as_object().filter(|object| plain_keys(object)) else {
+		return serde_json_canonicalizer::to_vec(projects);
+	};
+
+	let entries: Vec<(&String, &serde_json::Value)> = object.iter().collect();
+	let parts: Result<Vec<Vec<u8>>, serde_json::Error> = entries
+		.par_iter()
+		.map(|(_, project)| serde_json_canonicalizer::to_vec(project))
+		.collect();
+	let parts = parts?;
+
+	let size = parts.iter().map(Vec::len).sum::<usize>()
+		+ entries.iter().map(|(key, _)| key.len() + 4).sum::<usize>()
+		+ 2;
+	let mut out = Vec::with_capacity(size);
+
+	out.push(b'{');
+
+	for (index, ((key, _), part)) in entries.iter().zip(&parts).enumerate() {
+		if index > 0 {
+			out.push(b',');
+		}
+
+		out.push(b'"');
+		out.extend_from_slice(key.as_bytes());
+		out.extend_from_slice(b"\":");
+		out.extend_from_slice(part);
+	}
+
+	out.push(b'}');
+
+	Ok(out)
 }
 
 fn check_revision(
@@ -272,5 +327,49 @@ fn check_revision(
 			ErrorKind::RevisionConflict,
 			"the same revision was published with different bytes",
 		)),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use serde_json::json;
+
+	use super::*;
+
+	#[test]
+	fn the_parallel_form_equals_the_librarys_form() {
+		let projects = json!({
+			"zeta": {"b": 1, "a": [1, 2, {"y": "é", "x": "line\nbreak"}], "c": null},
+			"alpha": {"nested": {"z": true, "a": false}, "text": "quote\"slash\\"},
+			"a-1": {},
+			"m": {"k": "𐀀"},
+		});
+
+		assert_eq!(
+			canonical_projects(&projects).unwrap(),
+			serde_json_canonicalizer::to_vec(&projects).unwrap()
+		);
+	}
+
+	#[test]
+	fn empty_and_single_project_maps_match_too() {
+		for projects in [json!({}), json!({"only": {"a": 1}})] {
+			assert_eq!(
+				canonical_projects(&projects).unwrap(),
+				serde_json_canonicalizer::to_vec(&projects).unwrap()
+			);
+		}
+	}
+
+	#[test]
+	fn unusual_keys_take_the_standard_path() {
+		// Keys the semantic checks would reject, but the function must still be
+		// correct for them. UTF-16 order puts "\u{ffff}" after "\u{10000}".
+		let projects = json!({"\u{ffff}": {"a": 1}, "\u{10000}": {"a": 2}, "A": {}});
+
+		assert_eq!(
+			canonical_projects(&projects).unwrap(),
+			serde_json_canonicalizer::to_vec(&projects).unwrap()
+		);
 	}
 }

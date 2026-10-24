@@ -226,3 +226,124 @@ fn canonicalization_matches_the_shared_vectors() {
 		);
 	}
 }
+
+/// Measures verification of a maximum-size catalog. Run it in release mode:
+///
+/// ```sh
+/// cargo test --release -p launcher-catalog catalog_of_ten_thousand -- --ignored --nocapture
+/// ```
+#[test]
+#[ignore = "a timing measurement, not a correctness check"]
+fn verifying_a_catalog_of_ten_thousand_projects_is_measured() {
+	use base64::Engine;
+	use base64::engine::general_purpose::STANDARD;
+	use ed25519_dalek::{Signer, SigningKey};
+
+	let signing = SigningKey::from_bytes(&[7u8; 32]);
+	let public = STANDARD.encode(signing.verifying_key().to_bytes());
+	let registry = KeyRegistry::from_test_fixture(&format!(
+		r#"{{"schema_version":1,"feed_id":"perf.feed","test_only":true,"keys":[
+			{{"key_id":"perf","algorithm":"ed25519","role":"catalog","status":"active","public_key":"{public}"}}]}}"#
+	))
+	.unwrap();
+
+	let projects: serde_json::Map<String, serde_json::Value> = (0..10_000)
+		.map(|index| {
+			let variant = |os: &str, arch: &str| {
+				serde_json::json!({
+					"id": format!("{os}-{arch}"), "os": os, "arch": arch, "abi": "native", "runtimes": [],
+					"format": "tar.gz",
+					"assets": {"include": [format!("app{index}-*-{os}-{arch}.tar.gz")], "exclude": ["*debug*"], "case_sensitive": true},
+					"install": {"adapter": "portable-v1", "scope": "user", "entry_point": "bin/app", "required_capabilities": ["safe-archive-v1"]},
+					"verification": {"minimum": "host-digest"},
+					"required_capabilities": []
+				})
+			};
+
+			(
+				format!("app-{index}"),
+				serde_json::json!({
+					"display": {"name": format!("Application {index}"), "summary": "A synthetic catalog entry used to measure verification.",
+						"kind": "desktop", "categories": ["utilities"], "links": {}},
+					"source": {"provider": "github", "repository_id": (index + 1).to_string(), "owner_id": "2",
+						"owner": "owner", "repository": format!("app-{index}")},
+					"status": {"state": "active"},
+					"release_policy": {"channel": "stable", "version_strategy": "semver", "tag_include": ["v*"],
+						"tag_exclude": [], "tracking": "upstream"},
+					"variants": [variant("linux", "x86_64"), variant("macos", "aarch64"), variant("windows", "x86_64")]
+				}),
+			)
+		})
+		.collect();
+
+	let projects = serde_json::Value::Object(projects);
+	let hash = hex::encode(Sha256::digest(
+		serde_json_canonicalizer::to_vec(&projects).unwrap(),
+	));
+	let manifest = serde_json::to_vec(&serde_json::json!({
+		"schema_version": 1, "feed_id": "perf.feed", "revision": 1,
+		"issued_at": "2030-01-01T00:00:00Z", "expires_at": "2030-01-31T00:00:00Z",
+		"required_capabilities": [], "projects": projects, "hash": hash
+	}))
+	.unwrap();
+	let signature = STANDARD.encode(signing.sign(&manifest).to_bytes());
+	let envelope = format!(
+		r#"{{"version":1,"signatures":[{{"key_id":"perf","algorithm":"ed25519","signature":"{signature}"}}]}}"#
+	);
+
+	let context = VerifyContext {
+		registry: &registry,
+		feed_id: "perf.feed",
+		now: timestamp::parse("2030-01-15T00:00:00Z").unwrap(),
+		high_water: None,
+		supported_capabilities: &["safe-archive-v1"],
+		freshness: FreshnessPolicy::RequireCurrent,
+	};
+
+	// Where the time goes, stage by stage.
+	{
+		use serde::Deserialize;
+
+		let stage = |label: &str, started: std::time::Instant| {
+			println!(
+				"  {label}: {:.0} ms",
+				started.elapsed().as_secs_f64() * 1000.0
+			);
+		};
+
+		let t = std::time::Instant::now();
+		let value = crate::strict_json::parse(&manifest).unwrap();
+		stage("strict parse to a value tree", t);
+
+		let t = std::time::Instant::now();
+		let typed = crate::manifest::Manifest::deserialize(&value).unwrap();
+		stage("typed deserialize", t);
+
+		let t = std::time::Instant::now();
+		crate::semantic::validate(&typed).unwrap();
+		stage("semantic validation (parallel)", t);
+
+		let t = std::time::Instant::now();
+		let canonical = crate::verify::canonical_projects(value.get("projects").unwrap()).unwrap();
+		stage("canonical form of projects (parallel)", t);
+
+		let t = std::time::Instant::now();
+		let _ = Sha256::digest(&canonical);
+		let _ = Sha256::digest(&manifest);
+		stage("two SHA-256 passes", t);
+	}
+
+	let started = std::time::Instant::now();
+	let outcome = verify(&manifest, envelope.as_bytes(), &context).unwrap();
+	let elapsed = started.elapsed();
+
+	println!(
+		"verified {} projects ({:.1} MiB) in {:.0} ms on {} threads",
+		outcome.catalog.project_count(),
+		manifest.len() as f64 / (1024.0 * 1024.0),
+		elapsed.as_secs_f64() * 1000.0,
+		rayon::current_num_threads(),
+	);
+
+	assert_eq!(outcome.catalog.project_count(), 10_000);
+}
