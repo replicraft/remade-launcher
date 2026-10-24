@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Draws the DMG window background: a charcoal field with a lime arrow.
+"""Draws the DMG window background: a light field with a dark green arrow.
+
+The field is light on purpose: Finder draws icon labels in dark text and
+cannot be told otherwise, so a dark background would hide them.
 
 The output is plain PNG, written with the standard library only, so the
 packaging step needs no image tools. Run it only when the artwork changes
@@ -15,8 +18,8 @@ import zlib
 from pathlib import Path
 
 WIDTH, HEIGHT = 660, 400
-BACKGROUND = (0x15, 0x19, 0x1F)
-ACCENT = (0xC4, 0xF4, 0x77)
+BACKGROUND = (0xF5, 0xF6, 0xF2)
+ACCENT = (0x3F, 0x5F, 0x0F)
 
 # The arrow sits between the app icon (x=165) and the Applications link
 # (x=495), on the icon row (y=200). Units are 1x pixels.

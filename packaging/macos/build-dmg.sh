@@ -9,7 +9,9 @@
 #   SIGN_IDENTITY  Developer ID identity for codesign. Defaults to an ad-hoc
 #                  signature, which runs locally but is not notarized.
 #
-# Requires: Xcode command line tools and `brew install create-dmg`.
+# Requires: Xcode command line tools and `dmgbuild` (`pip install dmgbuild`).
+# dmgbuild lays the window out without Finder scripting, so this runs
+# without a desktop session or Automation permission.
 
 set -euo pipefail
 
@@ -22,7 +24,8 @@ binary="remade-launcher"
 version="$(cargo metadata --no-deps --format-version 1 --manifest-path "$root/Cargo.toml" \
 	| python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "remade-launcher"))')"
 
-command -v create-dmg >/dev/null || { echo "create-dmg is missing: brew install create-dmg" >&2; exit 1; }
+dmgbuild="${DMGBUILD:-$(command -v dmgbuild || true)}"
+[[ -n "$dmgbuild" ]] || { echo "dmgbuild is missing: pip install dmgbuild (or set DMGBUILD)" >&2; exit 1; }
 
 # --- Build ------------------------------------------------------------------
 
@@ -70,20 +73,13 @@ tiffutil -cat "$here/dmg-background.png" "$here/dmg-background@2x.png" -out "$ba
 dmg="$dist/RemadeLauncher-$version-macos-$arch_label.dmg"
 rm -f "$dmg"
 
-create-dmg \
-	--volname "$app_name" \
-	--volicon "$root/assets/macos/RemadeLauncher.icns" \
-	--background "$background" \
-	--window-pos 200 120 \
-	--window-size 660 400 \
-	--icon-size 112 \
-	--text-size 13 \
-	--icon "$app_name.app" 165 200 \
-	--hide-extension "$app_name.app" \
-	--app-drop-link 495 200 \
-	--no-internet-enable \
-	"$dmg" \
-	"$staging"
+"$dmgbuild" \
+	-s "$here/dmgbuild-settings.py" \
+	-D app="$bundle" \
+	-D background="$background" \
+	-D icon="$root/assets/macos/RemadeLauncher.icns" \
+	"$app_name" \
+	"$dmg"
 
 rm -rf "$staging" "$background"
 
