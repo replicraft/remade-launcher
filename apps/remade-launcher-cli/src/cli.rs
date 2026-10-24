@@ -40,6 +40,8 @@ pub(crate) enum Command {
 	Run(RunArgs),
 	/// Show recent installs, updates, and removals.
 	History(HistoryArgs),
+	/// Print a support report with no private details in it.
+	Diagnostics,
 	/// Check or refresh the catalog.
 	Catalog {
 		#[command(subcommand)]

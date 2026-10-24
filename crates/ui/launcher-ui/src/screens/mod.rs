@@ -11,7 +11,7 @@ pub(crate) use add::AddView;
 pub(crate) use explore::ExploreView;
 pub(crate) use library::library;
 pub(crate) use navigation::navigation;
-pub(crate) use settings::settings;
+pub(crate) use settings::{SettingsAction, settings};
 
 use egui::{Frame, Margin, RichText, Ui};
 use launcher_core::{CustomPreparation, InstalledApp};

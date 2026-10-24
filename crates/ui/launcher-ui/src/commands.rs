@@ -35,6 +35,7 @@ pub(crate) enum Message {
 		report: RemovalReport,
 	},
 	Engine(EngineEvent),
+	Diagnostics(String),
 }
 
 /// A handle for submitting commands.
@@ -165,6 +166,12 @@ impl Commands {
 
 			engine.installed().await.map(Message::Installed)
 		});
+	}
+
+	pub(crate) fn diagnostics(&self) {
+		self.spawn_result(
+			|engine| async move { engine.diagnostics().await.map(Message::Diagnostics) },
+		);
 	}
 
 	pub(crate) fn set_theme(&self, theme: ThemePreference) {

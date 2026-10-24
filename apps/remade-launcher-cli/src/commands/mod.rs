@@ -22,6 +22,11 @@ pub(crate) async fn dispatch(engine: &Arc<Engine>, cli: &Cli) -> Result<ExitCode
 		Command::Search(args) => search::run(engine, cli, args).await,
 		Command::Info(args) => info::run(engine, cli, args).await,
 		Command::List => list::run(engine, cli).await,
+		Command::Diagnostics => {
+			print!("{}", engine.diagnostics().await?);
+
+			Ok(ExitCode::SUCCESS)
+		}
 		Command::History(args) => history::run(engine, cli, args).await,
 		Command::Install(args) => install::run(engine, cli, args).await,
 		Command::Update(args) => update::run(engine, cli, args).await,

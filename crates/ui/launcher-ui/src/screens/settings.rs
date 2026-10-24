@@ -1,15 +1,17 @@
 use egui::{RichText, Ui};
-use launcher_model::ThemePreference;
+use launcher_model::{ThemePreference, product};
 
 use super::page;
+use crate::theme;
 
-/// Returns the theme the user just picked, if they picked one.
-pub(crate) fn settings(
-	ui: &mut Ui,
-	current: ThemePreference,
-	notice: Option<&str>,
-) -> Option<ThemePreference> {
-	let mut chosen = None;
+pub(crate) enum SettingsAction {
+	None,
+	Theme(ThemePreference),
+	CopyDiagnostics,
+}
+
+pub(crate) fn settings(ui: &mut Ui, current: ThemePreference) -> SettingsAction {
+	let mut action = SettingsAction::None;
 
 	page(ui, "Settings", |ui| {
 		ui.label(RichText::new("Appearance").size(18.0).strong());
@@ -17,16 +19,30 @@ pub(crate) fn settings(
 		ui.horizontal(|ui| {
 			for theme in ThemePreference::ALL {
 				if ui.radio(current == theme, theme.label()).clicked() {
-					chosen = Some(theme);
+					action = SettingsAction::Theme(theme);
 				}
 			}
 		});
 
-		if let Some(notice) = notice {
-			ui.add_space(12.0);
-			ui.colored_label(ui.visuals().error_fg_color, notice);
+		ui.add_space(16.0);
+		ui.label(RichText::new("About").size(18.0).strong());
+		ui.label(format!("{} {}", product::NAME, product::VERSION));
+		ui.label(RichText::new(product::TAGLINE).color(theme::muted(ui)));
+
+		ui.add_space(8.0);
+
+		if ui.button("Copy support report").clicked() {
+			action = SettingsAction::CopyDiagnostics;
 		}
+
+		ui.label(
+			RichText::new(
+				"The report lists versions and counts only. It has no file paths, links, or app names.",
+			)
+			.small()
+			.color(theme::muted(ui)),
+		);
 	});
 
-	chosen
+	action
 }

@@ -5,6 +5,7 @@
 
 mod catalog;
 mod config;
+mod diagnostics;
 mod engine;
 mod events;
 mod explore;

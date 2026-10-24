@@ -9,11 +9,12 @@ use tokio::runtime::Handle;
 
 use crate::commands::{Commands, Message};
 use crate::screens::sheet::{self, Outcome, Sheet};
-use crate::screens::{self, Action, AddView, ExploreView, Screen};
+use crate::screens::{self, Action, AddView, ExploreView, Screen, SettingsAction};
 use crate::{branding, theme};
 
 pub(crate) struct LauncherApp {
 	commands: Commands,
+	context: Context,
 	messages: Receiver<Message>,
 	logo: TextureHandle,
 
@@ -46,6 +47,7 @@ impl LauncherApp {
 
 		Self {
 			commands: Commands::new(engine, runtime, sender, context.clone()),
+			context: context.clone(),
 			messages,
 			logo,
 			screen: Screen::Explore,
@@ -89,6 +91,13 @@ impl LauncherApp {
 					self.commands.refresh_installed();
 				}
 				Message::Engine(event) => self.handle_event(event),
+				Message::Diagnostics(text) => {
+					self.context.copy_text(text);
+					self.sheet = Some(Sheet::Message {
+						title: "Copied".into(),
+						lines: vec!["A support report is on your clipboard. It has no file paths or app names.".into()],
+					});
+				}
 			}
 		}
 	}
@@ -230,11 +239,11 @@ impl eframe::App for LauncherApp {
 				Screen::Explore => action = self.explore.show(ui, &self.commands),
 				Screen::Library => action = screens::library(ui, &self.installed, &self.progress),
 				Screen::Add => action = self.add.show(ui),
-				Screen::Settings => {
-					if let Some(theme) = screens::settings(ui, self.theme, None) {
-						self.change_theme(&context, theme);
-					}
-				}
+				Screen::Settings => match screens::settings(ui, self.theme) {
+					SettingsAction::None => {}
+					SettingsAction::Theme(theme) => self.change_theme(&context, theme),
+					SettingsAction::CopyDiagnostics => self.commands.diagnostics(),
+				},
 			}
 		});
 
