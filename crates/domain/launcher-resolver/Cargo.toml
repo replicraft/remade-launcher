@@ -1,0 +1,23 @@
+[package]
+name = "launcher-resolver"
+description = "Turns release observations into explained candidates, then into immutable plans."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+globset.workspace = true
+hex.workspace = true
+launcher-catalog.workspace = true
+launcher-model.workspace = true
+launcher-providers.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_json_canonicalizer.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

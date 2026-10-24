@@ -1,0 +1,24 @@
+//! Release resolution and installation plans.
+//!
+//! The resolver reads observations and signed policy and explains what it
+//! found. It has no side effects. A [`Plan`] freezes one candidate into an
+//! immutable, hashed record that a user approves, so what they approved is
+//! exactly what later executes.
+
+mod heuristics;
+mod matching;
+mod plan;
+mod resolve;
+mod version;
+
+pub use heuristics::{Guess, classify_asset, custom_candidates};
+pub use matching::Matcher;
+pub use plan::{
+	ApprovedPlan, AssetBinding, Consent, EvidenceLevel, InstallBinding, Operation, Origin, Plan,
+	PlanBody, PlanError, ReleaseBinding, SourceBinding,
+};
+pub use resolve::{
+	AssetRef, Candidate, NoCompatible, Outcome, ReleaseRef, Resolution, SkippedRelease,
+	resolve_curated,
+};
+pub use version::{Version, VersionOrder};
