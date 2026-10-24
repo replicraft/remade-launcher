@@ -47,6 +47,16 @@ pub(crate) struct LibraryState {
 	pub(super) show: Show,
 }
 
+impl LibraryState {
+	/// Puts the newest installs first, with no search or filter hiding them.
+	/// Used when the person comes to the Library to find what just finished.
+	pub(crate) fn show_recent(&mut self) {
+		self.sort = Sort::RecentlyInstalled;
+		self.show = Show::All;
+		self.search.clear();
+	}
+}
+
 fn has_update(statuses: &HashMap<InstallationId, UpdateStatus>, app: &InstalledApp) -> bool {
 	statuses
 		.get(&app.id)
@@ -189,6 +199,21 @@ mod tests {
 
 		assert_eq!(names(&arrange(&apps, &statuses, &only)), ["Beta"]);
 		assert_eq!(names(&arrange(&apps, &statuses, &first)), ["Beta", "Alpha"]);
+	}
+
+	#[test]
+	fn showing_recent_installs_clears_whatever_could_hide_them() {
+		let mut state = LibraryState {
+			search: "x".into(),
+			sort: Sort::Name,
+			show: Show::Reviewed,
+		};
+
+		state.show_recent();
+
+		assert_eq!(state.sort, Sort::RecentlyInstalled);
+		assert_eq!(state.show, Show::All);
+		assert!(state.search.is_empty());
 	}
 
 	#[test]

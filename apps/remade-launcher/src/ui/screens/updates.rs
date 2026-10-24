@@ -203,7 +203,7 @@ fn attention(ui: &mut Ui, view: &UpdatesView<'_>) {
 	ui.add_space(12.0);
 	ui.label(
 		RichText::new("Held or not checked")
-			.size(16.0)
+			.size(18.0)
 			.family(theme::semibold()),
 	);
 
@@ -226,7 +226,7 @@ fn history(ui: &mut Ui, history: &[OperationSummary]) {
 	ui.add_space(12.0);
 	ui.label(
 		RichText::new("History")
-			.size(16.0)
+			.size(18.0)
 			.family(theme::semibold()),
 	);
 

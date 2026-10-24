@@ -812,6 +812,7 @@ impl LauncherApp {
 		}
 
 		if library {
+			self.library.show_recent();
 			self.go(Screen::Library);
 		}
 	}
