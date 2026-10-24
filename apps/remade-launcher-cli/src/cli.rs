@@ -227,6 +227,10 @@ pub(crate) struct ChangelogArgs {
 	/// A release tag. Defaults to the newest stable release.
 	#[arg(long, value_name = "TAG")]
 	pub(crate) release: Option<String>,
+
+	/// Open the release's page on GitHub in your browser as well.
+	#[arg(long)]
+	pub(crate) open: bool,
 }
 
 #[derive(Debug, Args)]

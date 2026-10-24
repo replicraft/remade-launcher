@@ -482,6 +482,26 @@ pub(crate) async fn changelog(
 		);
 	}
 
+	if args.open {
+		let state = engine.catalog().state();
+
+		if let Some(project) = state
+			.catalog
+			.as_ref()
+			.and_then(|catalog| catalog.project(&args.slug))
+		{
+			let url = format!(
+				"https://github.com/{}/releases/tag/{}",
+				project.source.display_name(),
+				notes.version
+			);
+
+			if open_in_browser(&url).is_err() {
+				ctx.warn(format!("No browser could be opened. The page is {url}"));
+			}
+		}
+	}
+
 	Ok(ExitStatus::Success)
 }
 
