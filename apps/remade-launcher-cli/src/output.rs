@@ -101,16 +101,9 @@ pub(crate) fn bytes(size: u64) -> String {
 	}
 }
 
+/// A date for text output, in the reader's own time zone.
 pub(crate) fn date(unix: i64) -> String {
-	let time =
-		time::OffsetDateTime::from_unix_timestamp(unix).unwrap_or(time::OffsetDateTime::UNIX_EPOCH);
-
-	format!(
-		"{}-{:02}-{:02}",
-		time.year(),
-		u8::from(time.month()),
-		time.day()
-	)
+	launcher_model::local_time::date(unix)
 }
 
 /// UTC, whole seconds, with a `Z`: the form every timestamp in JSON uses.
@@ -129,9 +122,10 @@ pub(crate) fn iso(unix: i64) -> String {
 	)
 }
 
-/// A timestamp for text output, with the time of day.
+/// A timestamp for text output, with the time of day, in the reader's own
+/// time zone. JSON keeps using [`iso`].
 pub(crate) fn when(unix: i64) -> String {
-	iso(unix).replace('T', " ").trim_end_matches('Z').to_owned() + " UTC"
+	launcher_model::local_time::date_time(unix)
 }
 
 #[cfg(test)]
@@ -148,9 +142,18 @@ mod tests {
 	#[test]
 	fn formats_sizes_and_times() {
 		assert_eq!(bytes(1536), "1.5 KB");
-		assert_eq!(date(1_894_665_600), "2030-01-15");
 		assert_eq!(iso(1_894_665_600), "2030-01-15T00:00:00Z");
 		assert_eq!(iso(1_894_669_445), "2030-01-15T01:04:05Z");
-		assert_eq!(when(1_894_669_445), "2030-01-15 01:04:05 UTC");
+
+		// Text output follows the reader's zone, so it must agree with the
+		// shared formatter instead of repeating the UTC reading.
+		assert_eq!(
+			date(1_894_665_600),
+			launcher_model::local_time::date(1_894_665_600)
+		);
+		assert_eq!(
+			when(1_894_669_445),
+			launcher_model::local_time::date_time(1_894_669_445)
+		);
 	}
 }

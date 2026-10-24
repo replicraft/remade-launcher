@@ -236,54 +236,62 @@ fn update_settings(
 ) {
 	let policy = view.policies.get(&app.id).cloned().unwrap_or_default();
 
-	ui.collapsing("Update settings", |ui| {
-		let mut changed = policy.clone();
+	egui::CollapsingHeader::new("Update settings")
+		.id_salt(("update-settings", app.id.to_string()))
+		.show(ui, |ui| {
+			let mut changed = policy.clone();
 
-		let mut pinned = policy.pinned_release_id.is_some();
+			let mut pinned = policy.pinned_release_id.is_some();
 
-		if ui.checkbox(&mut pinned, "Pin at this version").changed() {
-			*action = Some(Action::Pin(app.id, pinned));
-		}
+			if ui.checkbox(&mut pinned, "Pin at this version").changed() {
+				*action = Some(Action::Pin(app.id, pinned));
+			}
 
-		ui.checkbox(
-			&mut changed.auto_paused,
-			"Pause automatic updates for this app",
-		);
-		ui.checkbox(&mut changed.allow_prerelease, "Allow pre-releases");
+			ui.checkbox(
+				&mut changed.auto_paused,
+				"Pause automatic updates for this app",
+			);
+			ui.checkbox(&mut changed.allow_prerelease, "Allow pre-releases");
 
-		ui.horizontal(|ui| {
-			ui.label("Minimum release age");
+			ui.horizontal(|ui| {
+				ui.label("Minimum release age");
 
-			let effective = match changed.min_age_seconds.and_then(MinimumAge::from_seconds) {
-				Some(age) => preset_label(age),
-				None => format!("Use global default ({})", preset_label(view.global_age)),
-			};
+				let effective = match changed.min_age_seconds.and_then(MinimumAge::from_seconds) {
+					Some(age) => preset_label(age),
+					None => format!("Use global default ({})", preset_label(view.global_age)),
+				};
 
-			ComboBox::from_id_salt(("age", app.id.to_string()))
-				.selected_text(effective)
-				.show_ui(ui, |ui| {
-					if ui
-						.selectable_label(changed.min_age_seconds.is_none(), "Use global default")
-						.clicked()
-					{
-						changed.min_age_seconds = None;
-					}
-
-					for (label, age) in MinimumAge::PRESETS {
+				ComboBox::from_id_salt(("age", app.id.to_string()))
+					.selected_text(effective)
+					.show_ui(ui, |ui| {
 						if ui
-							.selectable_label(changed.min_age_seconds == Some(age.seconds()), label)
+							.selectable_label(
+								changed.min_age_seconds.is_none(),
+								"Use global default",
+							)
 							.clicked()
 						{
-							changed.min_age_seconds = Some(age.seconds());
+							changed.min_age_seconds = None;
 						}
-					}
-				});
-		});
 
-		if changed != policy {
-			*action = Some(Action::SetPolicy(app.id, changed));
-		}
-	});
+						for (label, age) in MinimumAge::PRESETS {
+							if ui
+								.selectable_label(
+									changed.min_age_seconds == Some(age.seconds()),
+									label,
+								)
+								.clicked()
+							{
+								changed.min_age_seconds = Some(age.seconds());
+							}
+						}
+					});
+			});
+
+			if changed != policy {
+				*action = Some(Action::SetPolicy(app.id, changed));
+			}
+		});
 }
 
 fn preset_label(age: MinimumAge) -> String {

@@ -546,10 +546,5 @@ fn banner(ui: &mut Ui, state: &CatalogState, commands: &Commands) {
 }
 
 fn date(time: OffsetDateTime) -> String {
-	format!(
-		"{}-{:02}-{:02}",
-		time.year(),
-		u8::from(time.month()),
-		time.day()
-	)
+	launcher_model::local_time::date(time.unix_timestamp())
 }

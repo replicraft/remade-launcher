@@ -361,19 +361,9 @@ fn evidence(level: EvidenceLevel) -> &'static str {
 	}
 }
 
-/// A UTC date and time for display.
+/// A date and time in the person's own time zone.
 pub(crate) fn when(unix: i64) -> String {
-	let time =
-		time::OffsetDateTime::from_unix_timestamp(unix).unwrap_or(time::OffsetDateTime::UNIX_EPOCH);
-
-	format!(
-		"{}-{:02}-{:02} {:02}:{:02} UTC",
-		time.year(),
-		u8::from(time.month()),
-		time.day(),
-		time.hour(),
-		time.minute()
-	)
+	launcher_model::local_time::friendly(unix, time::OffsetDateTime::now_utc().unix_timestamp())
 }
 
 pub(crate) fn bytes(size: u64) -> String {

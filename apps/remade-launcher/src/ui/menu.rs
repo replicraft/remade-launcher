@@ -30,11 +30,6 @@ impl AppMenu {
 		use muda::accelerator::{Accelerator, Code, Modifiers};
 		use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 
-		// The menu bar names the application after its process. Unpackaged
-		// runs would otherwise show the executable's file name.
-		objc2_foundation::NSProcessInfo::processInfo()
-			.setProcessName(&objc2_foundation::NSString::from_str(product::NAME));
-
 		let (sender, commands) = mpsc::channel();
 		let sender = Mutex::new(sender);
 		let context = context.clone();

@@ -5,6 +5,7 @@
 
 pub mod error;
 pub mod ids;
+pub mod local_time;
 pub mod product;
 pub mod settings;
 pub mod target;

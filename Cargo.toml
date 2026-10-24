@@ -64,7 +64,6 @@ eframe = { version = "0.37", default-features = false, features = ["accesskit", 
 egui = { version = "0.37", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
 muda = { version = "0.21", default-features = false }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSProcessInfo", "NSString"] }
 
 # Archives and filesystem
 cap-std = "4"
@@ -80,6 +79,7 @@ semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_json_canonicalizer = "0.4"
+jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo", "tzdb-bundle-platform"] }
 time = { version = "0.3", default-features = false, features = ["parsing", "std"] }
 uuid = { version = "1", features = ["serde", "v7"] }
 
