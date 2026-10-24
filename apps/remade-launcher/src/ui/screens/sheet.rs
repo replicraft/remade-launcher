@@ -9,7 +9,7 @@ use launcher_core::{InstalledApp, OperatorUpdate, Ready, RemovalReport};
 use launcher_model::{InstallationId, UpdateMode};
 use launcher_resolver::{Candidate, EvidenceLevel};
 
-use crate::ui::components::{Choice, Confirm, dialog_buttons};
+use crate::ui::components::{Choice, Confirm, dialog_buttons, dialog_close, dialog_ok};
 use crate::ui::icons;
 use crate::ui::theme;
 
@@ -70,6 +70,9 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 		.show(ctx, |ui| {
 		ui.set_width(460.0);
 
+		let origin = ui.cursor().min;
+		let working = matches!(sheet, Sheet::Working(_));
+
 		match sheet {
 			Sheet::Working(label) => {
 				ui.horizontal(|ui| {
@@ -84,7 +87,7 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 					ui.label(line.as_str());
 				}
 
-				if ui.button("OK").clicked() {
+				if dialog_ok(ui, "OK") {
 					outcome = Outcome::Close;
 				}
 			}
@@ -101,7 +104,7 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 					ui.label(format!("• {} ({})", candidate.asset.name, candidate.variant_id));
 				}
 
-				if ui.button("OK").clicked() {
+				if dialog_ok(ui, "OK") {
 					outcome = Outcome::Close;
 				}
 			}
@@ -162,15 +165,13 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 				ui.add_space(6.0);
 				ui.label(RichText::new("Each app is checked and replaced one at a time. A failure in one does not stop the others.").small().color(theme::muted(ui)));
 
-				ui.horizontal(|ui| {
-					if ui.button("Cancel").clicked() {
-						outcome = Outcome::Close;
-					}
+				ui.add_space(14.0);
 
-					if ui.button("Update all").clicked() {
-						outcome = Outcome::UpdateAll(std::mem::take(updates));
-					}
-				});
+				match dialog_buttons(ui, &Confirm { label: "Update all", destructive: false, enabled: true }) {
+					Choice::Pending => {}
+					Choice::Cancel => outcome = Outcome::Close,
+					Choice::Confirm => outcome = Outcome::UpdateAll(std::mem::take(updates)),
+				}
 			}
 			Sheet::Notes { app, version, text } => {
 				ui.heading(format!("{app} {version}"));
@@ -179,7 +180,7 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 					ui.label(if text.trim().is_empty() { "This release has no notes." } else { text.as_str() });
 				});
 
-				if ui.button("Close").clicked() {
+				if dialog_ok(ui, "Close") {
 					outcome = Outcome::Close;
 				}
 			}
@@ -226,10 +227,14 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 					}
 				}
 
-				if ui.button("OK").clicked() {
+				if dialog_ok(ui, "OK") {
 					outcome = Outcome::Close;
 				}
 			}
+		}
+
+		if !working && dialog_close(ui, origin, 460.0) {
+			outcome = Outcome::Close;
 		}
 	});
 
@@ -322,21 +327,26 @@ fn review(
 
 	ui.add_space(8.0);
 
-	ui.horizontal(|ui| {
-		if ui.button("Cancel").clicked() {
-			outcome = Some(Outcome::Close);
-		}
+	let allowed = !ready.unreviewed || *acknowledged;
 
-		let allowed = !ready.unreviewed || *acknowledged;
-
-		if ui.add_enabled(allowed, egui::Button::new(verb)).clicked() {
+	match dialog_buttons(
+		ui,
+		&Confirm {
+			label: verb,
+			destructive: false,
+			enabled: allowed,
+		},
+	) {
+		Choice::Pending => {}
+		Choice::Cancel => outcome = Some(Outcome::Close),
+		Choice::Confirm => {
 			outcome = Some(Outcome::Install {
 				ready: Box::new(ready.clone()),
 				update_of: *update_of,
 				acknowledged: *acknowledged,
 			});
 		}
-	});
+	}
 
 	outcome
 }

@@ -13,6 +13,7 @@ use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
 
 use crate::ui::commands::{Commands, Message};
+use crate::ui::components::dialog_close;
 use crate::ui::demo::{self, Demo};
 use crate::ui::menu::{AppMenu, MenuCommand};
 use crate::ui::screens::navigation::{self, NavAction, Sidebar};
@@ -443,9 +444,11 @@ impl LauncherApp {
 			.show(context, |ui| {
 				ui.set_width(520.0);
 
+				let origin = ui.cursor().min;
+
 				action = self.add.show(ui);
 
-				if ui.button("Close").clicked() {
+				if dialog_close(ui, origin, 520.0) {
 					close = true;
 				}
 			});

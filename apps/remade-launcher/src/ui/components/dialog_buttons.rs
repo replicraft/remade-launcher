@@ -42,3 +42,11 @@ pub(crate) fn dialog_buttons(ui: &mut Ui, confirm: &Confirm<'_>) -> Choice {
 
 	choice
 }
+
+/// A lone dismiss button, at the right edge like the rest.
+pub(crate) fn dialog_ok(ui: &mut Ui, label: &str) -> bool {
+	ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+		ui.button(label).clicked()
+	})
+	.inner
+}

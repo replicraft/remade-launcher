@@ -5,13 +5,15 @@ mod brand;
 mod count_badge;
 mod danger_button;
 mod dialog_buttons;
+mod dialog_close;
 mod icon_button;
 mod nav_item;
 mod search_bar;
 
 pub(crate) use brand::brand;
 pub(crate) use danger_button::danger_button;
-pub(crate) use dialog_buttons::{Choice, Confirm, dialog_buttons};
+pub(crate) use dialog_buttons::{Choice, Confirm, dialog_buttons, dialog_ok};
+pub(crate) use dialog_close::dialog_close;
 pub(crate) use icon_button::icon_button;
 pub(crate) use nav_item::nav_item;
 pub(crate) use search_bar::search_bar;

@@ -7,8 +7,8 @@ use egui::{RichText, ScrollArea, Ui};
 use launcher_core::CustomPreparation;
 use launcher_resolver::Fit;
 
+use super::Action;
 use super::sheet::bytes;
-use super::{Action, page};
 use crate::ui::theme;
 
 #[derive(Default)]
@@ -31,7 +31,10 @@ impl AddView {
 	pub(crate) fn show(&mut self, ui: &mut Ui) -> Option<Action> {
 		let mut action = None;
 
-		page(ui, "Add from GitHub", |ui| {
+		ui.heading("Add from GitHub");
+		ui.add_space(8.0);
+
+		(|ui: &mut Ui| {
 			ui.label(
 				RichText::new("Paste a public GitHub repository or release link. Remade has not reviewed apps you add this way, and a checksum cannot show who made a file or that it is safe.")
 					.color(theme::muted(ui)),
@@ -123,7 +126,7 @@ impl AddView {
 						});
 					}
 				});
-		});
+		})(ui);
 
 		action
 	}
