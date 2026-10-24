@@ -1,0 +1,46 @@
+use std::sync::Arc;
+
+use launcher_catalog::{KeyRegistry, SUPPORTED_CAPABILITIES};
+use launcher_model::product;
+use launcher_net::Url;
+
+/// Where the catalog lives and which keys may sign it.
+#[derive(Clone)]
+pub struct CatalogConfig {
+	pub feed_id: String,
+	pub manifest_url: Url,
+	pub envelope_url: Url,
+	pub registry: Arc<KeyRegistry>,
+	pub supported_capabilities: &'static [&'static str],
+}
+
+impl CatalogConfig {
+	/// The official Remade catalog, trusted through the compiled-in registry.
+	pub fn production() -> Self {
+		let base = |path: &str| {
+			Url::parse(&format!("https://remade.wiki/data/{path}"))
+				.expect("the catalog URLs are valid")
+		};
+
+		Self {
+			feed_id: product::CATALOG_FEED_ID.to_owned(),
+			manifest_url: base("launcher-catalog.json"),
+			envelope_url: base("launcher-catalog.sig"),
+			registry: Arc::new(KeyRegistry::production()),
+			supported_capabilities: SUPPORTED_CAPABILITIES,
+		}
+	}
+}
+
+#[derive(Clone)]
+pub struct EngineConfig {
+	pub catalog: CatalogConfig,
+}
+
+impl EngineConfig {
+	pub fn production() -> Self {
+		Self {
+			catalog: CatalogConfig::production(),
+		}
+	}
+}

@@ -8,13 +8,18 @@ publish.workspace = true
 
 [dependencies]
 directories.workspace = true
+launcher-catalog.workspace = true
 launcher-model.workspace = true
 launcher-net.workspace = true
 launcher-storage.workspace = true
+rayon.workspace = true
+time.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+launcher-catalog = { workspace = true, features = ["test-keys"] }
+serde_json.workspace = true
 tempfile.workspace = true
 
 [lints]

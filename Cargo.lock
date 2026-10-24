@@ -2065,10 +2065,14 @@ name = "launcher-core"
 version = "0.1.0"
 dependencies = [
  "directories",
+ "launcher-catalog",
  "launcher-model",
  "launcher-net",
  "launcher-storage",
+ "rayon",
+ "serde_json",
  "tempfile",
+ "time",
  "tokio",
  "tracing",
 ]

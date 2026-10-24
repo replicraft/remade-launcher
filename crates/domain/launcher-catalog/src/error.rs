@@ -20,6 +20,8 @@ pub enum ErrorKind {
 	HashMismatch,
 	Rollback,
 	RevisionConflict,
+	/// The verifier itself failed, for example a panicked worker.
+	Internal,
 }
 
 impl ErrorKind {
@@ -41,6 +43,7 @@ impl ErrorKind {
 			Self::HashMismatch => "hash-mismatch",
 			Self::Rollback => "rollback",
 			Self::RevisionConflict => "revision-conflict",
+			Self::Internal => "internal",
 		}
 	}
 
@@ -71,6 +74,10 @@ pub struct CatalogError {
 }
 
 impl CatalogError {
+	pub fn internal(detail: impl Into<String>) -> Self {
+		Self::new(ErrorKind::Internal, detail)
+	}
+
 	pub(crate) fn new(kind: ErrorKind, detail: impl Into<String>) -> Self {
 		Self {
 			kind,
