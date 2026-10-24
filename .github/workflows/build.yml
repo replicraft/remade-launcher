@@ -157,20 +157,34 @@ jobs:
           retention-days: 7
 
   windows:
-    name: Windows x86-64
+    name: Windows ${{ matrix.arch }}
     needs: version
-    runs-on: windows-2022
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            arch: x86_64
+            target: x86_64-pc-windows-msvc
+          - os: windows-11-arm
+            arch: aarch64
+            target: aarch64-pc-windows-msvc
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v7
-      - name: Install the pinned toolchain
-        run: rustup show active-toolchain || rustup toolchain install
+      # The Arm runner may not ship rustup, so install the toolchain the
+      # same way on both.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.99'
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
-          key: build-windows
+          key: build-windows-${{ matrix.arch }}
       - name: Install the installer builder
         run: cargo install cargo-packager --version 0.11.8 --locked
       - name: Build the programs
@@ -178,17 +192,17 @@ jobs:
       - name: Installer
         run: cargo packager --config packaging/windows/Packager.toml --release
       - name: Command-line archive
-        run: packaging/cli/build-archive.sh x86_64-pc-windows-msvc
+        run: packaging/cli/build-archive.sh ${{ matrix.target }}
       - name: Name and checksum the installer
         working-directory: dist
         run: |
           set -euo pipefail
           installer="$(ls *-setup.exe | head -n 1)"
-          mv "$installer" "RemadeLauncher-${{ needs.version.outputs.version }}-windows-x86_64-setup.exe"
-          sha256sum RemadeLauncher-*-setup.exe > "RemadeLauncher-${{ needs.version.outputs.version }}-windows-x86_64-setup.exe.sha256"
+          mv "$installer" "RemadeLauncher-${{ needs.version.outputs.version }}-windows-${{ matrix.arch }}-setup.exe"
+          sha256sum RemadeLauncher-*-setup.exe > "RemadeLauncher-${{ needs.version.outputs.version }}-windows-${{ matrix.arch }}-setup.exe.sha256"
       - uses: actions/upload-artifact@v7
         with:
-          name: remade-${{ needs.version.outputs.version }}-windows-x86_64
+          name: remade-${{ needs.version.outputs.version }}-windows-${{ matrix.arch }}
           path: dist/*
           if-no-files-found: error
           retention-days: 7
