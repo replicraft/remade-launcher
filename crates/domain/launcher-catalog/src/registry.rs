@@ -79,6 +79,12 @@ impl KeyRegistry {
 		&self.feed_id
 	}
 
+	/// The IDs of the keys this build trusts. Public by nature: a key ID
+	/// names a key, it does not grant anything.
+	pub fn active_key_ids(&self) -> Vec<&str> {
+		self.active.iter().map(|key| key.key_id.as_str()).collect()
+	}
+
 	pub fn active_key_count(&self) -> usize {
 		self.active.len()
 	}

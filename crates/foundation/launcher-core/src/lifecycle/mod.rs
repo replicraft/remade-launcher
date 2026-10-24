@@ -17,10 +17,13 @@ mod safe_delete;
 
 pub use artifact::{ArtifactSource, HttpArtifacts};
 pub use install::LifecycleService;
+pub(crate) use lock::acquire_patiently as acquire_operation_lock;
 pub(crate) use lock::try_acquire_cycle as cycle_lock;
+pub(crate) use meta::ManifestEntry;
 pub use meta::{InstallMeta, InstalledApp, OperationSummary};
 pub use recover::RecoveryReport;
 pub use remove::RemovalReport;
+pub(crate) use remove::verify_ownership;
 
 #[cfg(test)]
 mod tests;

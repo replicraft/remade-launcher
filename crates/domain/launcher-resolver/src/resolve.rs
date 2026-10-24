@@ -198,6 +198,93 @@ fn resolve_outcome(
 	})
 }
 
+/// Why a release is or is not a candidate, for listing releases.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReleaseStatus {
+	/// It passes the app's rules. `has_package` says whether a package for
+	/// this device is in it.
+	Eligible {
+		has_package: bool,
+	},
+	Excluded(&'static str),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseView {
+	pub id: u64,
+	pub tag: String,
+	pub prerelease: bool,
+	pub published_at: Option<i64>,
+	pub status: ReleaseStatus,
+}
+
+/// Every observed release with the verdict the resolver would give it, in
+/// the provider's order.
+pub fn list_releases(
+	project: &Project,
+	observation: &ReleaseObservation,
+	host: HostTarget,
+	supported: &[&str],
+	channel: Option<Channel>,
+) -> Vec<ReleaseView> {
+	let policy = &project.release_policy;
+	let channel = channel.unwrap_or(policy.channel);
+	let rules = TagRules::new(project);
+
+	let usable: Vec<&Variant> = project
+		.variants
+		.iter()
+		.filter(|variant| {
+			host.runs(variant.os, variant.arch) && capabilities_met(variant, supported)
+		})
+		.collect();
+
+	observation
+		.releases
+		.iter()
+		.map(|release| {
+			let verdict = (|| {
+				let rules = rules.as_ref().ok_or("the app's tag rules cannot be read")?;
+
+				if policy.tracking == Tracking::Pinned
+					&& policy.pinned_release_id.as_deref() != Some(release.id.to_string().as_str())
+				{
+					return Err("the app is pinned to another release");
+				}
+
+				let prefix = rules
+					.allowed_prefix(&release.tag)
+					.ok_or("the tag is outside the app's rules")?;
+				let version =
+					Version::parse_with_prefix(&release.tag, prefix, policy.version_strategy)
+						.ok_or("the tag is not a version this app uses")?;
+
+				if channel == Channel::Stable && (release.prerelease || version.is_prerelease()) {
+					return Err("it is a pre-release");
+				}
+
+				Ok(())
+			})();
+
+			let status = match verdict {
+				Err(why) => ReleaseStatus::Excluded(why),
+				Ok(()) => ReleaseStatus::Eligible {
+					has_package: matches_in_release(release, &usable, host)
+						.is_ok_and(|found| !found.is_empty()),
+				},
+			};
+
+			ReleaseView {
+				id: release.id,
+				tag: release.tag.clone(),
+				prerelease: release.prerelease,
+				published_at: release.published_at_unix,
+				status,
+			}
+		})
+		.collect()
+}
+
 /// How a candidate release compares with the one already installed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Recency {
@@ -571,6 +658,47 @@ mod tests {
 		assert_eq!(candidate.release.tag, "v1.10.0");
 		assert_eq!(candidate.asset.name, "app-1.10.0-linux-x64.tar.gz");
 		assert!(!candidate.explanation.is_empty());
+	}
+
+	#[test]
+	fn listing_releases_gives_each_one_a_reason() {
+		let observation = observed(
+			vec![
+				release(4, "v3.0.0-rc.1", true, &["app-3.0.0-rc.1-linux-x64.tar.gz"]),
+				release(3, "nightly", false, &["x"]),
+				release(2, "v2.0.0", false, &["app-2.0.0-windows.zip"]),
+				release(1, "v1.0.0", false, &["app-1.0.0-linux-x64.tar.gz"]),
+			],
+			true,
+		);
+
+		let views = list_releases(&linux_project(), &observation, LINUX, CAPS, None);
+		let status = |tag: &str| {
+			views
+				.iter()
+				.find(|view| view.tag == tag)
+				.unwrap()
+				.status
+				.clone()
+		};
+
+		assert_eq!(
+			status("v3.0.0-rc.1"),
+			ReleaseStatus::Excluded("it is a pre-release")
+		);
+		assert_eq!(
+			status("nightly"),
+			ReleaseStatus::Excluded("the tag is outside the app's rules")
+		);
+		assert_eq!(
+			status("v2.0.0"),
+			ReleaseStatus::Eligible { has_package: false }
+		);
+		assert_eq!(
+			status("v1.0.0"),
+			ReleaseStatus::Eligible { has_package: true }
+		);
+		assert_eq!(views.len(), 4);
 	}
 
 	#[test]

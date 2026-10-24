@@ -1308,3 +1308,194 @@ async fn an_uninstall_plan_shows_what_it_will_do_and_then_does_it() {
 	assert!(matches!(applied, Applied::Removed(report) if report.is_clean()));
 	assert!(world.engine.installed().await.unwrap().is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// Looking things up, and checking what is installed
+// ---------------------------------------------------------------------------
+
+async fn installed_world() -> (World, InstallationId, std::path::PathBuf) {
+	let world = world().await;
+	let ready = ready(prepare(&world, "sample-editor").await.unwrap());
+	let id = world
+		.engine
+		.install(&ready, &consent(&ready.source_display, false))
+		.await
+		.unwrap();
+	let root = std::path::PathBuf::from(&world.engine.installed().await.unwrap()[0].root);
+
+	(world, id, root)
+}
+
+#[tokio::test]
+async fn verify_passes_on_a_fresh_install_and_names_edits_and_losses() {
+	let (world, id, root) = installed_world().await;
+
+	let clean = world.engine.verify_installation(id).await.unwrap();
+	assert!(clean.is_clean(), "{clean:?}");
+	assert!(clean.files_checked >= 3);
+
+	std::fs::write(root.join("README"), "edited").unwrap();
+	std::fs::remove_file(root.join("bin/sample-editor")).unwrap();
+
+	let dirty = world.engine.verify_installation(id).await.unwrap();
+
+	assert!(!dirty.is_clean());
+	assert_eq!(dirty.modified, vec!["README".to_owned()]);
+	assert_eq!(dirty.missing, vec!["bin/sample-editor".to_owned()]);
+	assert!(dirty.ownership_ok);
+}
+
+#[tokio::test]
+async fn verify_reports_a_folder_that_is_no_longer_the_launchers() {
+	let (world, id, root) = installed_world().await;
+	std::fs::remove_file(root.join(".remade-install")).unwrap();
+
+	let report = world.engine.verify_installation(id).await.unwrap();
+
+	assert!(!report.ownership_ok && !report.is_clean());
+	assert!(
+		report.problems[0].contains("not marked"),
+		"{:?}",
+		report.problems
+	);
+}
+
+#[tokio::test]
+async fn doctor_is_read_only_and_points_at_unfinished_work() {
+	let (world, _id, root) = installed_world().await;
+
+	assert!(world.engine.doctor().await.unwrap().is_healthy());
+
+	std::fs::write(root.join("README"), "edited").unwrap();
+	let before = std::fs::read_to_string(root.join("README")).unwrap();
+
+	let report = world.engine.doctor().await.unwrap();
+
+	assert!(!report.is_healthy());
+	assert_eq!(report.apps[0].modified, vec!["README".to_owned()]);
+	assert_eq!(
+		std::fs::read_to_string(root.join("README")).unwrap(),
+		before,
+		"doctor repairs nothing"
+	);
+}
+
+#[tokio::test]
+async fn releases_lists_every_release_with_its_verdict() {
+	let world = world().await;
+	let provider = GithubProvider::new(world.github.clone());
+
+	let views = world
+		.engine
+		.releases_with(&provider, "sample-editor", Some(LINUX))
+		.await
+		.unwrap();
+
+	assert_eq!(views.len(), 1);
+	assert_eq!(views[0].tag, "v1.0.0");
+	assert_eq!(
+		views[0].status,
+		launcher_resolver::ReleaseStatus::Eligible { has_package: true }
+	);
+
+	let missing = world
+		.engine
+		.releases_with(&provider, "nope", Some(LINUX))
+		.await
+		.unwrap_err();
+	assert_eq!(missing.code(), ErrorCode::InstallationNotFound);
+}
+
+#[tokio::test]
+async fn a_changelog_is_plain_text_even_when_the_notes_are_hostile() {
+	let world = world().await;
+	let provider = GithubProvider::new(world.github.clone());
+	let release = release_json(1, "v1.0.0", &tarball("1.0.0"), true).replace(
+		"\"assets\"",
+		"\"body\":\"Fixes <script>x()</script>\\u001b[2Jdone\",\"assets\"",
+	);
+	*world.github.releases.lock().unwrap() = format!("[{release}]");
+
+	let notes = world
+		.engine
+		.changelog_with(&provider, "sample-editor", None)
+		.await
+		.unwrap();
+
+	assert_eq!(notes.version, "v1.0.0");
+	assert_eq!(notes.text, "Fixes x()[2Jdone");
+}
+
+#[tokio::test]
+async fn platforms_explain_each_package_type_for_this_device() {
+	let world = world().await;
+	let report = world.engine.platforms(Some("sample-editor")).unwrap();
+	let variants = &report.apps[0].1;
+
+	assert_eq!(variants.len(), 1);
+	// The fixture builds for Linux x86-64; whatever this test machine is, the
+	// answer must carry a reason.
+	assert!(!variants[0].reason.is_empty());
+	assert_eq!(
+		variants[0].supported,
+		HostTarget::current().is_some_and(|host| host.os == Os::Linux && host.arch == Arch::X86_64)
+	);
+
+	assert!(world.engine.platforms(Some("nope")).is_err());
+	assert_eq!(world.engine.platforms(None).unwrap().apps.len(), 1);
+}
+
+#[tokio::test]
+async fn trust_status_lists_keys_and_explain_says_what_is_checked() {
+	let world = world().await;
+	let status = world.engine.trust_status();
+
+	assert_eq!(status.feed_id, "test.remade.launcher-catalog");
+	assert_eq!(status.trusted_key_ids.len(), 2);
+	assert_eq!(status.catalog_revision, Some(10));
+	assert!(!status.verified_by.is_empty());
+
+	let lines = world
+		.engine
+		.explain_trust("sample-editor")
+		.unwrap()
+		.join("\n");
+
+	assert!(lines.contains("fixture-owner/fixture-editor"));
+	assert!(lines.contains("intact, not who made it"));
+	assert!(lines.contains("does not mean the software is harmless"));
+}
+
+#[tokio::test]
+async fn forget_drops_the_record_and_leaves_the_files() {
+	let (world, id, root) = installed_world().await;
+
+	world.engine.forget(id).await.unwrap();
+
+	assert!(world.engine.installed().await.unwrap().is_empty());
+	assert!(
+		root.join("bin/sample-editor").exists(),
+		"forget never touches files"
+	);
+
+	let history = world.engine.history(1).await.unwrap();
+	assert_eq!(history[0].state, "completed");
+	assert!(
+		history[0]
+			.detail
+			.as_deref()
+			.unwrap()
+			.contains("left in place")
+	);
+}
+
+#[tokio::test]
+async fn forget_refuses_a_folder_it_cannot_prove_is_its_own() {
+	let (world, id, root) = installed_world().await;
+	std::fs::remove_file(root.join(".remade-install")).unwrap();
+
+	let error = world.engine.forget(id).await.unwrap_err();
+
+	assert_eq!(error.code(), ErrorCode::InstallationChanged);
+	assert_eq!(world.engine.installed().await.unwrap().len(), 1);
+}

@@ -180,20 +180,7 @@ impl Engine {
 			return unavailable("This device type is not recognized by the catalog.");
 		};
 
-		// Pin the repository by its numeric IDs, so a renamed, transferred,
-		// or recreated repository cannot pass as the one the catalog approved.
-		let identity = provider
-			.repository_by_id(parse_id(&project.source.repository_id)?)
-			.await?;
-
-		if identity.repository_id.to_string() != project.source.repository_id
-			|| identity.owner_id.to_string() != project.source.owner_id
-		{
-			return Err(LauncherError::new(
-				ErrorCode::SourceIdentityChanged,
-				"The repository no longer matches the one Remade approved, so nothing was installed.",
-			));
-		}
+		let identity = pinned_identity(provider, project).await?;
 
 		let observation = provider.releases(identity.clone()).await?;
 		let supported = self.catalog().config().supported_capabilities;
@@ -615,4 +602,27 @@ fn install_binding(
 		evidence,
 		expected_sha256: expected,
 	})
+}
+
+/// Looks the catalog's repository up by its numeric IDs and checks that it
+/// still belongs to the same owner, so a renamed, transferred, or recreated
+/// repository cannot pass as the one Remade approved.
+pub(crate) async fn pinned_identity<T: Transport>(
+	provider: &GithubProvider<T>,
+	project: &launcher_catalog::Project,
+) -> Result<RepositoryIdentity, LauncherError> {
+	let identity = provider
+		.repository_by_id(parse_id(&project.source.repository_id)?)
+		.await?;
+
+	if identity.repository_id.to_string() != project.source.repository_id
+		|| identity.owner_id.to_string() != project.source.owner_id
+	{
+		return Err(LauncherError::new(
+			ErrorCode::SourceIdentityChanged,
+			"The repository no longer matches the one Remade approved, so nothing was installed.",
+		));
+	}
+
+	Ok(identity)
 }

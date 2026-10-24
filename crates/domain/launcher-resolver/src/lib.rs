@@ -18,7 +18,8 @@ pub use plan::{
 	PLAN_LIFETIME_SECONDS, Plan, PlanBody, PlanError, ReleaseBinding, SourceBinding,
 };
 pub use resolve::{
-	AssetRef, Candidate, NoCompatible, OrderBasis, Outcome, Recency, ReleaseRef, Resolution,
-	SkippedRelease, compare_tags, resolve_curated, resolve_curated_on,
+	AssetRef, Candidate, NoCompatible, OrderBasis, Outcome, Recency, ReleaseRef, ReleaseStatus,
+	ReleaseView, Resolution, SkippedRelease, compare_tags, list_releases, resolve_curated,
+	resolve_curated_on,
 };
 pub use version::{Version, VersionOrder};

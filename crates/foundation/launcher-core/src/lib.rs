@@ -3,12 +3,14 @@
 //! Nothing here knows about windows. The interface submits typed commands
 //! and listens for events, and the same engine can sit behind a CLI.
 
+mod browse;
 mod catalog;
 mod config;
 mod diagnostics;
 mod engine;
 mod events;
 mod explore;
+mod inspect;
 mod lifecycle;
 mod paths;
 mod prepare;
@@ -18,14 +20,17 @@ mod updates;
 #[cfg(test)]
 mod flow_tests;
 
+pub use browse::{Changelog, PlatformReport, TrustStatus, VariantSupport};
 pub use catalog::{CatalogService, CatalogState, Origin, Problem, ProblemKind};
 pub use config::{CatalogConfig, EngineConfig};
 pub use engine::Engine;
 pub use events::{EngineEvent, OperationEvent, Stage};
 pub use explore::{Availability, ExploreQuery, ExploreRow};
+pub use inspect::{DoctorReport, VerifyReport};
 pub use launcher_catalog::{
 	Freshness, PackageFormat, Project, State, VerificationLevel, VerifiedCatalog,
 };
+pub use launcher_resolver::{ReleaseStatus, ReleaseView};
 pub use lifecycle::{
 	ArtifactSource, HttpArtifacts, InstallMeta, InstalledApp, LifecycleService, OperationSummary,
 	RecoveryReport, RemovalReport,

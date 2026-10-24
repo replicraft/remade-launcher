@@ -54,6 +54,8 @@ impl From<InstallationRecord> for InstalledApp {
 /// One line of operation history.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OperationSummary {
+	/// The operation's full ID.
+	pub id: String,
 	pub kind: String,
 	pub state: String,
 	pub app: Option<String>,
@@ -70,6 +72,7 @@ impl From<OperationRecord> for OperationSummary {
 			.and_then(|plan| plan["source"]["display"].as_str().map(str::to_owned));
 
 		Self {
+			id: record.id.to_string(),
 			kind: record.kind,
 			state: record.state,
 			app,

@@ -74,6 +74,19 @@ impl Database {
 		})
 	}
 
+	/// SQLite's quick integrity check. A healthy database returns `["ok"]`.
+	pub async fn quick_check(&self) -> Result<Vec<String>, LauncherError> {
+		self.reader()
+			.call(|connection| -> DbResult<Vec<String>> {
+				connection
+					.prepare("PRAGMA quick_check")?
+					.query_map([], |row| row.get(0))?
+					.collect()
+			})
+			.await
+			.map_err(unavailable)
+	}
+
 	/// The connection that serializes all writes.
 	pub(crate) fn writer(&self) -> &Connection {
 		&self.writer
