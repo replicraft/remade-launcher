@@ -1,0 +1,43 @@
+app-id: wiki.remade.Launcher
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: remade-launcher
+
+finish-args:
+  # Graphics and windowing.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # Catalog and release downloads.
+  - --share=network
+  # Installing other apps needs a real design for sandboxed installs. This
+  # manifest grants none of it yet; the launcher's own data is kept in its
+  # private sandbox directory.
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/remade-launcher/cargo
+
+modules:
+  - name: remade-launcher
+    buildsystem: simple
+    build-commands:
+      - cargo --offline build --release --locked -p remade-launcher
+      - install -Dm755 target/release/remade-launcher /app/bin/remade-launcher
+      - install -Dm644 packaging/linux/wiki.remade.Launcher.desktop /app/share/applications/wiki.remade.Launcher.desktop
+      - install -Dm644 packaging/linux/wiki.remade.Launcher.metainfo.xml /app/share/metainfo/wiki.remade.Launcher.metainfo.xml
+      - cp -R assets/linux/hicolor/. /app/share/icons/hicolor/
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - target
+          - dist
+          - docs/temp
+          - .git
+      - cargo-sources.json

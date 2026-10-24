@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Remade Launcher
+GenericName=Software Manager
+Comment=The official launcher for unofficial apps.
+Exec=remade-launcher
+Icon=wiki.remade.Launcher
+Terminal=false
+Categories=System;PackageManager;Utility;
+StartupWMClass=wiki.remade.Launcher
