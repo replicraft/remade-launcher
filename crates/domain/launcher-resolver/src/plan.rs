@@ -6,7 +6,7 @@
 //! approval. [`ApprovedPlan`] can only be built from a plan plus a matching
 //! [`Consent`], which is how the interface proves the user saw the source.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -17,7 +17,7 @@ pub const PLAN_SCHEMA_VERSION: u32 = 1;
 /// How long an unapproved plan stays valid.
 pub const PLAN_LIFETIME_SECONDS: i64 = 15 * 60;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Operation {
 	Install,
@@ -27,7 +27,7 @@ pub enum Operation {
 
 /// Where the authority to install came from. The two paths are separate and
 /// neither can turn into the other.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum Origin {
 	/// Allowed by a verified Remade catalog.
@@ -42,7 +42,7 @@ pub enum Origin {
 	Custom,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceBinding {
 	pub repository_id: u64,
 	pub owner_id: u64,
@@ -50,13 +50,13 @@ pub struct SourceBinding {
 	pub display: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReleaseBinding {
 	pub id: u64,
 	pub tag: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetBinding {
 	pub id: u64,
 	pub name: String,
@@ -65,7 +65,7 @@ pub struct AssetBinding {
 }
 
 /// The strongest evidence the package will be checked against.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum EvidenceLevel {
 	/// The digest GitHub reports for the file. Proves the bytes match what
@@ -80,7 +80,7 @@ pub enum EvidenceLevel {
 	LocalObserved,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InstallBinding {
 	pub variant_id: String,
 	pub adapter: String,
@@ -94,7 +94,7 @@ pub struct InstallBinding {
 	pub expected_sha256: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlanBody {
 	pub schema_version: u32,
 	pub operation: Operation,
@@ -348,5 +348,16 @@ mod tests {
 			"https://github.com/owner/repo/releases/download/v1/evil.zip".into();
 
 		assert!(!approved.covers(&Plan::seal(swapped).unwrap()));
+	}
+}
+
+impl Operation {
+	/// The word for this operation in messages and JSON.
+	pub const fn verb(self) -> &'static str {
+		match self {
+			Self::Install => "install",
+			Self::Update => "update",
+			Self::Uninstall => "uninstall",
+		}
 	}
 }

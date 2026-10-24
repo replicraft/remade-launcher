@@ -12,6 +12,7 @@ mod explore;
 mod lifecycle;
 mod paths;
 mod prepare;
+mod saved_plans;
 mod updates;
 
 #[cfg(test)]
@@ -31,6 +32,7 @@ pub use lifecycle::{
 };
 pub use paths::DataDirectory;
 pub use prepare::{CustomPreparation, Preparation, Ready, custom_plan};
+pub use saved_plans::{Applied, Approval, SavedPlan, UninstallPlan};
 pub use updates::{
 	AutoStatus, AvailableUpdate, CycleOutcome, CycleReport, CycleResult, Decision, Initiator,
 	LaunchOutcome, ModeConsent, Outlook, SkipReason, Trigger, UpdateSettings, UpdateState,

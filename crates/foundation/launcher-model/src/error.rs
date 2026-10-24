@@ -60,6 +60,7 @@ pub enum ErrorCode {
 	ConfirmationRequired,
 	ConsentRequired,
 	PlanExpired,
+	PlanChanged,
 	AppPinned,
 	StorageUnavailable,
 	StorageMigrationFailed,
@@ -89,6 +90,7 @@ impl ErrorCode {
 			Self::ConfirmationRequired => "cli.confirmation_required",
 			Self::ConsentRequired => "policy.consent_required",
 			Self::PlanExpired => "plan.expired",
+			Self::PlanChanged => "plan.changed",
 			Self::AppPinned => "installation.pinned",
 			Self::StorageUnavailable => "storage.unavailable",
 			Self::StorageMigrationFailed => "storage.migration_failed",
@@ -114,7 +116,7 @@ impl ErrorCode {
 			Self::InvalidSourceUrl | Self::ConfirmationRequired | Self::ConsentRequired => {
 				ErrorCategory::Ambiguity
 			}
-			Self::PlanExpired => ErrorCategory::Trust,
+			Self::PlanExpired | Self::PlanChanged => ErrorCategory::Trust,
 			Self::AppPinned => ErrorCategory::LocalOwnership,
 			Self::StorageUnavailable | Self::StorageMigrationFailed | Self::StorageNewerThanApp => {
 				ErrorCategory::Storage
@@ -141,7 +143,7 @@ impl ErrorCode {
 			Self::InvalidSourceUrl | Self::ConfirmationRequired | Self::ConsentRequired => {
 				Retry::AfterUserAction
 			}
-			Self::PlanExpired => Retry::AfterUserAction,
+			Self::PlanExpired | Self::PlanChanged => Retry::AfterUserAction,
 			Self::AppPinned => Retry::AfterUserAction,
 			Self::StorageUnavailable | Self::StorageNewerThanApp => Retry::AfterUserAction,
 			Self::InternalInvariant => Retry::Never,

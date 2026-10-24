@@ -14,8 +14,8 @@ mod version;
 pub use heuristics::{CustomOption, Fit, Guess, classify_asset, custom_candidates};
 pub use matching::Matcher;
 pub use plan::{
-	ApprovedPlan, AssetBinding, Consent, EvidenceLevel, InstallBinding, Operation, Origin, Plan,
-	PlanBody, PlanError, ReleaseBinding, SourceBinding,
+	ApprovedPlan, AssetBinding, Consent, EvidenceLevel, InstallBinding, Operation, Origin,
+	PLAN_LIFETIME_SECONDS, Plan, PlanBody, PlanError, ReleaseBinding, SourceBinding,
 };
 pub use resolve::{
 	AssetRef, Candidate, NoCompatible, OrderBasis, Outcome, Recency, ReleaseRef, Resolution,

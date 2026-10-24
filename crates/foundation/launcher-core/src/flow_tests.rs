@@ -1048,3 +1048,263 @@ async fn prerelease_opt_in_is_per_app_and_off_by_default() {
 	let found = statuses(&world, NOW).await;
 	assert_eq!(found[0].available.as_ref().unwrap().version, "v2.0.0-rc.1");
 }
+
+// ---------------------------------------------------------------------------
+// Saved plans
+// ---------------------------------------------------------------------------
+
+use launcher_storage::StoredPlan;
+
+use crate::saved_plans::{Applied, Approval, SavedPlan};
+
+fn approval(confirmed: bool, accepted: Option<&str>) -> Approval {
+	Approval {
+		actor: "test".into(),
+		confirmed,
+		accepted_unreviewed_source: accepted.map(str::to_owned),
+	}
+}
+
+#[tokio::test]
+async fn a_saved_plan_is_applied_exactly_as_planned() {
+	let world = world().await;
+	let ready = ready(prepare(&world, "sample-editor").await.unwrap());
+	let id = world.engine.save_ready_plan(&ready, None).await.unwrap();
+
+	assert_eq!(id.len(), 16);
+
+	let SavedPlan::Install { ready: loaded, .. } = world
+		.engine
+		.load_plan_at(&id[..6], at(NOW).unix_timestamp())
+		.await
+		.unwrap()
+	else {
+		panic!("expected an install plan");
+	};
+	assert_eq!(loaded.plan.digest(), ready.plan.digest());
+	assert_eq!(loaded.candidate.asset.name, ready.candidate.asset.name);
+
+	let applied = world
+		.engine
+		.apply_plan_at(&id, &approval(true, None), at(NOW).unix_timestamp())
+		.await
+		.unwrap();
+
+	assert!(matches!(applied, Applied::Installed(_)));
+	assert_eq!(world.engine.installed().await.unwrap().len(), 1);
+
+	let approvals = world
+		.engine
+		.database
+		.consents("plan", &hex::encode(ready.plan.digest()))
+		.await
+		.unwrap();
+	assert_eq!(
+		approvals.len(),
+		1,
+		"the approval is recorded against the plan's digest"
+	);
+}
+
+#[tokio::test]
+async fn an_unconfirmed_plan_changes_nothing() {
+	let world = world().await;
+	let ready = ready(prepare(&world, "sample-editor").await.unwrap());
+	let id = world.engine.save_ready_plan(&ready, None).await.unwrap();
+
+	let error = world
+		.engine
+		.apply_plan_at(&id, &approval(false, None), at(NOW).unix_timestamp())
+		.await
+		.unwrap_err();
+
+	assert_eq!(error.code(), ErrorCode::ConfirmationRequired);
+	assert!(world.engine.installed().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_unreviewed_source_must_be_accepted_by_name() {
+	let world = world().await;
+	let provider = GithubProvider::new(world.github.clone());
+	let prepared = world
+		.engine
+		.prepare_custom_with(
+			&provider,
+			"https://github.com/fixture-owner/fixture-editor",
+			Some(LINUX),
+		)
+		.await
+		.unwrap();
+	let ready = custom_plan(
+		&prepared,
+		prepared.options[0].asset.id,
+		at(NOW).unix_timestamp(),
+	)
+	.unwrap();
+	let id = world.engine.save_ready_plan(&ready, None).await.unwrap();
+	let now = at(NOW).unix_timestamp();
+
+	for accepted in [None, Some("someone/else"), Some("fixture-owner/other")] {
+		let error = world
+			.engine
+			.apply_plan_at(&id, &approval(true, accepted), now)
+			.await
+			.unwrap_err();
+
+		assert_eq!(error.code(), ErrorCode::ConsentRequired, "{accepted:?}");
+	}
+
+	assert!(world.engine.installed().await.unwrap().is_empty());
+
+	world
+		.engine
+		.apply_plan_at(
+			&id,
+			&approval(true, Some("fixture-owner/fixture-editor")),
+			now,
+		)
+		.await
+		.unwrap();
+
+	assert_eq!(world.engine.installed().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn an_expired_or_edited_plan_is_refused() {
+	let world = world().await;
+	let ready = ready(prepare(&world, "sample-editor").await.unwrap());
+	let id = world.engine.save_ready_plan(&ready, None).await.unwrap();
+
+	let late = at("2030-01-15T01:00:00Z").unix_timestamp();
+	let expired = world
+		.engine
+		.apply_plan_at(&id, &approval(true, None), late)
+		.await
+		.unwrap_err();
+	assert_eq!(expired.code(), ErrorCode::PlanExpired);
+
+	// A row whose body no longer matches its recorded digest.
+	let body = serde_json::to_string(ready.plan.body()).unwrap();
+	world
+		.engine
+		.database
+		.save_plan(StoredPlan {
+			id: "forged0000000000".into(),
+			digest: [9; 32],
+			body,
+			extra: "{}".into(),
+			update_of: None,
+			created_at: 0,
+			expires_at: i64::MAX,
+		})
+		.await
+		.unwrap();
+
+	let forged = world.engine.load_plan_at("forged", 0).await.unwrap_err();
+	assert_eq!(forged.code(), ErrorCode::PlanChanged);
+
+	let missing = world.engine.load_plan_at("nothere", 0).await.unwrap_err();
+	assert_eq!(missing.code(), ErrorCode::PlanChanged);
+}
+
+#[tokio::test]
+async fn an_update_plan_is_void_once_the_app_has_moved_on() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	let provider = GithubProvider::new(world.github.clone());
+	let now = at(NOW).unix_timestamp();
+
+	let update = ready(
+		world
+			.engine
+			.prepare_update_with(&provider, id, Some(LINUX), now)
+			.await
+			.unwrap(),
+	);
+	let plan_id = world
+		.engine
+		.save_ready_plan(&update, Some(id))
+		.await
+		.unwrap();
+
+	// Someone updates it another way first.
+	world
+		.engine
+		.update(id, &update, &consent(&update.source_display, false))
+		.await
+		.unwrap();
+
+	let error = world
+		.engine
+		.apply_plan_at(&plan_id, &approval(true, None), now)
+		.await
+		.unwrap_err();
+
+	assert_eq!(error.code(), ErrorCode::PlanChanged);
+}
+
+#[tokio::test]
+async fn a_pinned_app_refuses_a_saved_update_plan() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	let provider = GithubProvider::new(world.github.clone());
+	let now = at(NOW).unix_timestamp();
+
+	let update = ready(
+		world
+			.engine
+			.prepare_update_with(&provider, id, Some(LINUX), now)
+			.await
+			.unwrap(),
+	);
+	let plan_id = world
+		.engine
+		.save_ready_plan(&update, Some(id))
+		.await
+		.unwrap();
+	world.engine.pin(id).await.unwrap();
+
+	let error = world
+		.engine
+		.apply_plan_at(&plan_id, &approval(true, None), now)
+		.await
+		.unwrap_err();
+
+	assert_eq!(error.code(), ErrorCode::AppPinned);
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+}
+
+#[tokio::test]
+async fn an_uninstall_plan_shows_what_it_will_do_and_then_does_it() {
+	let world = world().await;
+	let ready = ready(prepare(&world, "sample-editor").await.unwrap());
+	let id = world
+		.engine
+		.install(&ready, &consent(&ready.source_display, false))
+		.await
+		.unwrap();
+
+	let plan = world
+		.engine
+		.plan_uninstall_at(id, at(NOW).unix_timestamp())
+		.await
+		.unwrap();
+	assert_eq!(plan.name, "Sample Editor");
+	assert!(plan.owned_files >= 3);
+
+	let now = at(NOW).unix_timestamp();
+	let unconfirmed = world
+		.engine
+		.apply_plan_at(&plan.id, &approval(false, None), now)
+		.await
+		.unwrap_err();
+	assert_eq!(unconfirmed.code(), ErrorCode::ConfirmationRequired);
+	assert_eq!(world.engine.installed().await.unwrap().len(), 1);
+
+	let applied = world
+		.engine
+		.apply_plan_at(&plan.id, &approval(true, None), now)
+		.await
+		.unwrap();
+
+	assert!(matches!(applied, Applied::Removed(report) if report.is_clean()));
+	assert!(world.engine.installed().await.unwrap().is_empty());
+}

@@ -9,12 +9,12 @@ use std::cmp::Ordering;
 use launcher_catalog::{Channel, Project, State, Tracking, Variant};
 use launcher_model::HostTarget;
 use launcher_providers::{Asset, Release, ReleaseObservation};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::matching::Matcher;
 use crate::version::{Version, VersionOrder};
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReleaseRef {
 	pub id: u64,
 	pub tag: String,
@@ -26,13 +26,13 @@ pub struct ReleaseRef {
 }
 
 /// A serializable stand-in for [`VersionOrder`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderBasis {
 	Defined,
 	ProviderOrder,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetRef {
 	pub id: u64,
 	pub name: String,
@@ -46,13 +46,13 @@ pub struct AssetRef {
 	pub updated_at: Option<i64>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkippedRelease {
 	pub tag: String,
 	pub reason: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Candidate {
 	pub release: ReleaseRef,
 	pub variant_id: String,
