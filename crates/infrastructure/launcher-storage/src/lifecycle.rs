@@ -168,6 +168,24 @@ impl Database {
 			.map_err(unavailable)
 	}
 
+	/// The most recent operations, newest first, finished or not.
+	pub async fn recent_operations(
+		&self,
+		limit: u32,
+	) -> Result<Vec<OperationRecord>, LauncherError> {
+		self.reader()
+			.call(move |connection| -> DbResult<_> {
+				connection
+					.prepare_cached(&format!(
+						"SELECT {OPERATION_COLUMNS} FROM operations ORDER BY created_at DESC, id DESC LIMIT ?1"
+					))?
+					.query_map([limit], operation_from)?
+					.collect()
+			})
+			.await
+			.map_err(unavailable)
+	}
+
 	pub async fn operation(
 		&self,
 		id: OperationId,
@@ -402,6 +420,24 @@ mod tests {
 		assert_eq!(unfinished.len(), 1);
 		assert_eq!(unfinished[0].state, "downloading");
 		assert_eq!(unfinished[0].staging.as_deref(), Some("/staging/x"));
+	}
+
+	#[tokio::test]
+	async fn recent_operations_come_newest_first_and_respect_the_limit() {
+		let (_directory, database) = open_temporary().await;
+
+		for created_at in [10, 30, 20] {
+			let mut record = operation(OperationId::new(), None);
+			record.created_at = created_at;
+			database.begin_operation(record).await.unwrap();
+		}
+
+		let recent = database.recent_operations(2).await.unwrap();
+
+		assert_eq!(
+			recent.iter().map(|r| r.created_at).collect::<Vec<_>>(),
+			vec![30, 20]
+		);
 	}
 
 	#[tokio::test]

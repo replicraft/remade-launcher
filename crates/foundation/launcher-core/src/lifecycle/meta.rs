@@ -1,5 +1,5 @@
 use launcher_model::InstallationId;
-use launcher_storage::InstallationRecord;
+use launcher_storage::{InstallationRecord, OperationRecord};
 use serde::{Deserialize, Serialize};
 
 /// Presentation facts the plan does not carry.
@@ -47,6 +47,34 @@ impl From<InstallationRecord> for InstalledApp {
 			launchable: record.entry_point.is_some(),
 			evidence: record.evidence,
 			installed_at: record.installed_at,
+		}
+	}
+}
+
+/// One line of operation history.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OperationSummary {
+	pub kind: String,
+	pub state: String,
+	pub app: Option<String>,
+	pub detail: Option<String>,
+	pub started_at: i64,
+}
+
+impl From<OperationRecord> for OperationSummary {
+	fn from(record: OperationRecord) -> Self {
+		// The plan is JSON written by the launcher, so reading the repository
+		// back out of it is safe and gives history a human label.
+		let app = serde_json::from_str::<serde_json::Value>(&record.plan)
+			.ok()
+			.and_then(|plan| plan["source"]["display"].as_str().map(str::to_owned));
+
+		Self {
+			kind: record.kind,
+			state: record.state,
+			app,
+			detail: record.detail,
+			started_at: record.created_at,
 		}
 	}
 }

@@ -9,7 +9,7 @@ use crate::catalog::CatalogService;
 use crate::config::EngineConfig;
 use crate::events::{EngineEvent, EventBus};
 use crate::explore::{self, ExploreQuery, ExploreRow};
-use crate::lifecycle::{HttpArtifacts, InstalledApp, LifecycleService};
+use crate::lifecycle::{HttpArtifacts, InstalledApp, LifecycleService, OperationSummary};
 use crate::paths::DataDirectory;
 
 pub(crate) fn now_unix() -> i64 {
@@ -85,6 +85,17 @@ impl Engine {
 			.await?
 			.into_iter()
 			.map(InstalledApp::from)
+			.collect())
+	}
+
+	/// The most recent installs, updates, and removals, newest first.
+	pub async fn history(&self, limit: u32) -> Result<Vec<OperationSummary>, LauncherError> {
+		Ok(self
+			.database
+			.recent_operations(limit)
+			.await?
+			.into_iter()
+			.map(OperationSummary::from)
 			.collect())
 	}
 

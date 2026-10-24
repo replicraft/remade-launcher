@@ -177,3 +177,17 @@ fn flags_that_only_make_sense_together_are_enforced() {
 		Some(2)
 	);
 }
+
+#[test]
+fn history_starts_empty_and_is_valid_json() {
+	let run = run();
+
+	assert!(run.remade(&["history"]).status.success());
+
+	let json = run.remade(&["--json", "history"]);
+
+	assert_eq!(
+		serde_json::from_slice::<serde_json::Value>(&json.stdout).unwrap(),
+		serde_json::json!([])
+	);
+}

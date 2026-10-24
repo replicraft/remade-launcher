@@ -24,8 +24,8 @@ pub use launcher_catalog::{
 	Freshness, PackageFormat, Project, State, VerificationLevel, VerifiedCatalog,
 };
 pub use lifecycle::{
-	ArtifactSource, HttpArtifacts, InstallMeta, InstalledApp, LifecycleService, RecoveryReport,
-	RemovalReport,
+	ArtifactSource, HttpArtifacts, InstallMeta, InstalledApp, LifecycleService, OperationSummary,
+	RecoveryReport, RemovalReport,
 };
 pub use paths::DataDirectory;
 pub use prepare::{CustomPreparation, Preparation, Ready, custom_plan};

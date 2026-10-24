@@ -38,6 +38,8 @@ pub(crate) enum Command {
 	Uninstall(UninstallArgs),
 	/// Start an installed app.
 	Run(RunArgs),
+	/// Show recent installs, updates, and removals.
+	History(HistoryArgs),
 	/// Check or refresh the catalog.
 	Catalog {
 		#[command(subcommand)]
@@ -108,6 +110,13 @@ pub(crate) struct UninstallArgs {
 	/// Do not ask for confirmation.
 	#[arg(short, long)]
 	pub(crate) yes: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct HistoryArgs {
+	/// How many operations to show.
+	#[arg(short = 'n', long, default_value_t = 20)]
+	pub(crate) limit: u32,
 }
 
 #[derive(Debug, Args)]

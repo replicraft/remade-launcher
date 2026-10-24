@@ -1,4 +1,5 @@
 mod catalog;
+mod history;
 mod info;
 mod install;
 mod list;
@@ -21,6 +22,7 @@ pub(crate) async fn dispatch(engine: &Arc<Engine>, cli: &Cli) -> Result<ExitCode
 		Command::Search(args) => search::run(engine, cli, args).await,
 		Command::Info(args) => info::run(engine, cli, args).await,
 		Command::List => list::run(engine, cli).await,
+		Command::History(args) => history::run(engine, cli, args).await,
 		Command::Install(args) => install::run(engine, cli, args).await,
 		Command::Update(args) => update::run(engine, cli, args).await,
 		Command::Uninstall(args) => uninstall::run(engine, args).await,

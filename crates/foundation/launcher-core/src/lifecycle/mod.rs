@@ -17,7 +17,7 @@ mod safe_delete;
 
 pub use artifact::{ArtifactSource, HttpArtifacts};
 pub use install::LifecycleService;
-pub use meta::{InstallMeta, InstalledApp};
+pub use meta::{InstallMeta, InstalledApp, OperationSummary};
 pub use recover::RecoveryReport;
 pub use remove::RemovalReport;
 
