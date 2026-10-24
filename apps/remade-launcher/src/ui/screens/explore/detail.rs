@@ -213,7 +213,7 @@ fn header(ui: &mut Ui, facts: &Facts<'_>, installable: bool, action: &mut Option
 		ui.add_space(8.0);
 
 		ui.vertical(|ui| {
-			ui.set_max_width((ui.available_width() - 240.0 - 40.0).max(240.0));
+			ui.set_max_width((ui.available_width() - 240.0 - 72.0).max(240.0));
 			ui.spacing_mut().item_spacing.y = 4.0;
 
 			ui.horizontal(|ui| {
