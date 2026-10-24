@@ -57,6 +57,7 @@ pub enum ErrorCode {
 	InstallationChanged,
 	LaunchFailed,
 	OperationInProgress,
+	Cancelled,
 	ConfirmationRequired,
 	ConsentRequired,
 	SourceApprovalRequired,
@@ -88,6 +89,7 @@ impl ErrorCode {
 			Self::InstallationChanged => "installation.changed",
 			Self::LaunchFailed => "installation.launch_failed",
 			Self::OperationInProgress => "operation.in_progress",
+			Self::Cancelled => "operation.cancelled",
 			Self::ConfirmationRequired => "cli.confirmation_required",
 			Self::ConsentRequired => "policy.consent_required",
 			Self::SourceApprovalRequired => "policy.source_approval_required",
@@ -114,7 +116,8 @@ impl ErrorCode {
 			Self::InstallationNotFound
 			| Self::InstallationChanged
 			| Self::LaunchFailed
-			| Self::OperationInProgress => ErrorCategory::LocalOwnership,
+			| Self::OperationInProgress
+			| Self::Cancelled => ErrorCategory::LocalOwnership,
 			Self::InvalidSourceUrl
 			| Self::ConfirmationRequired
 			| Self::ConsentRequired
@@ -143,6 +146,7 @@ impl ErrorCode {
 			| Self::InstallationNotFound => Retry::Never,
 			Self::InstallationChanged | Self::LaunchFailed => Retry::AfterUserAction,
 			Self::OperationInProgress => Retry::Later,
+			Self::Cancelled => Retry::AfterUserAction,
 			Self::InvalidSourceUrl
 			| Self::ConfirmationRequired
 			| Self::ConsentRequired

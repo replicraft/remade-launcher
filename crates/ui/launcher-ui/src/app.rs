@@ -232,9 +232,15 @@ impl LauncherApp {
 			}
 		};
 
+		let stoppable = !matches!(event.stage, Stage::Applying | Stage::Removing);
+
 		self.progress.insert(
 			event.installation,
-			screens::library::Progress { label, fraction },
+			screens::library::Progress {
+				label,
+				fraction,
+				stoppable,
+			},
 		);
 	}
 
@@ -254,6 +260,7 @@ impl LauncherApp {
 			Action::SetPolicy(id, policy) => self.commands.set_app_policy(id, policy),
 			Action::Pin(id, pinned) => self.commands.set_pinned(id, pinned),
 			Action::CheckUpdates => self.commands.check_updates(),
+			Action::Cancel => self.commands.cancel_operation(),
 			Action::UpdateAll => {
 				self.sheet = Some(Sheet::Working("Checking what can be updated…".into()));
 				self.commands.plan_all_updates();

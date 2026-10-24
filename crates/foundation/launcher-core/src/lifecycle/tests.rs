@@ -267,6 +267,121 @@ async fn launches_the_entry_point_inside_the_app_folder() {
 	panic!("the app never ran");
 }
 
+/// Never finishes a download, so a stop has to interrupt it.
+struct HangingArtifacts;
+
+impl ArtifactSource for HangingArtifacts {
+	fn fetch<'a>(
+		&'a self,
+		_url: Url,
+		_file: &'a mut tokio::fs::File,
+		_max_bytes: u64,
+		_progress: &'a mut (dyn FnMut(u64, Option<u64>) + Send),
+	) -> Pin<Box<dyn Future<Output = Result<Downloaded, LauncherError>> + Send + 'a>> {
+		Box::pin(std::future::pending())
+	}
+}
+
+/// Finishes the download, then asks the service to stop.
+struct StopsAfterDownload {
+	inner: LocalArtifacts,
+	signal: Arc<std::sync::OnceLock<super::cancel::CancelSignal>>,
+}
+
+impl ArtifactSource for StopsAfterDownload {
+	fn fetch<'a>(
+		&'a self,
+		url: Url,
+		file: &'a mut tokio::fs::File,
+		max_bytes: u64,
+		progress: &'a mut (dyn FnMut(u64, Option<u64>) + Send),
+	) -> Pin<Box<dyn Future<Output = Result<Downloaded, LauncherError>> + Send + 'a>> {
+		Box::pin(async move {
+			let downloaded = self.inner.fetch(url, file, max_bytes, progress).await?;
+
+			assert!(self.signal.get().unwrap().request());
+
+			Ok(downloaded)
+		})
+	}
+}
+
+fn with_source(fixture: &Fixture, artifacts: Arc<dyn ArtifactSource>) -> LifecycleService {
+	LifecycleService::new(
+		fixture.data.clone(),
+		Arc::clone(&fixture.database),
+		artifacts,
+		fixture.events.clone(),
+	)
+}
+
+fn nothing_left_behind(fixture: &Fixture) {
+	assert!(apps_is_empty(fixture));
+	assert!(staging_is_empty(fixture));
+}
+
+#[tokio::test]
+async fn a_stop_during_the_download_installs_nothing() {
+	let fixture = fixture().await;
+	let service = Arc::new(with_source(&fixture, Arc::new(HangingArtifacts)));
+	let mut events = fixture.events.subscribe();
+	let approved = plan(&fixture, 1, None, Some("run.sh"));
+
+	let running = {
+		let service = Arc::clone(&service);
+
+		tokio::spawn(async move { service.install(&approved, &meta(), NOW).await })
+	};
+
+	// Wait until the download has really started.
+	loop {
+		if let Ok(EngineEvent::Operation(event)) = events.recv().await
+			&& matches!(event.stage, Stage::Downloading { .. })
+		{
+			break;
+		}
+	}
+
+	assert!(service.request_cancel());
+
+	let error = running.await.unwrap().unwrap_err();
+
+	assert_eq!(error.code(), ErrorCode::Cancelled);
+	nothing_left_behind(&fixture);
+	assert!(fixture.database.installations().await.unwrap().is_empty());
+	assert!(
+		fixture
+			.database
+			.unfinished_operations()
+			.await
+			.unwrap()
+			.is_empty()
+	);
+	assert!(!service.request_cancel(), "nothing is running any more");
+}
+
+#[tokio::test]
+async fn a_stop_between_steps_is_honoured_before_files_move() {
+	let fixture = fixture().await;
+	let signal = Arc::new(std::sync::OnceLock::new());
+	let service = with_source(
+		&fixture,
+		Arc::new(StopsAfterDownload {
+			inner: LocalArtifacts(HashMap::from([(URL.to_owned(), fixture.archive.clone())])),
+			signal: Arc::clone(&signal),
+		}),
+	);
+	signal.set(service.cancel.clone()).ok();
+
+	let error = service
+		.install(&plan(&fixture, 1, None, Some("run.sh")), &meta(), NOW)
+		.await
+		.unwrap_err();
+
+	assert_eq!(error.code(), ErrorCode::Cancelled);
+	nothing_left_behind(&fixture);
+}
+
 #[tokio::test]
 async fn a_wrong_checksum_installs_nothing() {
 	let fixture = fixture().await;

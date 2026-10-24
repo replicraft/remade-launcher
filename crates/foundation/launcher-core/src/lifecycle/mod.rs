@@ -6,6 +6,7 @@
 //! runs the entry point the user asked to open.
 
 mod artifact;
+mod cancel;
 mod install;
 mod launch;
 mod lock;

@@ -246,6 +246,11 @@ impl Commands {
 		});
 	}
 
+	/// Asks the running install or update to stop at the next safe point.
+	pub(crate) fn cancel_operation(&self) {
+		self.engine.lifecycle().request_cancel();
+	}
+
 	pub(crate) fn refresh_history(&self) {
 		self.spawn_result(|engine| async move { engine.history(30).await.map(Message::History) });
 	}

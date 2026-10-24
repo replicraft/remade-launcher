@@ -12,6 +12,8 @@ use crate::theme;
 pub(crate) struct Progress {
 	pub(crate) label: String,
 	pub(crate) fraction: Option<f32>,
+	/// Stopping is still safe: nothing has moved into place yet.
+	pub(crate) stoppable: bool,
 }
 
 pub(crate) struct LibraryView<'a> {
@@ -141,6 +143,10 @@ fn row(ui: &mut Ui, app: &InstalledApp, view: &LibraryView<'_>) -> Option<Action
 					Some(fraction) => ui.add(ProgressBar::new(fraction).text(&progress.label)),
 					None => ui.add(ProgressBar::new(0.0).animate(true).text(&progress.label)),
 				};
+
+				if progress.stoppable && ui.small_button("Stop").clicked() {
+					action = Some(Action::Cancel);
+				}
 
 				return;
 			}

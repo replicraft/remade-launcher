@@ -60,6 +60,8 @@ pub(crate) enum Action {
 	/// A read-only look for updates to everything installed.
 	CheckUpdates,
 	UpdateAll,
+	/// Stop the running install or update at the next safe point.
+	Cancel,
 	ReleaseNotes {
 		slug: String,
 		tag: String,

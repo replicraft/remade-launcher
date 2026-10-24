@@ -9,6 +9,7 @@ use launcher_storage::{Database, InstallationRecord, OperationRecord};
 use sha2::{Digest, Sha256};
 
 use super::artifact::ArtifactSource;
+use super::cancel::CancelSignal;
 use super::meta::{InstallMeta, ManifestEntry};
 use super::safe_delete::{MARKER, remove_staging};
 use crate::events::{EngineEvent, EventBus, OperationEvent, Stage};
@@ -37,6 +38,7 @@ pub struct LifecycleService {
 	pub(crate) database: Arc<Database>,
 	pub(crate) artifacts: Arc<dyn ArtifactSource>,
 	pub(crate) events: EventBus,
+	pub(crate) cancel: CancelSignal,
 }
 
 impl LifecycleService {
@@ -51,7 +53,14 @@ impl LifecycleService {
 			database,
 			artifacts,
 			events,
+			cancel: CancelSignal::default(),
 		}
+	}
+
+	/// Asks the running install or update to stop. It succeeds only before
+	/// files start moving into place; after that the operation finishes.
+	pub fn request_cancel(&self) -> bool {
+		self.cancel.request()
 	}
 
 	/// Installs the approved plan as a new app.
@@ -95,6 +104,25 @@ impl LifecycleService {
 		// One operation at a time, across the app and the CLI.
 		let _lock = super::lock::acquire_patiently(&self.data).await?;
 
+		self.cancel.begin();
+
+		let result = self
+			.apply_locked(approved, meta, installation, previous, now)
+			.await;
+
+		self.cancel.finish();
+
+		result
+	}
+
+	async fn apply_locked(
+		&self,
+		approved: &ApprovedPlan,
+		meta: &InstallMeta,
+		installation: InstallationId,
+		previous: Option<InstallationRecord>,
+		now: i64,
+	) -> Result<InstallationId, LauncherError> {
 		let plan = approved.plan();
 		let body = plan.body();
 		let operation = OperationId::new();
@@ -275,6 +303,9 @@ impl Run<'_> {
 
 		let root = self.final_root();
 
+		// The last safe point. Past it the install runs to the end.
+		service.cancel.commit()?;
+
 		self.step(state::APPLYING, Stage::Applying, None).await?;
 		service
 			.database
@@ -330,6 +361,9 @@ impl Run<'_> {
 		stage: Stage,
 		staging: Option<&PathBuf>,
 	) -> Result<(), LauncherError> {
+		// Every step before the files move is a safe place to stop.
+		self.service.cancel.check()?;
+
 		self.service
 			.database
 			.set_operation_state(
@@ -386,11 +420,18 @@ impl Run<'_> {
 			}
 		};
 
-		let downloaded = self
-			.service
-			.artifacts
-			.fetch(url, &mut file, limit, &mut progress)
-			.await?;
+		// Dropping the transfer when a stop is requested closes the
+		// connection; staging is removed by the failure path.
+		let downloaded = tokio::select! {
+			biased;
+			() = self.service.cancel.requested() => {
+				return Err(LauncherError::new(
+					ErrorCode::Cancelled,
+					"Stopped. Nothing was installed.",
+				));
+			}
+			result = self.service.artifacts.fetch(url, &mut file, limit, &mut progress) => result?,
+		};
 
 		Ok(Observed {
 			size: downloaded.size,

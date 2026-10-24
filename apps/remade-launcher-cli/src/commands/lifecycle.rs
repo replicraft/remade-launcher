@@ -487,6 +487,21 @@ async fn prepare_update(
 	})
 }
 
+/// Turns Ctrl-C into a request to stop at the next safe point. Once files
+/// are moving into place the operation finishes instead, so it never leaves
+/// a half-installed app behind.
+fn stop_on_interrupt(engine: &Arc<Engine>) -> tokio::task::JoinHandle<()> {
+	let engine = Arc::clone(engine);
+
+	tokio::spawn(async move {
+		while tokio::signal::ctrl_c().await.is_ok() {
+			if !engine.lifecycle().request_cancel() {
+				eprintln!("Too late to stop safely. Finishing the install.");
+			}
+		}
+	})
+}
+
 /// Runs a saved plan with progress, and reports the outcome.
 async fn run_plan(
 	ctx: &Arc<Ctx>,
@@ -495,8 +510,10 @@ async fn run_plan(
 	approval: &Approval,
 ) -> Result<Applied, CliError> {
 	let printer = Printer::start(engine, ctx);
+	let interrupt = stop_on_interrupt(engine);
 	let result = engine.apply_plan(id, approval).await;
 
+	interrupt.abort();
 	printer.finish().await;
 
 	Ok(result?)
