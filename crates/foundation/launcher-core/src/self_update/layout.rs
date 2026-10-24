@@ -30,6 +30,13 @@ pub enum InstallLayout {
 		/// The running program's file name.
 		executable: String,
 	},
+	/// A macOS app bundle. It is replaced whole, because changing a file
+	/// inside would break its code signature.
+	AppBundle {
+		bundle: PathBuf,
+		/// The running program's file name, inside `Contents/MacOS`.
+		executable: String,
+	},
 	/// Something else owns the files, so the launcher leaves them alone.
 	Managed { by: String },
 }
@@ -48,14 +55,22 @@ impl InstallLayout {
 	pub(crate) fn for_executable(exe: &Path, has_variable: impl Fn(&str) -> bool) -> Self {
 		let text = exe.to_string_lossy().replace('\\', "/");
 
-		let owners: [(&str, &str); 9] = [
+		if let Some(bundle) = Self::bundle_of(exe) {
+			let executable = exe
+				.file_name()
+				.map(|name| name.to_string_lossy().into_owned())
+				.unwrap_or_default();
+
+			return Self::AppBundle { bundle, executable };
+		}
+
+		let owners: [(&str, &str); 8] = [
 			("/Cellar/", "Homebrew"),
 			("/homebrew/", "Homebrew"),
 			("/linuxbrew/", "Homebrew"),
 			("/WindowsApps/", "the Microsoft Store"),
 			("/nix/store/", "Nix"),
 			("/snap/", "Snap"),
-			(".app/Contents/", "the app bundle"),
 			("/usr/bin/", "the system package manager"),
 			("/usr/lib/", "the system package manager"),
 		];
@@ -83,6 +98,18 @@ impl InstallLayout {
 			},
 			_ => Self::managed("an unknown location"),
 		}
+	}
+
+	/// `Remade Launcher.app` for `.../Remade Launcher.app/Contents/MacOS/x`.
+	fn bundle_of(exe: &Path) -> Option<PathBuf> {
+		let macos = exe.parent()?;
+		let contents = macos.parent()?;
+		let bundle = contents.parent()?;
+
+		(macos.file_name()? == "MacOS"
+			&& contents.file_name()? == "Contents"
+			&& bundle.extension()? == "app")
+			.then(|| bundle.to_owned())
 	}
 
 	fn managed(by: &str) -> Self {
@@ -194,6 +221,187 @@ pub(crate) fn replace_files(
 	}
 
 	sweep_leftovers(directory);
+
+	Ok(())
+}
+
+/// A fingerprint of a whole folder: every file's name, executable bit, and
+/// SHA-256, and every link's target. Two folders with the same fingerprint are
+/// the same bundle.
+pub(crate) fn tree_digest(root: &Path) -> io::Result<String> {
+	let mut lines = Vec::new();
+
+	collect(root, root, &mut lines)?;
+	lines.sort();
+
+	Ok(hex::encode(Sha256::digest(lines.join("\n").as_bytes())))
+}
+
+fn collect(root: &Path, folder: &Path, lines: &mut Vec<String>) -> io::Result<()> {
+	for entry in fs::read_dir(folder)? {
+		let path = entry?.path();
+		let relative = path
+			.strip_prefix(root)
+			.map_err(io::Error::other)?
+			.to_string_lossy()
+			.replace('\\', "/");
+		let kind = fs::symlink_metadata(&path)?;
+
+		if kind.is_symlink() {
+			lines.push(format!(
+				"L {relative} -> {}",
+				fs::read_link(&path)?.display()
+			));
+		} else if kind.is_dir() {
+			lines.push(format!("D {relative}"));
+			collect(root, &path, lines)?;
+		} else {
+			lines.push(format!(
+				"F {relative} {} {}",
+				u8::from(is_executable(&kind)),
+				hash_file(&path)?
+			));
+		}
+	}
+
+	Ok(())
+}
+
+#[cfg(unix)]
+fn is_executable(metadata: &fs::Metadata) -> bool {
+	use std::os::unix::fs::PermissionsExt;
+
+	metadata.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn is_executable(_metadata: &fs::Metadata) -> bool {
+	false
+}
+
+/// Copies a folder with its links and permissions.
+fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
+	fs::create_dir_all(to)?;
+
+	for entry in fs::read_dir(from)? {
+		let entry = entry?;
+		let (source, target) = (entry.path(), to.join(entry.file_name()));
+		let kind = fs::symlink_metadata(&source)?;
+
+		if kind.is_symlink() {
+			link(&fs::read_link(&source)?, &target)?;
+		} else if kind.is_dir() {
+			copy_tree(&source, &target)?;
+		} else {
+			fs::copy(&source, &target)?;
+		}
+	}
+
+	Ok(())
+}
+
+#[cfg(unix)]
+fn link(target: &Path, at: &Path) -> io::Result<()> {
+	std::os::unix::fs::symlink(target, at)
+}
+
+#[cfg(not(unix))]
+fn link(_target: &Path, _at: &Path) -> io::Result<()> {
+	Err(io::Error::other("links are not copied on this system"))
+}
+
+fn hidden(bundle: &Path, tag: &str) -> PathBuf {
+	let name = bundle
+		.file_name()
+		.map(|name| name.to_string_lossy().into_owned())
+		.unwrap_or_default();
+
+	bundle.with_file_name(format!(".{name}.{tag}"))
+}
+
+/// Replaces an app bundle with the one in `source`, keeping the old one in
+/// `backup`. The new bundle is copied beside the old, checked against
+/// `expected`, and moved in with a rename, so the app is never half-written.
+pub(crate) fn replace_bundle(
+	source: &Path,
+	bundle: &Path,
+	backup: &Path,
+	expected: &str,
+) -> Result<(), LauncherError> {
+	let found = tree_digest(source).map_err(|e| io_failed("The new app could not be read.", e))?;
+
+	if found != expected {
+		return Err(LauncherError::new(
+			ErrorCode::ArtifactDigestMismatch,
+			"The downloaded app changed after it was checked, so nothing was replaced.",
+		));
+	}
+
+	if !bundle.is_dir() {
+		return Err(LauncherError::new(
+			ErrorCode::InstallationChanged,
+			"The launcher's app is not where it was, so nothing was replaced.",
+		));
+	}
+
+	let (fresh, aside) = (hidden(bundle, "new"), hidden(bundle, "old"));
+
+	let _ = fs::remove_dir_all(&fresh);
+	let _ = fs::remove_dir_all(&aside);
+
+	let prepared = copy_tree(source, &fresh)
+		.and_then(|()| tree_digest(&fresh))
+		.map_err(|e| io_failed("The new app could not be written.", e));
+
+	match prepared {
+		Ok(copied) if copied == expected => {}
+		Ok(_) => {
+			let _ = fs::remove_dir_all(&fresh);
+
+			return Err(LauncherError::new(
+				ErrorCode::ArtifactDigestMismatch,
+				"The new app did not copy intact, so nothing was replaced.",
+			));
+		}
+		Err(error) => {
+			let _ = fs::remove_dir_all(&fresh);
+
+			return Err(error);
+		}
+	}
+
+	// The current app is kept first, so there is always a way back.
+	let name = bundle.file_name().unwrap_or_default();
+
+	if let Err(error) = fs::remove_dir_all(backup)
+		.or_else(|e| {
+			if e.kind() == io::ErrorKind::NotFound {
+				Ok(())
+			} else {
+				Err(e)
+			}
+		})
+		.and_then(|()| copy_tree(bundle, &backup.join(name)))
+	{
+		let _ = fs::remove_dir_all(&fresh);
+
+		return Err(io_failed("The current app could not be backed up.", error));
+	}
+
+	fs::rename(bundle, &aside).map_err(|e| {
+		let _ = fs::remove_dir_all(&fresh);
+
+		io_failed("The current app could not be moved aside.", e)
+	})?;
+
+	if let Err(error) = fs::rename(&fresh, bundle) {
+		let _ = fs::rename(&aside, bundle);
+		let _ = fs::remove_dir_all(&fresh);
+
+		return Err(io_failed("The new app could not be put in place.", error));
+	}
+
+	let _ = fs::remove_dir_all(&aside);
 
 	Ok(())
 }
@@ -333,10 +541,6 @@ mod tests {
 		for (path, owner) in [
 			("/opt/homebrew/Cellar/remade/1.0/bin/remade", "Homebrew"),
 			(
-				"/Applications/Remade Launcher.app/Contents/MacOS/remade-launcher",
-				"the app bundle",
-			),
-			(
 				"C:\\Program Files\\WindowsApps\\x\\remade.exe",
 				"the Microsoft Store",
 			),
@@ -474,5 +678,127 @@ mod tests {
 			read(&folders.install, "remade-launcher-daemon"),
 			"old daemon"
 		);
+	}
+
+	fn make_bundle(root: &Path, marker: &str) -> PathBuf {
+		let bundle = root.join("Remade Launcher.app");
+		let macos = bundle.join("Contents/MacOS");
+
+		fs::create_dir_all(&macos).unwrap();
+		fs::write(macos.join("remade-launcher"), marker).unwrap();
+		fs::write(
+			bundle.join("Contents/Info.plist"),
+			format!("<plist>{marker}</plist>"),
+		)
+		.unwrap();
+
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+
+			fs::set_permissions(
+				macos.join("remade-launcher"),
+				fs::Permissions::from_mode(0o755),
+			)
+			.unwrap();
+		}
+
+		bundle
+	}
+
+	#[test]
+	fn a_bundle_is_recognised_by_its_shape() {
+		assert_eq!(
+			detect(
+				"/Applications/Remade Launcher.app/Contents/MacOS/remade-launcher",
+				&[]
+			),
+			InstallLayout::AppBundle {
+				bundle: PathBuf::from("/Applications/Remade Launcher.app"),
+				executable: "remade-launcher".into(),
+			}
+		);
+		// A folder that merely has "Contents" in its name is not a bundle.
+		assert!(matches!(
+			detect("/tmp/Contents/MacOS/remade", &[]),
+			InstallLayout::Standalone { .. } | InstallLayout::Managed { .. }
+		));
+	}
+
+	#[test]
+	fn the_fingerprint_changes_with_any_file_or_the_executable_bit() {
+		let folders = folders();
+		let one = make_bundle(&folders.source, "one");
+		let before = tree_digest(&one).unwrap();
+
+		assert_eq!(before, tree_digest(&one).unwrap());
+
+		fs::write(one.join("Contents/Info.plist"), "changed").unwrap();
+
+		assert_ne!(before, tree_digest(&one).unwrap());
+
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+
+			let again = tree_digest(&one).unwrap();
+
+			fs::set_permissions(
+				one.join("Contents/MacOS/remade-launcher"),
+				fs::Permissions::from_mode(0o644),
+			)
+			.unwrap();
+
+			assert_ne!(again, tree_digest(&one).unwrap());
+		}
+	}
+
+	#[test]
+	fn a_bundle_is_replaced_whole_and_the_old_one_kept() {
+		let folders = folders();
+		let old = make_bundle(&folders.install, "old");
+		let new = make_bundle(&folders.source, "new");
+		let expected = tree_digest(&new).unwrap();
+
+		replace_bundle(&new, &old, &folders.backup, &expected).unwrap();
+
+		assert_eq!(read(&old.join("Contents/MacOS"), "remade-launcher"), "new");
+		assert_eq!(
+			read(
+				&folders.backup.join("Remade Launcher.app/Contents/MacOS"),
+				"remade-launcher"
+			),
+			"old"
+		);
+		assert!(!hidden(&old, "old").exists() && !hidden(&old, "new").exists());
+		assert_eq!(tree_digest(&old).unwrap(), expected);
+	}
+
+	#[test]
+	fn a_bundle_that_changed_after_the_check_is_not_installed() {
+		let folders = folders();
+		let old = make_bundle(&folders.install, "old");
+		let new = make_bundle(&folders.source, "new");
+		let expected = tree_digest(&new).unwrap();
+
+		fs::write(new.join("Contents/Info.plist"), "tampered").unwrap();
+
+		let error = replace_bundle(&new, &old, &folders.backup, &expected).unwrap_err();
+
+		assert_eq!(error.code(), ErrorCode::ArtifactDigestMismatch);
+		assert_eq!(read(&old.join("Contents/MacOS"), "remade-launcher"), "old");
+	}
+
+	#[test]
+	fn a_missing_bundle_is_never_created_from_nothing() {
+		let folders = folders();
+		let new = make_bundle(&folders.source, "new");
+		let expected = tree_digest(&new).unwrap();
+		let missing = folders.install.join("Remade Launcher.app");
+
+		let error = replace_bundle(&new, &missing, &folders.backup, &expected).unwrap_err();
+
+		assert_eq!(error.code(), ErrorCode::InstallationChanged);
+		assert!(!missing.exists());
 	}
 }

@@ -78,6 +78,41 @@ fn archive(version: &str, files: &[(&str, &str)]) -> Vec<u8> {
 	builder.into_inner().unwrap().finish().unwrap()
 }
 
+/// The same, with the macOS app bundle beside the programs.
+fn archive_with_app(version: &str) -> Vec<u8> {
+	let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+	let mut builder = tar::Builder::new(encoder);
+
+	for (name, text, mode) in [
+		("remade", format!("new cli {version}"), 0o755),
+		(
+			"Remade Launcher.app/Contents/MacOS/remade-launcher",
+			format!("new gui {version}"),
+			0o755,
+		),
+		(
+			"Remade Launcher.app/Contents/Info.plist",
+			format!("new plist {version}"),
+			0o644,
+		),
+	] {
+		let mut header = tar::Header::new_gnu();
+
+		header.set_size(text.len() as u64);
+		header.set_mode(mode);
+		header.set_cksum();
+		builder
+			.append_data(
+				&mut header,
+				format!("remade-{version}/{name}"),
+				text.as_bytes(),
+			)
+			.unwrap();
+	}
+
+	builder.into_inner().unwrap().finish().unwrap()
+}
+
 fn url_for(version: &str) -> String {
 	format!(
 		"https://github.com/replicraft/remade-launcher/releases/download/v{version}/remade-{version}.tar.gz"
@@ -96,7 +131,22 @@ fn read(path: &Path) -> String {
 	std::fs::read_to_string(path).unwrap()
 }
 
+/// How the launcher under test is installed.
+enum Shape {
+	Programs,
+	Managed(String),
+	Bundle,
+}
+
 async fn setup(current: &str, managed: Option<&str>) -> Setup {
+	setup_shape(
+		current,
+		managed.map_or(Shape::Programs, |by| Shape::Managed(by.to_owned())),
+	)
+	.await
+}
+
+async fn setup_shape(current: &str, shape: Shape) -> Setup {
 	let directory = tempfile::tempdir().unwrap();
 	let install = directory.path().join("install");
 
@@ -104,6 +154,12 @@ async fn setup(current: &str, managed: Option<&str>) -> Setup {
 	std::fs::write(install.join("remade"), "old cli").unwrap();
 	std::fs::write(install.join("remade-launcher-daemon"), "old daemon").unwrap();
 	std::fs::write(install.join("notes.txt"), "mine").unwrap();
+
+	let old_app = install.join("Remade Launcher.app/Contents");
+
+	std::fs::create_dir_all(old_app.join("MacOS")).unwrap();
+	std::fs::write(old_app.join("MacOS/remade-launcher"), "old gui").unwrap();
+	std::fs::write(old_app.join("Info.plist"), "old plist").unwrap();
 
 	let key = SigningKey::from_bytes(&[9u8; 32]);
 	let public = STANDARD.encode(key.verifying_key().to_bytes());
@@ -113,11 +169,15 @@ async fn setup(current: &str, managed: Option<&str>) -> Setup {
 	))
 	.unwrap();
 	let served = Arc::new(Served(Mutex::new(HashMap::new())));
-	let layout = match managed {
-		Some(by) => InstallLayout::Managed { by: by.into() },
-		None => InstallLayout::Standalone {
+	let layout = match shape {
+		Shape::Managed(by) => InstallLayout::Managed { by },
+		Shape::Programs => InstallLayout::Standalone {
 			directory: install.clone(),
 			executable: "remade".into(),
+		},
+		Shape::Bundle => InstallLayout::AppBundle {
+			bundle: install.join("Remade Launcher.app"),
+			executable: "remade-launcher".into(),
 		},
 	};
 	let config = EngineConfig {
@@ -192,6 +252,20 @@ impl Setup {
 				("LICENSE", "text"),
 			],
 		);
+		let (document, envelope) = self.publish(version, revision, bytes.clone(), &bytes);
+
+		self.engine
+			.accept_release(&document, &envelope, now())
+			.await
+			.unwrap()
+	}
+
+	async fn release_with_app(
+		&self,
+		version: &str,
+		revision: u64,
+	) -> launcher_catalog::VerifiedRelease {
+		let bytes = archive_with_app(version);
 		let (document, envelope) = self.publish(version, revision, bytes.clone(), &bytes);
 
 		self.engine
@@ -576,4 +650,60 @@ async fn this_build_has_no_release_key_so_it_checks_nothing() {
 		engine.launcher_update_report().await.blocker,
 		Some(Blocker::NoKeys)
 	);
+}
+
+#[tokio::test]
+async fn a_macos_app_is_replaced_whole_and_can_be_put_back() {
+	let world = setup_shape("1.0.0", Shape::Bundle).await;
+	let release = world.release_with_app("1.1.0", 1).await;
+	let app = world.install.join("Remade Launcher.app/Contents");
+
+	world.stage(&release).await.unwrap();
+
+	assert_eq!(read(&app.join("MacOS/remade-launcher")), "old gui");
+
+	let applied = world.engine.apply_launcher_update().await.unwrap().unwrap();
+
+	assert_eq!(applied.to, "1.1.0");
+	assert_eq!(read(&app.join("MacOS/remade-launcher")), "new gui 1.1.0");
+	assert_eq!(read(&app.join("Info.plist")), "new plist 1.1.0");
+	assert_eq!(
+		read(&world.install.join("remade")),
+		"old cli",
+		"a bundle install replaces its app, and nothing beside it"
+	);
+	assert!(world.engine.launcher_update_report().await.can_roll_back);
+
+	world.engine.roll_back_launcher().await.unwrap();
+
+	assert_eq!(read(&app.join("MacOS/remade-launcher")), "old gui");
+	assert_eq!(read(&app.join("Info.plist")), "old plist");
+}
+
+#[tokio::test]
+async fn an_archive_without_the_app_does_not_update_a_bundle() {
+	let world = setup_shape("1.0.0", Shape::Bundle).await;
+	// This archive only has the command-line programs.
+	let release = world.release("1.1.0", 1).await;
+
+	assert_eq!(
+		world.stage(&release).await.unwrap_err().code(),
+		ErrorCode::PackageUnsupported
+	);
+}
+
+#[tokio::test]
+async fn two_programs_cannot_update_the_launcher_at_once() {
+	let world = setup("1.0.0", None).await;
+	let release = world.release("1.1.0", 1).await;
+	let held = UpdateLock::take(world.engine.data_directory()).unwrap();
+
+	assert_eq!(
+		world.stage(&release).await.unwrap_err().code(),
+		ErrorCode::OperationInProgress
+	);
+
+	drop(held);
+
+	assert!(world.stage(&release).await.is_ok());
 }

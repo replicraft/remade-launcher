@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
 pub use layout::InstallLayout;
-use layout::{EXECUTABLES, Replacement, hash_file, replace_files};
+use layout::{EXECUTABLES, Replacement, hash_file, replace_bundle, replace_files, tree_digest};
 
 use crate::engine::{Engine, now_unix};
 
@@ -138,7 +138,11 @@ pub struct StagedLauncher {
 	pub version: String,
 	pub revision: u64,
 	pub staged_at: i64,
+	/// The programs to switch in, for a folder of programs.
 	files: Vec<StagedFile>,
+	/// The app to switch in, for a macOS app bundle.
+	#[serde(default)]
+	bundle: Option<StagedBundle>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -147,11 +151,58 @@ struct StagedFile {
 	sha256: String,
 }
 
-/// The files kept for one step back.
+/// A whole app bundle, by name and by a fingerprint of everything in it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct StagedBundle {
+	name: String,
+	digest: String,
+}
+
+/// What was kept for one step back.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct Previous {
 	version: String,
 	files: Vec<StagedFile>,
+	#[serde(default)]
+	bundle: Option<StagedBundle>,
+}
+
+/// What the running launcher can be replaced with, and where it is.
+enum Target {
+	/// Programs in a folder, replaced one by one.
+	Programs {
+		directory: PathBuf,
+		executable: String,
+	},
+	/// An app bundle, replaced whole.
+	Bundle { bundle: PathBuf, executable: String },
+}
+
+/// Holds the right to change the launcher's files across every program of
+/// this user, so the desktop app and the command line never do it at once.
+struct UpdateLock {
+	_file: std::fs::File,
+}
+
+impl UpdateLock {
+	fn take(data: &crate::paths::DataDirectory) -> Result<Self, LauncherError> {
+		let busy = || {
+			LauncherError::new(
+				ErrorCode::OperationInProgress,
+				"The launcher is already being updated.",
+			)
+		};
+		let file = std::fs::OpenOptions::new()
+			.create(true)
+			.truncate(false)
+			.write(true)
+			.open(data.root().join("launcher-update.lock"))
+			.map_err(|error| storage_error("The update lock could not be opened.", error))?;
+
+		file.try_lock().map_err(|_| busy())?;
+
+		Ok(Self { _file: file })
+	}
 }
 
 /// A switch that happened.
@@ -230,6 +281,23 @@ impl Engine {
 			.layout
 			.clone()
 			.unwrap_or_else(InstallLayout::detect)
+	}
+
+	/// Where the running launcher is and how it can be replaced, or why not.
+	fn target(&self) -> Result<Target, Blocker> {
+		match self.release_layout() {
+			InstallLayout::Standalone {
+				directory,
+				executable,
+			} => Ok(Target::Programs {
+				directory,
+				executable,
+			}),
+			InstallLayout::AppBundle { bundle, executable } => {
+				Ok(Target::Bundle { bundle, executable })
+			}
+			InstallLayout::Managed { by } => Err(Blocker::ManagedBy(by)),
+		}
 	}
 
 	fn update_folder(&self) -> PathBuf {
@@ -441,10 +509,8 @@ impl Engine {
 			)
 		})?;
 
-		let executable = match self.release_layout() {
-			InstallLayout::Standalone { executable, .. } => executable,
-			InstallLayout::Managed { by } => return Err(Blocker::ManagedBy(by).error()),
-		};
+		let _lock = UpdateLock::take(&self.data)?;
+		let target = self.target().map_err(|blocker| blocker.error())?;
 
 		if *release.version() <= self.current_version()? {
 			return Err(LauncherError::new(
@@ -475,14 +541,14 @@ impl Engine {
 		}
 
 		let outcome = self
-			.download_and_unpack(&artifact, &archive_path, &payload, &executable, progress)
+			.download_and_unpack(&artifact, &archive_path, &payload, &target, progress)
 			.await;
 
 		// The archive has done its job whether or not it worked.
 		let _ = tokio::fs::remove_file(&archive_path).await;
 
-		let files = match outcome {
-			Ok(files) => files,
+		let unpacked = match outcome {
+			Ok(unpacked) => unpacked,
 			Err(error) => {
 				let _ = tokio::fs::remove_dir_all(&folder).await;
 
@@ -494,7 +560,8 @@ impl Engine {
 			version: release.version().to_string(),
 			revision: release.revision(),
 			staged_at: now_unix(),
-			files,
+			files: unpacked.files,
+			bundle: unpacked.bundle,
 		};
 
 		self.set_state_value(STAGED_KEY, to_json(&staged)).await?;
@@ -507,9 +574,9 @@ impl Engine {
 		artifact: &launcher_catalog::ReleaseArtifact,
 		archive_path: &Path,
 		payload: &Path,
-		executable: &str,
+		target: &Target,
 		progress: &mut (dyn FnMut(u64, Option<u64>) + Send),
-	) -> Result<Vec<StagedFile>, LauncherError> {
+	) -> Result<Unpacked, LauncherError> {
 		let url = Url::parse(&artifact.url).map_err(|_| {
 			LauncherError::new(
 				ErrorCode::ReleaseRejected,
@@ -541,9 +608,12 @@ impl Engine {
 
 		let archive_path = archive_path.to_owned();
 		let payload = payload.to_owned();
-		let executable = executable.to_owned();
+		let (bundle, executable) = match target {
+			Target::Programs { executable, .. } => (false, executable.clone()),
+			Target::Bundle { executable, .. } => (true, executable.clone()),
+		};
 
-		blocking(move || unpack(&archive_path, &payload, &executable)).await
+		blocking(move || unpack(&archive_path, &payload, bundle, &executable)).await
 	}
 
 	/// Switches a staged launcher in, if there is one.
@@ -563,49 +633,28 @@ impl Engine {
 			return Ok(None);
 		}
 
-		let InstallLayout::Standalone { directory, .. } = self.release_layout() else {
+		let Ok(target) = self.target() else {
 			return Ok(None);
 		};
 
+		let _lock = UpdateLock::take(&self.data)?;
 		let _operation = crate::lifecycle::acquire_operation_lock(&self.data).await?;
 		let root = self.update_folder();
 		let source = root.join("staged").join("payload");
 		let backup = root.join("previous");
-		let files: Vec<Replacement> = staged
-			.files
-			.iter()
-			.map(|file| Replacement {
-				name: file.name.clone(),
-				sha256: file.sha256.clone(),
-			})
-			.collect();
 
-		let previous = {
-			let backup = backup.clone();
-			let directory = directory.clone();
-			let files = files.clone();
+		let previous = match (target, staged.bundle.clone()) {
+			(Target::Programs { directory, .. }, None) => {
+				let files = replacements(&staged.files);
 
-			blocking(move || {
-				let _ = std::fs::remove_dir_all(&backup);
-
-				let mut old = Vec::new();
-
-				for file in &files {
-					let found = hash_file(&directory.join(&file.name)).map_err(|error| {
-						storage_error("The current launcher could not be read.", error)
-					})?;
-
-					old.push(StagedFile {
-						name: file.name.clone(),
-						sha256: found,
-					});
-				}
-
-				replace_files(&source, &directory, &backup, &files)?;
-
-				Ok(old)
-			})
-			.await?
+				blocking(move || switch_programs(&source, &directory, &backup, &files)).await?
+			}
+			(Target::Bundle { bundle, .. }, Some(staged_bundle)) => {
+				blocking(move || switch_bundle(&source, &bundle, &backup, &staged_bundle)).await?
+			}
+			// What was downloaded is not what this install can use, such as
+			// after the launcher was moved. Leave everything as it is.
+			_ => return Ok(None),
 		};
 
 		let applied = AppliedLauncher {
@@ -618,7 +667,8 @@ impl Engine {
 			PREVIOUS_KEY,
 			to_json(&Previous {
 				version: self.releases.current_version.clone(),
-				files: previous,
+				files: previous.files,
+				bundle: previous.bundle,
 			}),
 		)
 		.await?;
@@ -642,32 +692,45 @@ impl Engine {
 					"There is no earlier launcher to go back to.",
 				)
 			})?;
-		let InstallLayout::Standalone { directory, .. } = self.release_layout() else {
-			return Err(LauncherError::new(
+		let target = self.target().map_err(|_| {
+			LauncherError::new(
 				ErrorCode::SelfUpdateUnavailable,
 				"The launcher's files belong to something else, so they were left alone.",
-			));
-		};
+			)
+		})?;
 
+		let _lock = UpdateLock::take(&self.data)?;
 		let _operation = crate::lifecycle::acquire_operation_lock(&self.data).await?;
 		let root = self.update_folder();
 		let source = root.join("previous");
 		let aside = root.join("replaced");
-		let files: Vec<Replacement> = previous
-			.files
-			.iter()
-			.map(|file| Replacement {
-				name: file.name.clone(),
-				sha256: file.sha256.clone(),
-			})
-			.collect();
 
-		blocking(move || {
-			let _ = std::fs::remove_dir_all(&aside);
+		match (target, previous.bundle.clone()) {
+			(Target::Programs { directory, .. }, None) => {
+				let files = replacements(&previous.files);
 
-			replace_files(&source, &directory, &aside, &files)
-		})
-		.await?;
+				blocking(move || {
+					let _ = std::fs::remove_dir_all(&aside);
+
+					replace_files(&source, &directory, &aside, &files)
+				})
+				.await?;
+			}
+			(Target::Bundle { bundle, .. }, Some(kept)) => {
+				blocking(move || {
+					let _ = std::fs::remove_dir_all(&aside);
+
+					replace_bundle(&source.join(&kept.name), &bundle, &aside, &kept.digest)
+				})
+				.await?;
+			}
+			_ => {
+				return Err(LauncherError::new(
+					ErrorCode::SelfUpdateUnavailable,
+					"The earlier launcher does not fit this install, so it was left alone.",
+				));
+			}
+		}
 
 		let applied = AppliedLauncher {
 			from: self.releases.current_version.clone(),
@@ -747,13 +810,88 @@ impl Engine {
 	}
 }
 
-/// Opens the downloaded archive and keeps the launcher's own programs from
-/// it. The archive holds one folder, as the release script makes it.
+fn replacements(files: &[StagedFile]) -> Vec<Replacement> {
+	files
+		.iter()
+		.map(|file| Replacement {
+			name: file.name.clone(),
+			sha256: file.sha256.clone(),
+		})
+		.collect()
+}
+
+/// What is kept for a step back.
+struct Kept {
+	files: Vec<StagedFile>,
+	bundle: Option<StagedBundle>,
+}
+
+/// Switches programs in a folder, and notes what they were.
+fn switch_programs(
+	source: &Path,
+	directory: &Path,
+	backup: &Path,
+	files: &[Replacement],
+) -> Result<Kept, LauncherError> {
+	let _ = std::fs::remove_dir_all(backup);
+
+	let mut old = Vec::new();
+
+	for file in files {
+		let found = hash_file(&directory.join(&file.name))
+			.map_err(|error| storage_error("The current launcher could not be read.", error))?;
+
+		old.push(StagedFile {
+			name: file.name.clone(),
+			sha256: found,
+		});
+	}
+
+	replace_files(source, directory, backup, files)?;
+
+	Ok(Kept {
+		files: old,
+		bundle: None,
+	})
+}
+
+/// Switches an app bundle, and notes what it was.
+fn switch_bundle(
+	source: &Path,
+	bundle: &Path,
+	backup: &Path,
+	staged: &StagedBundle,
+) -> Result<Kept, LauncherError> {
+	let name = bundle
+		.file_name()
+		.map(|name| name.to_string_lossy().into_owned())
+		.unwrap_or_default();
+	let old = tree_digest(bundle)
+		.map_err(|error| storage_error("The current app could not be read.", error))?;
+
+	replace_bundle(&source.join(&staged.name), bundle, backup, &staged.digest)?;
+
+	Ok(Kept {
+		files: Vec::new(),
+		bundle: Some(StagedBundle { name, digest: old }),
+	})
+}
+
+/// What the archive held that this install can use.
+struct Unpacked {
+	files: Vec<StagedFile>,
+	bundle: Option<StagedBundle>,
+}
+
+/// Opens the downloaded archive and keeps what this install can use: the
+/// launcher's programs for a folder install, or the app bundle for a macOS
+/// app. The archive holds one folder, as the release script makes it.
 fn unpack(
 	archive: &Path,
 	payload: &Path,
+	wants_bundle: bool,
 	executable: &str,
-) -> Result<Vec<StagedFile>, LauncherError> {
+) -> Result<Unpacked, LauncherError> {
 	let unsafe_archive = |why: &str| LauncherError::new(ErrorCode::PackageUnsafe, why.to_owned());
 	let format = detect_magic(archive)
 		.map_err(|_| unsafe_archive("The launcher download could not be read."))?
@@ -763,7 +901,7 @@ fn unpack(
 		format,
 		1,
 		Limits {
-			max_entries: 64,
+			max_entries: 4_096,
 			max_total_bytes: 1024 * 1024 * 1024,
 			max_file_bytes: MAX_RELEASE_BYTES,
 			..Limits::default()
@@ -772,6 +910,10 @@ fn unpack(
 	.map_err(|_| unsafe_archive("The launcher download is not a safe archive."))?;
 	let owned = extract(archive, &inventory, payload)
 		.map_err(|_| unsafe_archive("The launcher download could not be unpacked."))?;
+
+	if wants_bundle {
+		return unpack_bundle(&owned, payload, executable);
+	}
 
 	let mut files = Vec::new();
 
@@ -805,7 +947,53 @@ fn unpack(
 		));
 	}
 
-	Ok(files)
+	Ok(Unpacked {
+		files,
+		bundle: None,
+	})
+}
+
+fn unpack_bundle(
+	owned: &[launcher_packages::OwnedFile],
+	payload: &Path,
+	executable: &str,
+) -> Result<Unpacked, LauncherError> {
+	let mut bundles = owned.iter().filter(|file| {
+		file.kind == launcher_packages::OwnedKind::Directory
+			&& !file.path.contains('/')
+			&& file.path.ends_with(".app")
+	});
+	let (Some(bundle), None) = (bundles.next(), bundles.next()) else {
+		return Err(LauncherError::new(
+			ErrorCode::PackageUnsupported,
+			"The launcher download does not contain exactly one app.",
+		));
+	};
+	let folder = payload.join(&bundle.path);
+
+	// The program that is running has to be inside it, for the same reason.
+	if !folder.join("Contents/MacOS").join(executable).is_file() {
+		return Err(LauncherError::new(
+			ErrorCode::PackageUnsupported,
+			"The launcher download does not contain the program that is running.",
+		));
+	}
+
+	let digest = tree_digest(&folder).map_err(|error| {
+		LauncherError::new(
+			ErrorCode::PackageUnsafe,
+			"The launcher download could not be checked.",
+		)
+		.with_source(error)
+	})?;
+
+	Ok(Unpacked {
+		files: Vec::new(),
+		bundle: Some(StagedBundle {
+			name: bundle.path.clone(),
+			digest,
+		}),
+	})
 }
 
 #[cfg(test)]
