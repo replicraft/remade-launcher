@@ -1151,7 +1151,11 @@ async fn an_unreviewed_source_must_be_accepted_by_name() {
 			.await
 			.unwrap_err();
 
-		assert_eq!(error.code(), ErrorCode::ConsentRequired, "{accepted:?}");
+		assert_eq!(
+			error.code(),
+			ErrorCode::SourceApprovalRequired,
+			"{accepted:?}"
+		);
 	}
 
 	assert!(world.engine.installed().await.unwrap().is_empty());

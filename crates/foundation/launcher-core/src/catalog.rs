@@ -50,6 +50,8 @@ pub enum ProblemKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Problem {
 	pub kind: ProblemKind,
+	/// A stable, machine-readable code for scripts.
+	pub code: &'static str,
 	/// Safe to display. Never contains server-provided text.
 	pub message: String,
 }
@@ -162,6 +164,7 @@ impl CatalogService {
 		if self.config.registry.active_key_count() == 0 {
 			return self.fail(Problem {
 				kind: ProblemKind::NoTrustedKeys,
+				code: "CATALOG_KEYS_NOT_CONFIGURED",
 				message: "This build has no catalog signing keys configured, so it cannot \
 				          verify a catalog yet."
 					.into(),
@@ -218,6 +221,7 @@ impl CatalogService {
 
 				Err(Problem {
 					kind: ProblemKind::Network,
+					code: "RELEASE_LOOKUP_FAILED",
 					message:
 						"The catalog could not be downloaded. Check your connection and try again."
 							.into(),
@@ -381,6 +385,7 @@ impl AcceptFailure {
 fn storage_problem() -> Problem {
 	Problem {
 		kind: ProblemKind::Storage,
+		code: "DATA_INTEGRITY_FAILURE",
 		message: "The launcher's local database could not be read, so the catalog was not used."
 			.into(),
 	}
@@ -435,7 +440,25 @@ fn problem_from(error: &CatalogError) -> Problem {
 
 	Problem {
 		kind,
+		code: contract_code(error.kind()),
 		message: message.to_owned(),
+	}
+}
+
+/// The stable code scripts see for a verification failure.
+fn contract_code(kind: ErrorKind) -> &'static str {
+	match kind {
+		ErrorKind::NoTrustedSignature
+		| ErrorKind::SignatureInvalid
+		| ErrorKind::DuplicateKeyId
+		| ErrorKind::EnvelopeInvalid
+		| ErrorKind::HashMismatch
+		| ErrorKind::WrongFeed => "CATALOG_SIGNATURE_INVALID",
+		ErrorKind::Expired => "CATALOG_EXPIRED",
+		ErrorKind::Rollback | ErrorKind::RevisionConflict => "REVISION_ROLLBACK",
+		ErrorKind::UnsupportedCapability => "UNSUPPORTED_SCHEMA",
+		ErrorKind::FutureIssued => "CLOCK_UNCERTAIN",
+		_ => "CATALOG_INVALID",
 	}
 }
 

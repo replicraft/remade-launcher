@@ -350,7 +350,7 @@ impl Engine {
 						!= Some(ready.source_display.as_str())
 				{
 					return Err(LauncherError::new(
-						ErrorCode::ConsentRequired,
+						ErrorCode::SourceApprovalRequired,
 						format!(
 							"Remade has not reviewed {}. To install from it, accept that exact repository.",
 							ready.source_display

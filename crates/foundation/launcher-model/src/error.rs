@@ -59,6 +59,7 @@ pub enum ErrorCode {
 	OperationInProgress,
 	ConfirmationRequired,
 	ConsentRequired,
+	SourceApprovalRequired,
 	PlanExpired,
 	PlanChanged,
 	AppPinned,
@@ -89,6 +90,7 @@ impl ErrorCode {
 			Self::OperationInProgress => "operation.in_progress",
 			Self::ConfirmationRequired => "cli.confirmation_required",
 			Self::ConsentRequired => "policy.consent_required",
+			Self::SourceApprovalRequired => "policy.source_approval_required",
 			Self::PlanExpired => "plan.expired",
 			Self::PlanChanged => "plan.changed",
 			Self::AppPinned => "installation.pinned",
@@ -113,9 +115,10 @@ impl ErrorCode {
 			| Self::InstallationChanged
 			| Self::LaunchFailed
 			| Self::OperationInProgress => ErrorCategory::LocalOwnership,
-			Self::InvalidSourceUrl | Self::ConfirmationRequired | Self::ConsentRequired => {
-				ErrorCategory::Ambiguity
-			}
+			Self::InvalidSourceUrl
+			| Self::ConfirmationRequired
+			| Self::ConsentRequired
+			| Self::SourceApprovalRequired => ErrorCategory::Ambiguity,
 			Self::PlanExpired | Self::PlanChanged => ErrorCategory::Trust,
 			Self::AppPinned => ErrorCategory::LocalOwnership,
 			Self::StorageUnavailable | Self::StorageMigrationFailed | Self::StorageNewerThanApp => {
@@ -140,9 +143,10 @@ impl ErrorCode {
 			| Self::InstallationNotFound => Retry::Never,
 			Self::InstallationChanged | Self::LaunchFailed => Retry::AfterUserAction,
 			Self::OperationInProgress => Retry::Later,
-			Self::InvalidSourceUrl | Self::ConfirmationRequired | Self::ConsentRequired => {
-				Retry::AfterUserAction
-			}
+			Self::InvalidSourceUrl
+			| Self::ConfirmationRequired
+			| Self::ConsentRequired
+			| Self::SourceApprovalRequired => Retry::AfterUserAction,
 			Self::PlanExpired | Self::PlanChanged => Retry::AfterUserAction,
 			Self::AppPinned => Retry::AfterUserAction,
 			Self::StorageUnavailable | Self::StorageNewerThanApp => Retry::AfterUserAction,
