@@ -45,6 +45,8 @@ start-page-explore = 探索
 start-page-last-used = 上次离开的页面
 settings-layout-note = 你的布局(如折叠的侧边栏、网格或列表)和窗口大小会自动记住。
 
+update-mode-pinned = 已固定
+    .description = 保持当前版本。在你选择其他级别之前,不会更新,也不会显示更新按钮。
 update-mode-manual = 手动更新(默认)
     .description = 打开启动器时检查更新。已安装的应用会显示“更新”按钮,由你决定何时安装。
 update-mode-on-launch = 启动器启动时自动更新

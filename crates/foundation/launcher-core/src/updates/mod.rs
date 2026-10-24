@@ -14,7 +14,7 @@ mod settings;
 mod status;
 
 pub use cycle::{CycleOutcome, CycleReport, CycleResult, Trigger};
-pub use decide::{Decision, Initiator, SkipReason, decide, effective_age};
+pub use decide::{Decision, Initiator, SkipReason, decide, effective_age, effective_mode};
 pub(crate) use feed::ObservationsCache;
 pub use launch::LaunchOutcome;
 pub use outlook::Outlook;

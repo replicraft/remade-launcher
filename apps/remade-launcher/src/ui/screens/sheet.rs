@@ -32,6 +32,8 @@ pub(crate) enum Sheet {
 	/// Turning on an automatic update mode. Never pre-checked.
 	ConfirmMode {
 		mode: UpdateMode,
+		/// One app's own level, or all apps when empty.
+		app: Option<InstallationId>,
 		acknowledged: bool,
 	},
 	Removed {
@@ -59,6 +61,7 @@ pub(crate) enum Outcome {
 	Uninstall(InstalledApp),
 	SetMode {
 		mode: UpdateMode,
+		app: Option<InstallationId>,
 		acknowledged: bool,
 	},
 	UpdateAll(Vec<OperatorUpdate>),
@@ -174,7 +177,11 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 						Choice::Confirm => outcome = Outcome::Uninstall(app.clone()),
 					}
 				}
-				Sheet::ConfirmMode { mode, acknowledged } => {
+				Sheet::ConfirmMode {
+					mode,
+					app,
+					acknowledged,
+				} => {
 					ui.heading(text_for("update-mode", mode.as_str()));
 					ui.label(text_for(
 						"update-mode",
@@ -187,7 +194,7 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 					ui.label(format!("• {}", t!("sheet-mode-risk-migration")));
 					ui.label(format!("• {}", t!("sheet-mode-risk-unattended")));
 
-					if *mode == UpdateMode::Daemon {
+					if *mode == UpdateMode::Daemon && app.is_none() {
 						ui.add_space(4.0);
 						ui.colored_label(
 							ui.visuals().warn_fg_color,
@@ -213,6 +220,7 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 						Choice::Confirm => {
 							outcome = Outcome::SetMode {
 								mode: *mode,
+								app: *app,
 								acknowledged: *acknowledged,
 							}
 						}

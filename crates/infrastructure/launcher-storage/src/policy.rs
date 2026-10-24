@@ -1,6 +1,6 @@
 //! Update policy, asset observations, and decision history.
 
-use launcher_model::{InstallationId, LauncherError};
+use launcher_model::{InstallationId, LauncherError, UpdateMode};
 use rusqlite::OptionalExtension;
 
 use crate::Database;
@@ -18,6 +18,9 @@ pub struct AppPolicy {
 	pub allow_prerelease: bool,
 	/// An explicit opt-in for a repository Remade has not reviewed.
 	pub unattended_custom: bool,
+	/// This app's own level on the update chain. `None` follows the global
+	/// mode. A pin is `pinned_release_id`, never this.
+	pub update_mode: Option<UpdateMode>,
 }
 
 /// What the provider reported about one asset.
@@ -96,7 +99,7 @@ impl Database {
 			.call(move |connection| -> DbResult<_> {
 				connection
 					.prepare_cached(
-						"SELECT min_age_seconds, auto_paused, pinned_release_id, allow_prerelease, unattended_custom
+						"SELECT min_age_seconds, auto_paused, pinned_release_id, allow_prerelease, unattended_custom, update_mode
 						 FROM app_update_policy WHERE installation_id = ?1",
 					)?
 					.query_row([installation.as_bytes().as_slice()], |row| {
@@ -106,6 +109,9 @@ impl Database {
 							pinned_release_id: row.get::<_, Option<i64>>(2)?.and_then(|v| u64::try_from(v).ok()),
 							allow_prerelease: row.get::<_, i64>(3)? != 0,
 							unattended_custom: row.get::<_, i64>(4)? != 0,
+							update_mode: row
+								.get::<_, Option<String>>(5)?
+								.and_then(|text| text.parse().ok()),
 						})
 					})
 					.optional()
@@ -125,12 +131,12 @@ impl Database {
 				connection
 					.prepare_cached(
 						"INSERT INTO app_update_policy
-						     (installation_id, min_age_seconds, auto_paused, pinned_release_id, allow_prerelease, unattended_custom)
-						 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+						     (installation_id, min_age_seconds, auto_paused, pinned_release_id, allow_prerelease, unattended_custom, update_mode)
+						 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
 						 ON CONFLICT (installation_id) DO UPDATE SET
 						     min_age_seconds = excluded.min_age_seconds, auto_paused = excluded.auto_paused,
 						     pinned_release_id = excluded.pinned_release_id, allow_prerelease = excluded.allow_prerelease,
-						     unattended_custom = excluded.unattended_custom",
+						     unattended_custom = excluded.unattended_custom, update_mode = excluded.update_mode",
 					)?
 					.execute((
 						installation.as_bytes().as_slice(),
@@ -139,6 +145,7 @@ impl Database {
 						policy.pinned_release_id.map(signed),
 						i64::from(policy.allow_prerelease),
 						i64::from(policy.unattended_custom),
+						policy.update_mode.map(UpdateMode::as_str),
 					))?;
 
 				Ok(())
@@ -351,6 +358,7 @@ mod tests {
 			pinned_release_id: Some(9),
 			allow_prerelease: true,
 			unattended_custom: false,
+			update_mode: Some(UpdateMode::OnLaunch),
 		};
 
 		database.set_app_policy(app, policy.clone()).await.unwrap();

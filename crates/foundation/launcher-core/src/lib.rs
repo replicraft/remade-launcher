@@ -63,5 +63,5 @@ pub use storage_report::StorageReport;
 pub use updates::{
 	AutoStatus, AvailableUpdate, CycleOutcome, CycleReport, CycleResult, Decision, Initiator,
 	LaunchOutcome, ModeConsent, OperatorUpdate, Outlook, SkipReason, Trigger, UpdateSettings,
-	UpdateState, UpdateStatus, decide, effective_age,
+	UpdateState, UpdateStatus, decide, effective_age, effective_mode,
 };

@@ -530,13 +530,22 @@ impl Commands {
 		});
 	}
 
-	pub(crate) fn set_pinned(&self, installation: InstallationId, pinned: bool) {
+	/// Puts one app on a level of the update chain, or back on the global one.
+	pub(crate) fn set_app_level(
+		&self,
+		installation: InstallationId,
+		mode: Option<UpdateMode>,
+		acknowledged: bool,
+	) {
 		self.spawn_result(move |engine| async move {
-			if pinned {
-				engine.pin(installation).await?
-			} else {
-				engine.unpin(installation).await?
-			}
+			let consent = ModeConsent {
+				actor: "desktop".into(),
+				acknowledged_risks: acknowledged,
+			};
+
+			engine
+				.set_app_update_mode(installation, mode, &consent)
+				.await?;
 
 			let mut policies = HashMap::new();
 

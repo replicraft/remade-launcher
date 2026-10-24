@@ -155,6 +155,57 @@ impl Engine {
 		self.database.recent_decisions(installation, limit).await
 	}
 
+	/// Puts one app on a level of the update chain, or back on the global
+	/// one with `None`. `Some(Pinned)` holds it at the release it has.
+	///
+	/// An automatic level needs the same acknowledgement as the global mode.
+	/// The always-on updater only runs while the global mode asks for it, so
+	/// until then an app that chose it updates at launch.
+	pub async fn set_app_update_mode(
+		&self,
+		installation: InstallationId,
+		mode: Option<UpdateMode>,
+		consent: &ModeConsent,
+	) -> Result<(), LauncherError> {
+		let record = self.require_installed(installation).await?;
+		let mut policy = self.database.app_policy(installation).await?;
+
+		if let Some(mode) = mode.filter(|mode| mode.is_automatic()) {
+			if !consent.acknowledged_risks {
+				return Err(LauncherError::new(
+					ErrorCode::ConsentRequired,
+					"Automatic updates can install a bad release without asking. Confirm that you understand before turning them on.",
+				));
+			}
+
+			self.database
+				.record_consent(ConsentRecord {
+					kind: "update-mode".into(),
+					subject: mode.as_str().into(),
+					scope: format!("app {installation}"),
+					policy_version: CONSENT_POLICY_VERSION,
+					actor: consent.actor.clone(),
+					granted_at: now_unix(),
+				})
+				.await?;
+		}
+
+		match mode {
+			Some(UpdateMode::Pinned) => {
+				policy.pinned_release_id = Some(record.release_id);
+				policy.update_mode = None;
+			}
+			other => {
+				policy.pinned_release_id = None;
+				policy.update_mode = other;
+				// Picking a level is a fresh choice, so an earlier pause goes.
+				policy.auto_paused = false;
+			}
+		}
+
+		self.database.set_app_policy(installation, policy).await
+	}
+
 	/// Pins an app to the release it has. Pinned apps are not updated
 	/// automatically, and not by an operator run either until unpinned.
 	pub async fn pin(&self, installation: InstallationId) -> Result<(), LauncherError> {
@@ -347,6 +398,18 @@ mod tests {
 
 		assert_eq!(settings.mode, UpdateMode::Manual);
 		assert_eq!(settings.minimum_age, MinimumAge::DEFAULT);
+	}
+
+	#[tokio::test]
+	async fn a_level_for_an_app_that_is_not_installed_is_refused() {
+		let (_directory, engine) = engine().await;
+
+		let error = engine
+			.set_app_update_mode(InstallationId::new(), Some(UpdateMode::Manual), &yes())
+			.await
+			.unwrap_err();
+
+		assert_eq!(error.code(), ErrorCode::InstallationNotFound);
 	}
 
 	#[tokio::test]

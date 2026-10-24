@@ -45,6 +45,8 @@ start-page-explore = 探す
 start-page-last-used = 前回のページ
 settings-layout-note = サイドバーの折りたたみ、グリッド表示かリスト表示か、ウィンドウサイズなどのレイアウトは自動的に記憶されます。
 
+update-mode-pinned = 固定
+    .description = 今のバージョンのままにします。別のレベルを選ぶまで、何も更新せず、アップデートボタンも表示しません。
 update-mode-manual = 手動アップデート(既定)
     .description = ランチャーを開いたときにアップデートを確認します。インストール済みのアプリにはアップデートボタンが表示され、インストールするタイミングを自分で決められます。
 update-mode-on-launch = ランチャーの起動時に自動アップデート

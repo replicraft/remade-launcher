@@ -7,6 +7,7 @@ use launcher_core::UpdateSettings;
 use launcher_model::{MinimumAge, UpdateMode};
 
 use super::SettingsAction;
+use crate::ui::components::{Level, level_selector};
 use crate::ui::i18n::text_for;
 use crate::ui::theme;
 
@@ -16,32 +17,10 @@ pub(super) fn updates(
 	background: Option<&BackgroundStatus>,
 	action: &mut SettingsAction,
 ) {
-	// One of three, never three independent switches.
-	for mode in UpdateMode::ALL {
-		ui.horizontal_top(|ui| {
-			if ui.radio(settings.mode == mode, "").clicked() && settings.mode != mode {
-				*action = SettingsAction::PickMode(mode);
-			}
-
-			ui.vertical(|ui| {
-				let title =
-					RichText::new(text_for("update-mode", mode.as_str())).family(theme::semibold());
-				let title = if mode == UpdateMode::Daemon {
-					title.color(ui.visuals().warn_fg_color)
-				} else {
-					title
-				};
-
-				ui.label(title);
-				ui.label(
-					RichText::new(t!(&format!("update-mode-{}.description", mode.as_str())))
-						.small()
-						.color(theme::muted(ui)),
-				);
-			});
-		});
-
-		ui.add_space(2.0);
+	// One level of a chain, never independent switches.
+	if let Some(mode) = level_selector(ui, "update-mode", settings.mode, &update_levels(true, None))
+	{
+		*action = SettingsAction::PickMode(mode);
 	}
 
 	ui.add_space(8.0);
@@ -89,6 +68,33 @@ fn minimum_age(ui: &mut Ui, settings: &UpdateSettings, action: &mut SettingsActi
 	if settings.minimum_age == MinimumAge::NONE {
 		ui.colored_label(ui.visuals().warn_fg_color, t!("settings-min-age-warning"));
 	}
+}
+
+/// The update chain as the selector shows it: the same levels for all apps
+/// and for one app. `daemon_note` explains a level that cannot be chosen.
+pub(crate) fn update_levels(
+	daemon_enabled: bool,
+	daemon_note: Option<String>,
+) -> Vec<Level<UpdateMode>> {
+	UpdateMode::ALL
+		.into_iter()
+		.map(|mode| {
+			let unavailable = mode == UpdateMode::Daemon && !daemon_enabled;
+
+			Level {
+				value: mode,
+				title: text_for("update-mode", mode.as_str()),
+				description: text_for("update-mode", &format!("{}.description", mode.as_str())),
+				warn: mode == UpdateMode::Daemon,
+				enabled: !unavailable,
+				note: if unavailable {
+					daemon_note.clone()
+				} else {
+					None
+				},
+			}
+		})
+		.collect()
 }
 
 /// A preset delay in words, such as "6 hours".

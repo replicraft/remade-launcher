@@ -527,14 +527,17 @@ impl LauncherApp {
 		};
 
 		match action {
-			Action::Pin(id, pinned) => {
-				if let Some(demo) = &mut self.demo {
-					demo.policies.entry(id).or_default().pinned_release_id = pinned.then_some(1);
-				}
-			}
 			Action::SetPolicy(id, policy) => {
 				if let Some(demo) = &mut self.demo {
 					demo.policies.insert(id, policy);
+				}
+			}
+			Action::SetLevel(id, mode) => {
+				if let Some(demo) = &mut self.demo {
+					let policy = demo.policies.entry(id).or_default();
+
+					policy.pinned_release_id = (mode == Some(UpdateMode::Pinned)).then_some(1);
+					policy.update_mode = mode.filter(|mode| *mode != UpdateMode::Pinned);
 				}
 			}
 			Action::ReleaseNotes { app, tag, .. } => {
@@ -719,7 +722,14 @@ impl LauncherApp {
 			}
 			Action::Launch(id) => self.commands.launch(id),
 			Action::SetPolicy(id, policy) => self.commands.set_app_policy(id, policy),
-			Action::Pin(id, pinned) => self.commands.set_pinned(id, pinned),
+			Action::SetLevel(id, Some(mode)) if mode.is_automatic() => {
+				self.sheet = Some(Sheet::ConfirmMode {
+					mode,
+					app: Some(id),
+					acknowledged: false,
+				});
+			}
+			Action::SetLevel(id, mode) => self.commands.set_app_level(id, mode, false),
 			Action::CheckUpdates => self.commands.check_updates(),
 			Action::OpenAppSettings(id) => self.app_settings = Some(id),
 			Action::Cancel => self.commands.cancel_operation(),
@@ -770,9 +780,17 @@ impl LauncherApp {
 					self.commands.uninstall(app);
 				}
 			}
-			Outcome::SetMode { mode, acknowledged } => {
+			Outcome::SetMode {
+				mode,
+				app,
+				acknowledged,
+			} => {
 				self.sheet = None;
-				self.commands.set_update_mode(mode, acknowledged);
+
+				match app {
+					Some(app) => self.commands.set_app_level(app, Some(mode), acknowledged),
+					None => self.commands.set_update_mode(mode, acknowledged),
+				}
 			}
 			Outcome::UpdateAll(updates) => {
 				self.sheet = None;
@@ -1126,7 +1144,7 @@ impl LauncherApp {
 		};
 
 		let policy = self.policies.get(&id).cloned().unwrap_or_default();
-		let global_age = self.update_settings.minimum_age;
+		let global = self.update_settings;
 		let mut action = None;
 		let mut close = false;
 
@@ -1140,7 +1158,7 @@ impl LauncherApp {
 				ui.heading(t!("app-update-settings-title", name = app.name.as_str()));
 				ui.add_space(10.0);
 
-				action = screens::app_settings::app_settings(ui, &app, &policy, global_age);
+				action = screens::app_settings::app_settings(ui, &app, &policy, global);
 
 				ui.add_space(14.0);
 
@@ -1205,6 +1223,7 @@ impl LauncherApp {
 		if mode.is_automatic() {
 			self.sheet = Some(Sheet::ConfirmMode {
 				mode,
+				app: None,
 				acknowledged: false,
 			});
 		} else {

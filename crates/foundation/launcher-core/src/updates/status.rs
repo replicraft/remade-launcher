@@ -6,7 +6,7 @@ use launcher_model::{HostTarget, InstallationId, LauncherError, MinimumAge, Upda
 use launcher_providers::{GithubProvider, Transport};
 use launcher_storage::{AppPolicy, InstallationRecord, ObservedAsset};
 
-use super::decide::{Decision, Initiator, Inputs, decide, effective_age};
+use super::decide::{Decision, Initiator, Inputs, decide, effective_age, effective_mode};
 use super::outlook::Outlook;
 use crate::engine::{Engine, now_unix};
 
@@ -192,8 +192,10 @@ impl Engine {
 				_ => None,
 			};
 
+			let mode = effective_mode(&policy, settings.mode);
+
 			let decision = decide(&Inputs {
-				mode: settings.mode,
+				mode,
 				initiator,
 				curated: record.origin == "curated",
 				policy: &policy,
@@ -211,7 +213,7 @@ impl Engine {
 
 			evaluated.push(Evaluated {
 				auto: AutoStatus {
-					mode: settings.mode,
+					mode,
 					minimum_age,
 					age_is_per_app,
 					eligible_at,
@@ -255,7 +257,7 @@ impl Engine {
 }
 
 fn status_of(item: Evaluated) -> UpdateStatus {
-	let pinned = item.policy.pinned_release_id.is_some();
+	let pinned = item.auto.mode == UpdateMode::Pinned;
 
 	let (state, available) = match &item.outlook {
 		Outlook::Ready(ready) => {

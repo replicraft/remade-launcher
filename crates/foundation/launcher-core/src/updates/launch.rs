@@ -1,6 +1,6 @@
 //! What a genuine launcher start does about updates.
 
-use launcher_model::{LauncherError, UpdateMode};
+use launcher_model::LauncherError;
 
 use super::cycle::{CycleReport, Trigger};
 use super::status::UpdateStatus;
@@ -12,7 +12,8 @@ pub enum LaunchOutcome {
 	/// This process already handled its start. Focusing the window, opening
 	/// another one, or switching tabs never counts as a new start.
 	AlreadyHandled,
-	/// Manual mode: a read-only look. Nothing was installed.
+	/// Nothing is set to update on its own: a read-only look. Nothing was
+	/// installed.
 	Checked(Vec<UpdateStatus>),
 	/// An automatic mode ran its cycle.
 	Cycle(CycleReport),
@@ -35,16 +36,16 @@ impl Engine {
 			return Ok(LaunchOutcome::AlreadyHandled);
 		}
 
-		match self.update_settings().await.mode {
-			UpdateMode::Manual => Ok(LaunchOutcome::Checked(self.check_updates(None).await?)),
-			// In the daemon mode a launcher start also asks for a cycle. If the
-			// daemon is already running one, the cycle lock makes this a no-op.
-			UpdateMode::OnLaunch => Ok(LaunchOutcome::Cycle(
+		// An app can choose its own level, so one set to update at launch is
+		// enough even when the global mode is Manual. The cycle also covers
+		// what the background updater would do. If it is already running one,
+		// the cycle lock makes this a no-op.
+		if self.any_app_allows(Trigger::OnLaunch).await? {
+			Ok(LaunchOutcome::Cycle(
 				self.run_update_cycle(Trigger::OnLaunch).await?,
-			)),
-			UpdateMode::Daemon => Ok(LaunchOutcome::Cycle(
-				self.run_update_cycle(Trigger::Daemon).await?,
-			)),
+			))
+		} else {
+			Ok(LaunchOutcome::Checked(self.check_updates(None).await?))
 		}
 	}
 }

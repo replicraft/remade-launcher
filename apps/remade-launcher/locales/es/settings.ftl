@@ -45,6 +45,8 @@ start-page-explore = Explorar
 start-page-last-used = Donde me quedé
 settings-layout-note = Tu diseño, como la barra lateral plegada, la cuadrícula o la lista, y el tamaño de la ventana, se recuerda automáticamente.
 
+update-mode-pinned = Fijada
+    .description = Se queda en la versión que tiene. Nada la actualiza, y no se ofrece el botón de actualizar, hasta que elijas otro nivel.
 update-mode-manual = Actualizaciones manuales (predeterminado)
     .description = Busca actualizaciones cuando abres el Launcher. Las apps instaladas muestran un botón Actualizar para que decidas cuándo instalar.
 update-mode-on-launch = Actualizar automáticamente al iniciar el Launcher

@@ -111,7 +111,6 @@ pub(crate) fn library(ui: &mut Ui, view: &mut LibraryView<'_>) -> Option<Action>
 				app,
 				progress: view.busy.get(&app.id),
 				status: view.statuses.get(&app.id),
-				mode: view.mode,
 				link: if view.demo {
 					"https://example.com".to_owned()
 				} else {

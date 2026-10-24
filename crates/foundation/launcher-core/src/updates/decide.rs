@@ -12,8 +12,10 @@ use super::outlook::Outlook;
 /// Why an update was not applied.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SkipReason {
-	/// The global mode is Manual, so nothing installs on its own.
+	/// The app's mode is Manual, so nothing installs on its own.
 	ModeManual,
+	/// The app updates when the Launcher starts, which a background pass is not.
+	LaunchOnly,
 	/// The app is pinned, which no automatic or operator update overrides.
 	Pinned,
 	/// Automatic updates are paused for this app.
@@ -42,6 +44,7 @@ impl SkipReason {
 	pub fn code(&self) -> &'static str {
 		match self {
 			Self::ModeManual => "MODE_MANUAL",
+			Self::LaunchOnly => "LAUNCH_ONLY",
 			Self::Pinned => "PINNED",
 			Self::AutoPaused => "AUTO_PAUSED",
 			Self::SourceNotEnrolled => "UNVERIFIED_SOURCE_APPROVAL_REQUIRED",
@@ -59,6 +62,7 @@ impl SkipReason {
 	pub fn status(&self) -> &'static str {
 		match self {
 			Self::ModeManual => "manual_mode",
+			Self::LaunchOnly => "launch_only",
 			Self::Pinned => "pinned",
 			Self::AutoPaused => "auto_paused",
 			Self::SourceNotEnrolled => "source_not_enrolled",
@@ -76,7 +80,8 @@ impl SkipReason {
 	pub fn message(&self) -> String {
 		match self {
 			Self::ModeManual => "Automatic updates are off. Update it yourself when you like.".into(),
-			Self::Pinned => "It is pinned to its current version. Unpin it to update.".into(),
+			Self::LaunchOnly => "It updates when the Launcher starts, not in the background.".into(),
+			Self::Pinned => "It is pinned to its current version. Pick another update level to update it.".into(),
 			Self::AutoPaused => "Automatic updates are paused for this app.".into(),
 			Self::SourceNotEnrolled => {
 				"Remade has not reviewed this source, so it is not updated unattended.".into()
@@ -123,6 +128,35 @@ pub struct Inputs<'a> {
 	pub clock_ok: bool,
 }
 
+/// Where this app sits on the update chain: its own choice if it has one,
+/// the global mode if not.
+///
+/// A pin always wins. The always-on
+/// background updater only exists while the global mode asks for it, so an
+/// app that chose it without that updater runs at launch instead.
+pub fn effective_mode(policy: &AppPolicy, global: UpdateMode) -> UpdateMode {
+	if policy.pinned_release_id.is_some() {
+		return UpdateMode::Pinned;
+	}
+
+	match policy.update_mode.unwrap_or(global) {
+		UpdateMode::Daemon if global != UpdateMode::Daemon => UpdateMode::OnLaunch,
+		mode => mode,
+	}
+}
+
+/// The level an app is on, setting a pin aside. A pinned app still belongs
+/// in an update pass, so the pass can say why it was held.
+pub fn chosen_mode(policy: &AppPolicy, global: UpdateMode) -> UpdateMode {
+	effective_mode(
+		&AppPolicy {
+			pinned_release_id: None,
+			..policy.clone()
+		},
+		global,
+	)
+}
+
 /// The age this app waits, and whether that came from the app itself.
 pub fn effective_age(policy: &AppPolicy, global: MinimumAge) -> (MinimumAge, bool) {
 	match policy.min_age_seconds.and_then(MinimumAge::from_seconds) {
@@ -134,12 +168,12 @@ pub fn effective_age(policy: &AppPolicy, global: MinimumAge) -> (MinimumAge, boo
 pub fn decide(input: &Inputs<'_>) -> Decision {
 	let automatic = input.initiator == Initiator::Automatic;
 
-	if automatic && !input.mode.is_automatic() {
-		return Decision::Skip(SkipReason::ModeManual);
+	if input.mode == UpdateMode::Pinned || input.policy.pinned_release_id.is_some() {
+		return Decision::Skip(SkipReason::Pinned);
 	}
 
-	if input.policy.pinned_release_id.is_some() {
-		return Decision::Skip(SkipReason::Pinned);
+	if automatic && !input.mode.is_automatic() {
+		return Decision::Skip(SkipReason::ModeManual);
 	}
 
 	if automatic && input.policy.auto_paused {

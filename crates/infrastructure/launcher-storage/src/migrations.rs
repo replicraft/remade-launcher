@@ -46,6 +46,10 @@ const MIGRATIONS: &[Migration] = &[
 		version: 8,
 		sql: include_str!("migrations/0008_favorites.sql"),
 	},
+	Migration {
+		version: 9,
+		sql: include_str!("migrations/0009_app_update_mode.sql"),
+	},
 ];
 
 /// The schema version this build understands.

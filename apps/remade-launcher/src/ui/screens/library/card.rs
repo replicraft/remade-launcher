@@ -2,7 +2,6 @@
 
 use egui::{Align, Layout, ProgressBar, Rect, RichText, Sense, Ui, UiBuilder, pos2, vec2};
 use launcher_core::{InstalledApp, UpdateStatus};
-use launcher_model::UpdateMode;
 
 use super::Progress;
 use super::status::status_text;
@@ -18,7 +17,6 @@ pub(super) struct Item<'a> {
 	pub(super) app: &'a InstalledApp,
 	pub(super) progress: Option<&'a Progress>,
 	pub(super) status: Option<&'a UpdateStatus>,
-	pub(super) mode: UpdateMode,
 	pub(super) pinned: bool,
 	/// Where the repository link goes.
 	pub(super) link: String,
@@ -82,7 +80,7 @@ fn status_height(ui: &Ui, item: &Item<'_>, width: f32) -> f32 {
 		return 0.0;
 	};
 
-	let (text, _) = status_text(status, item.mode);
+	let (text, _) = status_text(status, status.auto.mode);
 
 	egui::WidgetText::from(RichText::new(text).small())
 		.into_galley(
@@ -100,7 +98,7 @@ fn status_line(ui: &mut Ui, item: &Item<'_>) {
 		return;
 	};
 
-	let (text, attention) = status_text(status, item.mode);
+	let (text, attention) = status_text(status, status.auto.mode);
 	let color = if attention {
 		ui.visuals().warn_fg_color
 	} else {

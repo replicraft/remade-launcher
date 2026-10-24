@@ -45,6 +45,8 @@ start-page-explore = Explore
 start-page-last-used = Where I left off
 settings-layout-note = Your layout, such as the folded sidebar, grid or list, and window size, is remembered automatically.
 
+update-mode-pinned = Pinned
+    .description = Stays at the version it has. Nothing updates it, and no Update button is offered, until you pick another level.
 update-mode-manual = Manual updates (default)
     .description = Checks for updates when you open the Launcher. Installed apps show an Update button so you decide when to install.
 update-mode-on-launch = Auto-update when the Launcher starts

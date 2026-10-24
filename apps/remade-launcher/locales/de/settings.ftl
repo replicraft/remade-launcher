@@ -45,6 +45,8 @@ start-page-explore = Entdecken
 start-page-last-used = Wo ich aufgehört habe
 settings-layout-note = Dein Layout, etwa die eingeklappte Seitenleiste, Raster oder Liste und die Fenstergröße, wird automatisch gemerkt.
 
+update-mode-pinned = Angeheftet
+    .description = Bleibt bei der aktuellen Version. Nichts aktualisiert sie, und es gibt keine Schaltfläche „Aktualisieren“, bis du eine andere Stufe wählst.
 update-mode-manual = Manuelle Updates (Standard)
     .description = Sucht nach Updates, wenn du den Launcher öffnest. Installierte Apps zeigen eine Schaltfläche „Aktualisieren“, du entscheidest also, wann installiert wird.
 update-mode-on-launch = Automatisch aktualisieren beim Start des Launchers

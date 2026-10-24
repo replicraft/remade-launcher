@@ -82,6 +82,34 @@ pub(crate) async fn mode_set_public(
 	mode_set(ctx, engine, args).await
 }
 
+/// Whether the person confirmed what an automatic level can do. `--no-input`
+/// can never answer that.
+fn acknowledge(ctx: &Ctx, mode: UpdateMode, accept_risks: bool) -> Result<bool, CliError> {
+	if !mode.is_automatic() {
+		return Ok(false);
+	}
+
+	if accept_risks {
+		return Ok(true);
+	}
+
+	if ctx.no_input || !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+		return Err(CliError::new(
+			"CONSENT_REQUIRED",
+			ExitStatus::ApprovalRequired,
+			"Automatic updates can install a bad release without asking. Pass --accept-risks to confirm you understand.",
+		));
+	}
+
+	eprintln!("{}", mode.description());
+
+	if crate::prompt::confirm(ctx, "Turn this on?", false)? {
+		Ok(true)
+	} else {
+		Err(CliError::approval("Cancelled. The mode was not changed."))
+	}
+}
+
 async fn mode_set(
 	ctx: &Ctx,
 	engine: &Arc<Engine>,
@@ -90,28 +118,9 @@ async fn mode_set(
 	let mode: UpdateMode = args
 		.mode
 		.parse()
-		.map_err(|_| CliError::usage("The mode must be manual, on-launch, or daemon."))?;
+		.map_err(|_| CliError::usage("The mode must be pinned, manual, on-launch, or daemon."))?;
 
-	// A person must say they understand. `--no-input` can never answer that.
-	let acknowledged = if !mode.is_automatic() {
-		false
-	} else if args.accept_risks {
-		true
-	} else if ctx.no_input || !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-		return Err(CliError::new(
-			"CONSENT_REQUIRED",
-			ExitStatus::ApprovalRequired,
-			"Automatic updates can install a bad release without asking. Pass --accept-risks to confirm you understand.",
-		));
-	} else {
-		eprintln!("{}", mode.description());
-
-		crate::prompt::confirm(ctx, "Turn this on?", false)?
-	};
-
-	if mode.is_automatic() && !acknowledged {
-		return Err(CliError::approval("Cancelled. The mode was not changed."));
-	}
+	let acknowledged = acknowledge(ctx, mode, args.accept_risks)?;
 
 	let previous = engine.update_settings().await.mode;
 	let consent = ModeConsent {
@@ -138,6 +147,9 @@ async fn mode_set(
 				println!("The background updater is registered to start when you sign in.")
 			}
 			UpdateMode::Manual => {}
+			UpdateMode::Pinned => println!(
+				"Apps are held at their versions. Give one its own level with `remade updates policy <app> --mode`."
+			),
 		}
 	}
 
@@ -253,6 +265,27 @@ async fn policy(
 	let app = find_app(&apps, &args.app)?;
 	let mut policy: AppPolicy = engine.app_update_policy(app.id).await?;
 
+	if let Some(level) = &args.mode {
+		let chosen = match level.as_str() {
+			"default" => None,
+			other => Some(other.parse::<UpdateMode>().map_err(|_| {
+				CliError::usage("The level must be pinned, manual, on-launch, daemon, or default.")
+			})?),
+		};
+		let acknowledged = match chosen {
+			Some(mode) => acknowledge(ctx, mode, args.accept_risks)?,
+			None => false,
+		};
+		let consent = ModeConsent {
+			actor: "cli".into(),
+			acknowledged_risks: acknowledged,
+		};
+
+		engine.set_app_update_mode(app.id, chosen, &consent).await?;
+
+		policy = engine.app_update_policy(app.id).await?;
+	}
+
 	let changing = args.pause_auto || args.resume_auto || args.prerelease || args.no_prerelease;
 
 	if args.pause_auto {
@@ -277,6 +310,7 @@ async fn policy(
 
 	let global = engine.update_settings().await;
 	let (age, per_app) = launcher_core::effective_age(&policy, global.minimum_age);
+	let level = launcher_core::effective_mode(&policy, global.mode);
 
 	if ctx.machine() {
 		ctx.emit(json!({
@@ -287,9 +321,20 @@ async fn policy(
 			"effective_minimum_release_age_seconds": age.seconds(),
 			"age_source": if per_app { "per_app_override" } else { "global_default" },
 			"update_mode": global.mode.as_str(),
+			"app_update_mode": policy.update_mode.map(UpdateMode::as_str),
+			"effective_update_mode": level.as_str(),
 		}));
 	} else {
 		println!("{}", app.name);
+		println!(
+			"  Update level:      {}{}",
+			level.as_str(),
+			if policy.pinned_release_id.is_none() && policy.update_mode.is_none() {
+				" (follows the setting for all apps)"
+			} else {
+				""
+			}
+		);
 		println!(
 			"  Automatic updates: {}",
 			if policy.auto_paused {

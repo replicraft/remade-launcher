@@ -8,7 +8,7 @@ mod notifications;
 mod region;
 mod storage;
 mod support;
-mod updates;
+pub(crate) mod updates;
 
 use std::path::PathBuf;
 

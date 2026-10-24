@@ -324,6 +324,22 @@ fn on_launch_mode_can_be_chosen_with_a_recorded_acknowledgement_and_starts_nothi
 }
 
 #[test]
+fn pinned_is_a_level_that_needs_no_acknowledgement() {
+	let run = run();
+
+	let (code, value, _) = run.json(&["updates", "mode", "set", "pinned"]);
+
+	assert_eq!(
+		(code, value["data"]["update_mode"].as_str()),
+		(0, Some("pinned"))
+	);
+	assert_eq!(
+		run.json(&["updates", "mode"]).1["data"]["update_mode"],
+		"pinned"
+	);
+}
+
+#[test]
 fn the_minimum_release_age_is_saved_in_seconds_and_validated() {
 	let run = run();
 

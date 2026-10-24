@@ -5,7 +5,7 @@ use launcher_providers::{GithubProvider, Transport};
 use launcher_resolver::Consent;
 use launcher_storage::{ConsentRecord, DecisionRecord};
 
-use super::decide::{Decision, Initiator, SkipReason};
+use super::decide::{Decision, Initiator, SkipReason, chosen_mode, effective_mode};
 use super::outlook::Outlook;
 use super::status::Evaluated;
 use crate::engine::{Engine, now_unix};
@@ -27,6 +27,17 @@ impl Trigger {
 			Self::OnLaunch => "on-launch",
 			Self::Daemon => "daemon",
 			Self::Operator => "operator",
+		}
+	}
+
+	/// Whether an app at `mode` is updated by this trigger. The background
+	/// updater does only what asked for it. A launcher start also does what
+	/// the background updater would, so the first start of the day catches up.
+	pub const fn allows(self, mode: UpdateMode) -> bool {
+		match self {
+			Self::OnLaunch => matches!(mode, UpdateMode::OnLaunch | UpdateMode::Daemon),
+			Self::Daemon => matches!(mode, UpdateMode::Daemon),
+			Self::Operator => !matches!(mode, UpdateMode::Pinned),
 		}
 	}
 
@@ -106,9 +117,7 @@ impl Engine {
 			outcomes: Vec::new(),
 		};
 
-		let settings = self.update_settings().await;
-
-		if trigger.initiator() == Initiator::Automatic && settings.mode == UpdateMode::Manual {
+		if trigger.initiator() == Initiator::Automatic && !self.any_app_allows(trigger).await? {
 			report.mode_blocked = true;
 
 			return Ok(report);
@@ -144,6 +153,51 @@ impl Engine {
 			.await?;
 
 		Ok(report)
+	}
+
+	/// Whether `trigger` may update any installed app right now.
+	pub(super) async fn any_app_allows(&self, trigger: Trigger) -> Result<bool, LauncherError> {
+		let global = self.update_settings().await.mode;
+
+		for record in self.database.installations().await? {
+			let policy = self
+				.database
+				.app_policy(record.id)
+				.await
+				.unwrap_or_default();
+
+			if trigger.allows(chosen_mode(&policy, global)) {
+				return Ok(true);
+			}
+		}
+
+		Ok(false)
+	}
+
+	/// Why `trigger` may not update this app under the settings as they are
+	/// now, if it may not.
+	async fn refusal_now(
+		&self,
+		installation: InstallationId,
+		trigger: Trigger,
+	) -> Option<SkipReason> {
+		let global = self.update_settings().await.mode;
+		let policy = self
+			.database
+			.app_policy(installation)
+			.await
+			.unwrap_or_default();
+		let mode = effective_mode(&policy, global);
+
+		if trigger.allows(mode) {
+			None
+		} else if mode == UpdateMode::Pinned {
+			Some(SkipReason::Pinned)
+		} else if mode.is_automatic() {
+			Some(SkipReason::LaunchOnly)
+		} else {
+			Some(SkipReason::ModeManual)
+		}
 	}
 
 	/// Applies or skips one app, and records why.
@@ -193,14 +247,14 @@ impl Engine {
 			decided_at: now,
 		};
 
-		// The mode can change while a pass is running. A person who switches to
-		// Manual must not see another install start afterwards.
+		// The mode can change while a pass is running. A person who switches
+		// an app to Manual must not see another install start afterwards.
 		let decision = match decision {
-			Decision::Apply
-				if trigger.initiator() == Initiator::Automatic
-					&& self.update_settings().await.mode == UpdateMode::Manual =>
-			{
-				Decision::Skip(SkipReason::ModeManual)
+			Decision::Apply if trigger.initiator() == Initiator::Automatic => {
+				match self.refusal_now(record.id, trigger).await {
+					Some(reason) => Decision::Skip(reason),
+					None => Decision::Apply,
+				}
 			}
 			other => other,
 		};

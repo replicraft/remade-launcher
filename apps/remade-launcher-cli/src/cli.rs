@@ -529,7 +529,7 @@ pub(crate) enum ModeAction {
 
 #[derive(Debug, Args)]
 pub(crate) struct ModeSetArgs {
-	/// `manual`, `on-launch`, or `daemon`.
+	/// `pinned`, `manual`, `on-launch`, or `daemon`.
 	pub(crate) mode: String,
 
 	/// For an automatic mode: confirm you understand a bad release could be
@@ -558,6 +558,16 @@ pub(crate) enum AgeAction {
 #[derive(Debug, Args)]
 pub(crate) struct PolicyArgs {
 	pub(crate) app: String,
+
+	/// Put this app on its own update level: `pinned`, `manual`, `on-launch`,
+	/// or `daemon`. `default` follows the setting for all apps.
+	#[arg(long, value_name = "LEVEL")]
+	pub(crate) mode: Option<String>,
+
+	/// With an automatic `--mode`: confirm you understand a bad release could
+	/// be installed without asking. Recorded.
+	#[arg(long)]
+	pub(crate) accept_risks: bool,
 
 	/// Stop automatic updates for this app.
 	#[arg(long, conflicts_with = "resume_auto")]

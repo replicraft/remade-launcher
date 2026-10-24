@@ -13,10 +13,14 @@ use serde::{Deserialize, Serialize};
 /// records are recognizably for older text.
 pub const CONSENT_POLICY_VERSION: u32 = 1;
 
-/// The three global ways application updates can happen. Exactly one is
-/// active, and Manual is the default.
+/// The ways application updates can happen, from none to the most automatic.
+/// The same chain is chosen for all apps in Settings and again for any one
+/// app. Manual is the default.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum UpdateMode {
+	/// Held at the version it has. Nothing updates it, not even on request,
+	/// until the level is changed.
+	Pinned,
 	/// Check when the launcher opens and offer an Update button. Nothing is
 	/// installed without an explicit action.
 	#[default]
@@ -28,10 +32,12 @@ pub enum UpdateMode {
 }
 
 impl UpdateMode {
-	pub const ALL: [Self; 3] = [Self::Manual, Self::OnLaunch, Self::Daemon];
+	/// Least to most automatic, which is the order they are offered in.
+	pub const ALL: [Self; 4] = [Self::Pinned, Self::Manual, Self::OnLaunch, Self::Daemon];
 
 	pub const fn as_str(self) -> &'static str {
 		match self {
+			Self::Pinned => "pinned",
 			Self::Manual => "manual",
 			Self::OnLaunch => "on-launch",
 			Self::Daemon => "daemon",
@@ -40,6 +46,7 @@ impl UpdateMode {
 
 	pub const fn label(self) -> &'static str {
 		match self {
+			Self::Pinned => "Pinned",
 			Self::Manual => "Manual-update (Default)",
 			Self::OnLaunch => "Auto-update on Launcher start",
 			Self::Daemon => "Auto-update w/ always active daemon (Dangerous)",
@@ -48,12 +55,15 @@ impl UpdateMode {
 
 	/// Whether this mode installs without a per-update confirmation.
 	pub const fn is_automatic(self) -> bool {
-		!matches!(self, Self::Manual)
+		matches!(self, Self::OnLaunch | Self::Daemon)
 	}
 
 	/// The sentence shown under the option in Settings.
 	pub const fn description(self) -> &'static str {
 		match self {
+			Self::Pinned => {
+				"Stays at the version it has. Nothing updates it, and no Update button is offered, until you pick another level."
+			}
 			Self::Manual => {
 				"Checks for updates when you open the Launcher. Installed applications show an Update Available button so you decide when to install."
 			}
@@ -81,6 +91,7 @@ impl FromStr for UpdateMode {
 
 	fn from_str(text: &str) -> Result<Self, Self::Err> {
 		match text {
+			"pinned" => Ok(Self::Pinned),
 			"manual" => Ok(Self::Manual),
 			"on-launch" => Ok(Self::OnLaunch),
 			"daemon" => Ok(Self::Daemon),
@@ -220,6 +231,7 @@ mod tests {
 		}
 
 		assert!("always".parse::<UpdateMode>().is_err());
+		assert!(!UpdateMode::Pinned.is_automatic());
 		assert!(!UpdateMode::Manual.is_automatic());
 		assert!(UpdateMode::OnLaunch.is_automatic() && UpdateMode::Daemon.is_automatic());
 	}

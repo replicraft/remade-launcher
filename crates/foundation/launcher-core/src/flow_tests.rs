@@ -882,6 +882,170 @@ async fn pinned_and_paused_apps_are_held_and_an_operator_run_respects_only_the_p
 }
 
 #[tokio::test]
+async fn an_app_can_update_at_launch_while_the_global_mode_is_manual() {
+	let (world, id) = world_with_update_published(MATURE).await;
+
+	world
+		.engine
+		.set_app_update_mode(id, Some(UpdateMode::OnLaunch), &consent_to_automatic())
+		.await
+		.unwrap();
+
+	assert!(!cycle(&world, Trigger::OnLaunch, NOW).await.mode_blocked);
+	assert_eq!(installed_version(&world).await, "v1.1.0");
+}
+
+#[tokio::test]
+async fn an_app_set_to_manual_is_left_alone_by_an_automatic_global_mode() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::OnLaunch, &consent_to_automatic())
+		.await
+		.unwrap();
+	world
+		.engine
+		.set_app_update_mode(id, Some(UpdateMode::Manual), &consent_to_automatic())
+		.await
+		.unwrap();
+
+	assert!(cycle(&world, Trigger::OnLaunch, NOW).await.mode_blocked);
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+
+	world
+		.engine
+		.set_app_update_mode(id, None, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	assert_eq!(cycle(&world, Trigger::OnLaunch, NOW).await.updated(), 1);
+}
+
+#[tokio::test]
+async fn the_background_updater_only_does_what_asked_for_it() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::Daemon, &consent_to_automatic())
+		.await
+		.unwrap();
+	world
+		.engine
+		.set_app_update_mode(id, Some(UpdateMode::OnLaunch), &consent_to_automatic())
+		.await
+		.unwrap();
+
+	assert!(cycle(&world, Trigger::Daemon, NOW).await.mode_blocked);
+	assert_eq!(installed_version(&world).await, "v1.0.0");
+	assert_eq!(cycle(&world, Trigger::OnLaunch, NOW).await.updated(), 1);
+}
+
+#[tokio::test]
+async fn an_app_cannot_use_the_background_updater_unless_all_apps_do() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_app_update_mode(id, Some(UpdateMode::Daemon), &consent_to_automatic())
+		.await
+		.unwrap();
+
+	assert!(cycle(&world, Trigger::Daemon, NOW).await.mode_blocked);
+	assert_eq!(cycle(&world, Trigger::OnLaunch, NOW).await.updated(), 1);
+}
+
+#[tokio::test]
+async fn pinned_is_a_level_for_all_apps_that_one_app_can_step_out_of() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	world
+		.engine
+		.set_update_mode(UpdateMode::Pinned, &consent_to_automatic())
+		.await
+		.unwrap();
+
+	assert!(matches!(
+		statuses(&world, NOW).await[0].state,
+		UpdateState::Pinned
+	));
+	assert_eq!(
+		*only_skip(&cycle(&world, Trigger::Operator, NOW).await),
+		SkipReason::Pinned
+	);
+
+	world
+		.engine
+		.set_app_update_mode(id, Some(UpdateMode::Manual), &consent_to_automatic())
+		.await
+		.unwrap();
+
+	assert!(matches!(
+		statuses(&world, NOW).await[0].state,
+		UpdateState::Available
+	));
+	assert_eq!(cycle(&world, Trigger::Operator, NOW).await.updated(), 1);
+}
+
+#[tokio::test]
+async fn choosing_pinned_for_an_app_holds_it_and_choosing_again_releases_it() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	let nothing = ModeConsent {
+		actor: "test".into(),
+		acknowledged_risks: false,
+	};
+
+	world
+		.engine
+		.set_app_update_mode(id, Some(UpdateMode::Pinned), &nothing)
+		.await
+		.unwrap();
+	assert!(
+		world
+			.engine
+			.app_update_policy(id)
+			.await
+			.unwrap()
+			.pinned_release_id
+			.is_some()
+	);
+
+	world
+		.engine
+		.set_app_update_mode(id, Some(UpdateMode::Manual), &nothing)
+		.await
+		.unwrap();
+
+	let policy = world.engine.app_update_policy(id).await.unwrap();
+
+	assert_eq!(policy.pinned_release_id, None);
+	assert_eq!(policy.update_mode, Some(UpdateMode::Manual));
+}
+
+#[tokio::test]
+async fn an_automatic_level_for_one_app_needs_the_acknowledgement_too() {
+	let (world, id) = world_with_update_published(MATURE).await;
+	let refuse = ModeConsent {
+		actor: "test".into(),
+		acknowledged_risks: false,
+	};
+
+	let error = world
+		.engine
+		.set_app_update_mode(id, Some(UpdateMode::OnLaunch), &refuse)
+		.await
+		.unwrap_err();
+
+	assert_eq!(error.code(), ErrorCode::ConsentRequired);
+	assert_eq!(
+		world
+			.engine
+			.app_update_policy(id)
+			.await
+			.unwrap()
+			.update_mode,
+		None
+	);
+}
+
+#[tokio::test]
 async fn a_rebuilt_file_with_the_same_version_is_never_applied_unattended() {
 	let (world, _) = world_with_update_published(MATURE).await;
 	world

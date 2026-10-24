@@ -206,7 +206,7 @@ fn attention(ui: &mut Ui, view: &UpdatesView<'_>) {
 	);
 
 	for status in others {
-		let (text, attention) = status_text(status, view.mode);
+		let (text, attention) = status_text(status, status.auto.mode);
 		let color = if attention {
 			ui.visuals().warn_fg_color
 		} else {

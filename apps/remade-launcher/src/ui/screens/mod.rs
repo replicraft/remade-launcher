@@ -70,7 +70,8 @@ pub(crate) enum Action {
 		asset_id: u64,
 	},
 	SetPolicy(InstallationId, launcher_storage::AppPolicy),
-	Pin(InstallationId, bool),
+	/// One app's own level on the update chain, or the global one with `None`.
+	SetLevel(InstallationId, Option<launcher_model::UpdateMode>),
 	/// A read-only look for updates to everything installed.
 	CheckUpdates,
 	UpdateAll,
