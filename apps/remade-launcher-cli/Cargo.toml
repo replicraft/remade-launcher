@@ -29,3 +29,27 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+# ---------------------------------------------------------------------------
+# Linux packages: `cargo deb -p remade-launcher-cli`
+# and `cargo generate-rpm -p apps/remade-launcher-cli`
+# ---------------------------------------------------------------------------
+
+[package.metadata.deb]
+name = "remade-cli"
+maintainer = "Remade <hello@remade.wiki>"
+section = "utils"
+priority = "optional"
+extended-description = "The Remade command line: search the catalog, and install, update, and remove apps."
+depends = "$auto"
+assets = [
+	["target/release/remade", "usr/bin/", "755"],
+]
+
+[package.metadata.generate-rpm]
+name = "remade-cli"
+summary = "The Remade command line."
+group = "Applications/System"
+assets = [
+	{ source = "target/release/remade", dest = "/usr/bin/remade", mode = "755" },
+]
