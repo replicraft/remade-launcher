@@ -90,6 +90,7 @@ impl Commands {
 		commands.repaint_on_catalog_changes();
 		commands.refresh_catalog();
 		commands.refresh_installed();
+		commands.refresh_preferences();
 		commands.refresh_update_info();
 		commands.launcher_started();
 

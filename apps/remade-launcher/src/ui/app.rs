@@ -8,7 +8,9 @@ use launcher_core::{
 	Engine, EngineEvent, InstalledApp, OperationSummary, Preparation, Stage, UpdateSettings,
 	UpdateStatus,
 };
-use launcher_model::{InstallationId, ThemePreference, UpdateMode};
+use launcher_model::{
+	InstallationId, Preferences, StartPage, ThemePreference, UpdateMode, product,
+};
 use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
 
@@ -16,11 +18,12 @@ use crate::ui::commands::{Commands, Message};
 use crate::ui::components::{ViewMode, dialog_close, dialog_ok};
 use crate::ui::demo::{self, Demo};
 use crate::ui::menu::{AppMenu, MenuCommand};
+use crate::ui::notifications;
 use crate::ui::screens::navigation::{self, NavAction, Sidebar};
 use crate::ui::screens::sheet::{self, Outcome, Sheet};
 use crate::ui::screens::{
 	self, Action, AddView, ExploreView, LibraryState, LibraryView, Screen, SettingsAction,
-	SettingsView, UpdatesView,
+	SettingsInputs, SettingsView, UpdatesView,
 };
 use crate::ui::transfers::{TransferKey, Transfers};
 use crate::ui::{branding, theme};
@@ -79,6 +82,22 @@ pub(crate) struct LauncherApp {
 	background: Option<BackgroundStatus>,
 	statuses: HashMap<InstallationId, UpdateStatus>,
 	policies: HashMap<InstallationId, AppPolicy>,
+
+	/// What the person has chosen in Settings, as last saved.
+	prefs: Preferences,
+	prefs_loaded: bool,
+	/// The first list of installed apps has arrived, so the start page can be
+	/// chosen knowing whether there are any.
+	installed_loaded: bool,
+	/// The layout changed at this moment. It is saved once it settles.
+	layout_changed_at: Option<std::time::Instant>,
+	settings_inputs: SettingsInputs,
+	token_state: launcher_core::TokenState,
+	rate_limit: Option<Result<launcher_core::RateLimit, String>>,
+	storage: Option<launcher_core::StorageReport>,
+	/// How many updates the last notification mentioned, so the same ones are
+	/// not announced twice.
+	notified_updates: usize,
 }
 
 impl LauncherApp {
@@ -132,6 +151,15 @@ impl LauncherApp {
 			background: None,
 			statuses: HashMap::new(),
 			policies: HashMap::new(),
+			prefs: Preferences::default(),
+			prefs_loaded: false,
+			installed_loaded: false,
+			layout_changed_at: None,
+			settings_inputs: SettingsInputs::default(),
+			token_state: launcher_core::TokenState::Absent,
+			rate_limit: None,
+			storage: None,
+			notified_updates: 0,
 		}
 	}
 
@@ -157,8 +185,16 @@ impl LauncherApp {
 				Message::Explore { request, rows } => self.explore.receive(request, rows),
 				Message::Installed(apps) => {
 					self.installed = apps;
-					self.open_library_if_any();
+					self.installed_loaded = true;
+					self.choose_start_page();
 				}
+				Message::Preferences(prefs) => self.receive_preferences(*prefs),
+				Message::Token(state) => {
+					self.token_state = state;
+					self.rate_limit = None;
+				}
+				Message::RateLimit(result) => self.rate_limit = Some(result),
+				Message::Storage(report) => self.storage = Some(*report),
 				Message::Prepared(preparation) => self.show_preparation(preparation),
 				Message::CustomLookedUp(lookup) => self.add.set_lookup(lookup),
 				Message::CustomChosen(ready) => {
@@ -184,6 +220,7 @@ impl LauncherApp {
 						.into_iter()
 						.map(|status| (status.installation, status))
 						.collect();
+					self.notify_about_updates();
 				}
 				Message::Policies(policies) => self.policies = policies,
 				Message::History(history) => self.history = history,
@@ -212,6 +249,7 @@ impl LauncherApp {
 					self.policies.clear();
 					self.statuses.clear();
 					self.change_theme(&self.context.clone(), ThemePreference::default());
+					self.commands.refresh_preferences();
 					self.notice = None;
 					self.sheet = Some(Sheet::Message {
 						title: "Defaults restored".into(),
@@ -249,7 +287,8 @@ impl LauncherApp {
 		self.history.clone_from(&demo.history);
 		self.checked = true;
 
-		self.open_library_if_any();
+		self.installed_loaded = true;
+		self.choose_start_page();
 		self.advance_demo_downloads();
 		self.advance_demo_removals();
 	}
@@ -565,6 +604,8 @@ impl LauncherApp {
 				self.commands.refresh_installed();
 				self.commands.refresh_history();
 
+				self.notify_about_finish(event.installation, &event.stage);
+
 				match &event.stage {
 					Stage::Completed => self.transfers.finish(event.installation),
 					Stage::Failed { message } => {
@@ -753,17 +794,167 @@ impl LauncherApp {
 	/// Starts on the Library when there is something in it, and on Explore
 	/// when there is not. Only the first answer counts, and never after the
 	/// person has chosen a screen.
-	fn open_library_if_any(&mut self) {
-		if self.navigated || self.installed.is_empty() {
+	fn choose_start_page(&mut self) {
+		// Wait until both the saved preferences and the list of apps are in,
+		// and never move someone who has already picked a page.
+		if self.navigated || !self.prefs_loaded || !self.installed_loaded {
 			return;
 		}
 
 		self.navigated = true;
-		self.screen = Screen::Library;
+
+		self.screen = start_screen(
+			self.prefs.start_page,
+			&self.prefs.layout.last_page,
+			!self.installed.is_empty(),
+		);
+
+		if self.screen == Screen::Settings {
+			self.refresh_settings_data();
+		}
+	}
+
+	/// Takes the saved preferences and puts them to use.
+	fn receive_preferences(&mut self, prefs: Preferences) {
+		self.prefs = prefs;
+		self.prefs_loaded = true;
+
+		self.sidebar_collapsed = self.prefs.layout.sidebar_collapsed;
+		self.view_mode = if self.prefs.layout.grid_view {
+			ViewMode::Grid
+		} else {
+			ViewMode::List
+		};
+		self.explore.set_sort_key(&self.prefs.layout.explore_sort);
+		self.library.set_sort_key(&self.prefs.layout.library_sort);
+		self.apply_scale();
+		self.choose_start_page();
+	}
+
+	fn apply_scale(&self) {
+		self.context
+			.set_zoom_factor(f32::from(self.prefs.ui_scale) / 100.0);
+	}
+
+	/// A change made in Settings: use it now and save it.
+	fn change_preferences(&mut self, prefs: Preferences) {
+		self.prefs = prefs;
+		self.apply_scale();
+		self.commands.save_preferences(self.prefs.clone());
+	}
+
+	/// Notices when the layout changes and saves it once it settles, so
+	/// dragging the window edge does not write on every frame.
+	fn remember_layout(&mut self, context: &Context) {
+		const SETTLE: std::time::Duration = std::time::Duration::from_millis(800);
+
+		// A demo is not the person's real use, so it leaves their saved
+		// layout alone.
+		if !self.prefs_loaded || self.demo.is_some() {
+			return;
+		}
+
+		// The size is kept in unscaled points, so it means the same thing next
+		// time whatever the interface scale is then.
+		let window = context
+			.input(|input| input.viewport().inner_rect)
+			.map(|rect| {
+				(
+					rect.width() * context.zoom_factor(),
+					rect.height() * context.zoom_factor(),
+				)
+			});
+
+		let layout = launcher_model::Layout {
+			sidebar_collapsed: self.sidebar_collapsed,
+			grid_view: self.view_mode == ViewMode::Grid,
+			explore_sort: self.explore.sort_key().to_owned(),
+			library_sort: self.library.sort_key().to_owned(),
+			last_page: self.screen.key().to_owned(),
+			window: window.or(self.prefs.layout.window),
+		};
+
+		if !same_window(&layout, &self.prefs.layout) {
+			self.prefs.layout = layout;
+			self.layout_changed_at = Some(std::time::Instant::now());
+		}
+
+		if let Some(changed) = self.layout_changed_at {
+			if changed.elapsed() >= SETTLE {
+				self.layout_changed_at = None;
+				self.commands.save_preferences(self.prefs.clone());
+			} else {
+				context.request_repaint_after(SETTLE);
+			}
+		}
+	}
+
+	fn refresh_settings_data(&mut self) {
+		self.commands.refresh_token();
+		self.commands.refresh_storage();
+	}
+
+	/// Tells the person, if they asked and are looking elsewhere, that updates
+	/// are waiting.
+	fn notify_about_updates(&mut self) {
+		let waiting = screens::updates::available(&self.statuses).len();
+		let new = waiting > self.notified_updates;
+
+		self.notified_updates = waiting;
+
+		if new && self.prefs.notifications.updates_available && !self.window_focused() {
+			let (title, body) = notifications::updates_available(waiting);
+
+			notifications::send(&title, &body);
+		}
+	}
+
+	/// Tells the person, if they asked and are looking elsewhere, that an
+	/// install or update has finished or failed.
+	fn notify_about_finish(&self, installation: InstallationId, stage: &Stage) {
+		if !self.prefs.notifications.install_finished || self.window_focused() {
+			return;
+		}
+
+		let name = self
+			.transfers
+			.name_of(installation)
+			.unwrap_or_else(|| "An app".to_owned());
+
+		match stage {
+			Stage::Completed => {
+				let (title, body) = notifications::install_finished(&name);
+
+				notifications::send(&title, &body);
+			}
+			Stage::Failed { .. } | Stage::RecoveryRequired { .. } => {
+				let (title, body) = notifications::install_failed(&name);
+
+				notifications::send(&title, &body);
+			}
+			_ => {}
+		}
+	}
+
+	/// Opens a folder in the system's file manager.
+	fn show_folder(&self, path: &std::path::Path) {
+		if let Ok(url) = launcher_net::Url::from_directory_path(path) {
+			self.context.open_url(egui::OpenUrl::new_tab(url.as_str()));
+		}
+	}
+
+	fn window_focused(&self) -> bool {
+		self.context
+			.input(|input| input.viewport().focused)
+			.unwrap_or(true)
 	}
 
 	fn go(&mut self, screen: Screen) {
 		self.navigated = true;
+
+		if screen == Screen::Settings && self.screen != Screen::Settings {
+			self.refresh_settings_data();
+		}
 
 		if screen == Screen::Updates {
 			self.commands.refresh_history();
@@ -1025,6 +1216,11 @@ impl eframe::App for LauncherApp {
 						background: self.background.as_ref(),
 						logo: &self.logo,
 						show_about: std::mem::take(&mut self.show_about),
+						prefs: &self.prefs,
+						inputs: &mut self.settings_inputs,
+						token: &self.token_state,
+						rate: self.rate_limit.as_ref(),
+						storage: self.storage.as_ref(),
 					};
 
 					match screens::settings(ui, view) {
@@ -1035,6 +1231,16 @@ impl eframe::App for LauncherApp {
 						SettingsAction::SetMinimumAge(age) => self.commands.set_minimum_age(age),
 						SettingsAction::RestoreDefaults => self.sheet = Some(Sheet::ConfirmRestore),
 						SettingsAction::StopBackground => self.commands.stop_background_updates(),
+						SettingsAction::Preferences(prefs) => self.change_preferences(*prefs),
+						SettingsAction::SaveToken(token) => self.commands.save_token(token),
+						SettingsAction::ClearToken => self.commands.clear_token(),
+						SettingsAction::CheckRateLimit => self.commands.check_rate_limit(),
+						SettingsAction::ShowFolder(path) => self.show_folder(&path),
+						SettingsAction::ClearLeftovers => self.commands.clear_leftovers(),
+						SettingsAction::ClearCache => self.commands.clear_cache(),
+						SettingsAction::TestNotification => {
+							notifications::send(product::NAME, "This is a test notification.");
+						}
 					}
 				}
 			}
@@ -1044,9 +1250,99 @@ impl eframe::App for LauncherApp {
 			self.perform(action);
 		}
 
+		self.remember_layout(&context);
 		self.show_tray(&context);
 		self.show_app_settings(&context);
 		self.show_add(&context);
 		self.show_sheet(&context);
+	}
+}
+
+/// Whether two layouts are the same, treating window sizes less than a point
+/// apart as equal.
+fn same_window(a: &launcher_model::Layout, b: &launcher_model::Layout) -> bool {
+	let near = |left: f32, right: f32| (left - right).abs() < 1.0;
+
+	let windows_match = match (a.window, b.window) {
+		(Some((aw, ah)), Some((bw, bh))) => near(aw, bw) && near(ah, bh),
+		(None, None) => true,
+		_ => false,
+	};
+
+	windows_match
+		&& a.sidebar_collapsed == b.sidebar_collapsed
+		&& a.grid_view == b.grid_view
+		&& a.explore_sort == b.explore_sort
+		&& a.library_sort == b.library_sort
+		&& a.last_page == b.last_page
+}
+
+/// Which page to open on. `last_page` is the name saved when the launcher was
+/// last used.
+fn start_screen(start: StartPage, last_page: &str, any_installed: bool) -> Screen {
+	match start {
+		StartPage::Library => Screen::Library,
+		StartPage::Explore => Screen::Explore,
+		StartPage::LastUsed => Screen::from_key(last_page).unwrap_or(Screen::Explore),
+		StartPage::Auto if any_installed => Screen::Library,
+		StartPage::Auto => Screen::Explore,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn automatic_opens_the_library_only_when_something_is_in_it() {
+		assert_eq!(start_screen(StartPage::Auto, "", true), Screen::Library);
+		assert_eq!(start_screen(StartPage::Auto, "", false), Screen::Explore);
+	}
+
+	#[test]
+	fn a_fixed_choice_is_honoured_either_way() {
+		assert_eq!(start_screen(StartPage::Explore, "", true), Screen::Explore);
+		assert_eq!(start_screen(StartPage::Library, "", false), Screen::Library);
+	}
+
+	#[test]
+	fn where_i_left_off_uses_the_saved_page_and_survives_nonsense() {
+		assert_eq!(
+			start_screen(StartPage::LastUsed, "updates", false),
+			Screen::Updates
+		);
+		assert_eq!(
+			start_screen(StartPage::LastUsed, "settings", true),
+			Screen::Settings
+		);
+		assert_eq!(
+			start_screen(StartPage::LastUsed, "no-such-page", true),
+			Screen::Explore
+		);
+		assert_eq!(start_screen(StartPage::LastUsed, "", true), Screen::Explore);
+	}
+
+	#[test]
+	fn layout_comparison_ignores_sub_point_window_jitter() {
+		let base = launcher_model::Layout {
+			window: Some((1280.0, 820.0)),
+			..launcher_model::Layout::default()
+		};
+		let jitter = launcher_model::Layout {
+			window: Some((1280.4, 819.7)),
+			..base.clone()
+		};
+		let resized = launcher_model::Layout {
+			window: Some((1300.0, 820.0)),
+			..base.clone()
+		};
+		let folded = launcher_model::Layout {
+			sidebar_collapsed: true,
+			..base.clone()
+		};
+
+		assert!(same_window(&base, &jitter));
+		assert!(!same_window(&base, &resized));
+		assert!(!same_window(&base, &folded));
 	}
 }

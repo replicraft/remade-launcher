@@ -3,7 +3,7 @@
 //! A real entry and a demo entry fill the same [`Facts`], so they share one
 //! layout.
 
-use egui::{Align, Frame, Layout, Margin, RichText, ScrollArea, Ui, vec2};
+use egui::{Align, Layout, RichText, ScrollArea, Ui, vec2};
 use launcher_catalog::{Maturity, Project, State, VerificationLevel};
 use launcher_core::{Availability, ExploreRow};
 use launcher_model::Os;

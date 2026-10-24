@@ -1,88 +1,20 @@
+//! How installed apps are updated.
+
 use egui::{ComboBox, RichText, Ui};
 use launcher_background::control::BackgroundStatus;
 use launcher_background::registration::RegistrationState;
 use launcher_core::UpdateSettings;
-use launcher_model::{MinimumAge, ThemePreference, UpdateMode, product};
+use launcher_model::{MinimumAge, UpdateMode};
 
-use super::page;
-use crate::ui::components::danger_button;
-use crate::ui::{icons, theme};
+use super::SettingsAction;
+use crate::ui::theme;
 
-pub(crate) enum SettingsAction {
-	None,
-	Theme(ThemePreference),
-	CopyDiagnostics,
-	/// The person picked an update mode. Automatic ones ask first.
-	PickMode(UpdateMode),
-	SetMinimumAge(MinimumAge),
-	RestoreDefaults,
-	StopBackground,
-}
-
-pub(crate) struct SettingsView<'a> {
-	pub(crate) theme: ThemePreference,
-	pub(crate) updates: UpdateSettings,
-	pub(crate) background: Option<&'a BackgroundStatus>,
-	pub(crate) logo: &'a egui::TextureHandle,
-	/// Scroll the About section into view.
-	pub(crate) show_about: bool,
-}
-
-pub(crate) fn settings(ui: &mut Ui, view: SettingsView<'_>) -> SettingsAction {
-	let mut action = SettingsAction::None;
-
-	page(ui, "Settings", |ui| {
-		egui::ScrollArea::vertical()
-			.auto_shrink([false, false])
-			.show(ui, |ui| {
-				appearance(ui, view.theme, &mut action);
-				ui.add_space(16.0);
-				updates(ui, &view.updates, view.background, &mut action);
-				ui.add_space(16.0);
-				support(ui, &mut action);
-				ui.add_space(16.0);
-				about(ui, view.logo, view.show_about, &mut action);
-			});
-	});
-
-	action
-}
-
-fn appearance(ui: &mut Ui, current: ThemePreference, action: &mut SettingsAction) {
-	ui.label(
-		RichText::new("Appearance")
-			.size(18.0)
-			.family(theme::semibold()),
-	);
-
-	ui.horizontal(|ui| {
-		for theme in ThemePreference::ALL {
-			if ui.radio(current == theme, theme.label()).clicked() {
-				*action = SettingsAction::Theme(theme);
-			}
-		}
-	});
-}
-
-fn updates(
+pub(super) fn updates(
 	ui: &mut Ui,
 	settings: &UpdateSettings,
 	background: Option<&BackgroundStatus>,
 	action: &mut SettingsAction,
 ) {
-	ui.label(
-		RichText::new("Updates")
-			.size(18.0)
-			.family(theme::semibold()),
-	);
-	ui.label(
-		RichText::new(
-			"How installed apps are updated. This does not affect updates to the Launcher itself.",
-		)
-		.color(theme::muted(ui)),
-	);
-	ui.add_space(4.0);
-
 	// One of three, never three independent switches.
 	for mode in UpdateMode::ALL {
 		ui.horizontal_top(|ui| {
@@ -237,96 +169,4 @@ fn background_status(
 			*action = SettingsAction::StopBackground;
 		}
 	}
-}
-
-fn support(ui: &mut Ui, action: &mut SettingsAction) {
-	ui.label(
-		RichText::new("Support")
-			.size(18.0)
-			.family(theme::semibold()),
-	);
-	ui.add_space(4.0);
-
-	if ui.button("Copy support report").clicked() {
-		*action = SettingsAction::CopyDiagnostics;
-	}
-
-	ui.label(
-		RichText::new(
-			"The report lists versions and counts only. It has no file paths, links, or app names.",
-		)
-		.small()
-		.color(theme::muted(ui)),
-	);
-}
-
-fn about(ui: &mut Ui, logo: &egui::TextureHandle, scroll_to: bool, action: &mut SettingsAction) {
-	let heading = ui.label(RichText::new("About").size(18.0).family(theme::semibold()));
-
-	if scroll_to {
-		heading.scroll_to_me(Some(egui::Align::TOP));
-	}
-
-	ui.add_space(8.0);
-
-	ui.horizontal(|ui| {
-		ui.image((logo.id(), egui::vec2(56.0, 56.0)));
-
-		ui.vertical(|ui| {
-			ui.spacing_mut().item_spacing.y = 2.0;
-			ui.label(
-				RichText::new(format!("{} by Replicraft", product::NAME))
-					.size(16.0)
-					.family(theme::semibold()),
-			);
-			ui.label(
-				RichText::new(format!("Version {}", product::VERSION)).color(theme::muted(ui)),
-			);
-			ui.label(
-				RichText::new(product::TAGLINE)
-					.small()
-					.color(theme::muted(ui)),
-			);
-		});
-	});
-
-	ui.add_space(10.0);
-
-	egui::Grid::new("about-facts")
-		.num_columns(2)
-		.spacing([16.0, 6.0])
-		.show(ui, |ui| {
-			fact(
-				ui,
-				"Platform",
-				&format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
-			);
-			fact(ui, "License", env!("CARGO_PKG_LICENSE"));
-
-			ui.label(RichText::new("Website").color(theme::muted(ui)));
-			ui.hyperlink_to("remade.wiki/launcher", env!("CARGO_PKG_HOMEPAGE"));
-			ui.end_row();
-		});
-
-	ui.add_space(8.0);
-
-	ui.hyperlink_to(
-		format!("{}  View the source on GitHub", icons::GITHUB),
-		env!("CARGO_PKG_REPOSITORY"),
-	);
-
-	ui.add_space(8.0);
-
-	ui.add_space(12.0);
-
-	// The consequences are spelled out in the confirmation that follows.
-	if danger_button(ui, "Restore defaults").clicked() {
-		*action = SettingsAction::RestoreDefaults;
-	}
-}
-
-fn fact(ui: &mut Ui, label: &str, value: &str) {
-	ui.label(RichText::new(label).color(theme::muted(ui)));
-	ui.label(value);
-	ui.end_row();
 }

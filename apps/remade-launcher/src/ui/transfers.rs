@@ -69,6 +69,14 @@ pub(crate) struct Transfers {
 }
 
 impl Transfers {
+	/// The name shown for an installation's row, if it has one.
+	pub(crate) fn name_of(&self, id: InstallationId) -> Option<String> {
+		self.items
+			.iter()
+			.find(|item| item.key == TransferKey::Installation(id))
+			.map(|item| item.name.clone())
+	}
+
 	/// Starts a row, replacing one with the same key.
 	pub(crate) fn begin(
 		&mut self,

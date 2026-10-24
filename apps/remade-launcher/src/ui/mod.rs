@@ -28,13 +28,19 @@ use tokio::runtime::Handle;
 /// its engine commands.
 pub fn run(engine: Arc<Engine>, runtime: Handle) -> eframe::Result {
 	let initial_theme = runtime.block_on(engine.theme());
+	let preferences = runtime.block_on(engine.preferences());
+	// Open at the size the window had when it was last closed.
+	let size = preferences
+		.layout
+		.window
+		.map_or([1280.0, 820.0], |(width, height)| [width, height]);
 
 	let options = eframe::NativeOptions {
 		viewport: egui::ViewportBuilder::default()
 			.with_title(product::NAME)
 			.with_app_id(product::APP_ID)
 			.with_icon(branding::window_icon())
-			.with_inner_size([1280.0, 820.0])
+			.with_inner_size(size)
 			.with_min_inner_size([880.0, 600.0]),
 		..Default::default()
 	};

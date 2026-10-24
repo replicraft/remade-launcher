@@ -137,7 +137,11 @@ impl<T: Transport> GithubProvider<T> {
 				ErrorCode::ProviderRateLimited,
 				"GitHub's request limit was reached. Try again later.",
 			)),
-			401 | 403 => Err(LauncherError::new(
+			401 => Err(LauncherError::new(
+				ErrorCode::ProviderDenied,
+				"GitHub refused the request. If you added an access token in Settings, it may have expired or been removed.",
+			)),
+			403 => Err(LauncherError::new(
 				ErrorCode::ProviderDenied,
 				"GitHub refused the request.",
 			)),

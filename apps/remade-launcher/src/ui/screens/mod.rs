@@ -13,7 +13,7 @@ pub(crate) use add::AddView;
 pub(crate) use explore::ExploreView;
 pub(crate) use library::{LibraryState, LibraryView, library};
 pub(crate) use navigation::navigation;
-pub(crate) use settings::{SettingsAction, SettingsView, settings};
+pub(crate) use settings::{SettingsAction, SettingsInputs, SettingsView, settings};
 pub(crate) use updates::{UpdatesView, updates};
 
 use egui::{Frame, Margin, RichText, Ui};
@@ -31,6 +31,22 @@ pub(crate) enum Screen {
 }
 
 impl Screen {
+	/// The stable name saved with the person's layout.
+	pub(crate) const fn key(self) -> &'static str {
+		match self {
+			Self::Explore => "explore",
+			Self::Library => "library",
+			Self::Updates => "updates",
+			Self::Settings => "settings",
+		}
+	}
+
+	pub(crate) fn from_key(key: &str) -> Option<Self> {
+		[Self::Explore, Self::Library, Self::Updates, Self::Settings]
+			.into_iter()
+			.find(|screen| screen.key() == key)
+	}
+
 	pub(crate) const fn title(self) -> &'static str {
 		match self {
 			Self::Explore => "Explore",
