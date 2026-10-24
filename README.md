@@ -21,18 +21,56 @@ test fixtures. Two things stand between this and a public release:
   Linux, and FreeBSD builds, runtime tests, and package builds are written but
   have not been run. See [`packaging/README.md`](packaging/README.md).
 
+## Automatic updates
+
+Apps update in one of three modes, chosen in Settings or with
+`remade updates mode set`:
+
+| Mode | What happens |
+|---|---|
+| Manual (default) | The launcher looks for updates when it opens and shows an Update button. Nothing installs on its own. |
+| On launcher start | Once per real launcher start, eligible updates install. Nothing runs in the background. |
+| Background updater | A per-user program registered at login checks every 24 hours, and when the launcher opens. |
+
+An automatic mode needs a recorded acknowledgement, and switching modes never
+starts an update by itself. A release must be at least a minimum age old
+before an automatic update installs it (one hour by default, overridable for
+each app, and never applied to an update you start yourself). Each app can be
+pinned, paused, or allowed pre-releases. Apps you added yourself are never
+updated unattended. Every skip has a stable reason code, shown by
+`remade updates check` and `remade updates decisions`.
+
+## The command line
+
+`remade` drives the same engine. Results are one versioned JSON object with
+`--json` (or NDJSON progress with `--output ndjson`), failures carry a typed
+code and a named exit status, and every change is a saved plan you approve:
+
+```sh
+remade search editor
+remade plan install sample-editor      # a plan ID; nothing changes yet
+remade apply <plan-id>                 # approve exactly that plan
+remade install https://github.com/owner/repo --accept-unreviewed-source owner/repo
+remade check && remade update --all
+```
+
+`--yes` approves a prompt but never accepts an unreviewed source: that needs
+the exact `owner/repository`. `--no-input` makes any question an error.
+
 ## Layout
 
 | Path | What it is |
 |---|---|
 | `apps/remade-launcher` | The desktop app |
 | `apps/remade-launcher-cli` | The `remade` command line, installable separately |
+| `apps/remade-launcher-daemon` | The optional per-user background updater |
 | `crates/foundation/launcher-model` | IDs, errors, product identity, platform targets |
 | `crates/foundation/launcher-core` | The engine: catalog, plans, install lifecycle, recovery |
 | `crates/domain/launcher-catalog` | Signed-catalog verification |
 | `crates/domain/launcher-providers` | GitHub releases, source links |
 | `crates/domain/launcher-resolver` | Version and package resolution, sealed install plans |
 | `crates/domain/launcher-packages` | Safe archive inspection and extraction |
+| `crates/platform/launcher-background` | Login registration, the updater's socket protocol, and its schedule |
 | `crates/infrastructure/launcher-storage` | SQLite: settings, trust state, receipts, journal |
 | `crates/infrastructure/launcher-net` | The HTTPS client |
 | `crates/ui/launcher-ui` | The egui interface |
