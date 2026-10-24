@@ -15,6 +15,7 @@ mod nav_item;
 mod search_bar;
 mod section_title;
 mod verified_badge;
+mod version_change;
 mod view_toggle;
 
 pub(crate) use app_tile::app_tile;
@@ -30,4 +31,5 @@ pub(crate) use nav_item::nav_item;
 pub(crate) use search_bar::search_bar;
 pub(crate) use section_title::section_title;
 pub(crate) use verified_badge::verified_badge;
+pub(crate) use version_change::version_change;
 pub(crate) use view_toggle::{ViewMode, view_toggle};

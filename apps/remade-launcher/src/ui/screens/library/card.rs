@@ -10,7 +10,7 @@ use crate::ui::components::{app_tile, icon_button, verified_badge};
 use crate::ui::screens::Action;
 use crate::ui::{icons, theme};
 
-pub(super) const CARD_HEIGHT: f32 = 196.0;
+pub(super) const CARD_HEIGHT: f32 = 212.0;
 pub(super) const ROW_HEIGHT: f32 = 92.0;
 
 /// Everything one app's card or row needs.
@@ -160,7 +160,7 @@ fn actions(ui: &mut Ui, item: &Item<'_>, compact: bool) -> Option<Action> {
 /// A card for the grid.
 pub(super) fn grid_card(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	let rect = ui.max_rect();
-	let inner = rect.shrink(14.0);
+	let inner = rect.shrink(18.0);
 	let mut action = None;
 
 	surface(ui, rect);

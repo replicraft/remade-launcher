@@ -8,7 +8,7 @@ use super::filters::category_label;
 use crate::ui::components::{app_tile, verified_badge};
 use crate::ui::theme;
 
-pub(super) const GRID_CARD_HEIGHT: f32 = 148.0;
+pub(super) const GRID_CARD_HEIGHT: f32 = 160.0;
 pub(super) const LIST_ROW_HEIGHT: f32 = 80.0;
 pub(super) const CATEGORY_TILE_HEIGHT: f32 = 64.0;
 
@@ -56,7 +56,7 @@ pub(super) fn grid_card(
 	let palette = theme::palette(ui);
 	let rect = ui.max_rect();
 	let response = surface(ui, rect, selected);
-	let inner = rect.shrink(14.0);
+	let inner = rect.shrink(18.0);
 
 	let mut content = ui.new_child(
 		UiBuilder::new()

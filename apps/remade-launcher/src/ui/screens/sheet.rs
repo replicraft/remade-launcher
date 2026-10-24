@@ -9,7 +9,7 @@ use launcher_core::{InstalledApp, OperatorUpdate, Ready, RemovalReport};
 use launcher_model::{InstallationId, UpdateMode};
 use launcher_resolver::{Candidate, EvidenceLevel};
 
-use crate::ui::components::{Choice, Confirm, dialog_buttons, dialog_close, dialog_ok};
+use crate::ui::components::{Choice, Confirm, app_tile, dialog_buttons, dialog_close, dialog_ok};
 use crate::ui::icons;
 use crate::ui::theme;
 
@@ -110,7 +110,29 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 			}
 			Sheet::ConfirmUninstall(app) => {
 				ui.heading(format!("Uninstall {}?", app.name));
-				ui.label("The launcher removes the files it installed. Files the app saved in its own folder, and any file you edited, are kept and listed afterwards.");
+				ui.add_space(8.0);
+
+				ui.horizontal(|ui| {
+					app_tile(ui, &app.name, 44.0);
+
+					ui.vertical(|ui| {
+						ui.spacing_mut().item_spacing.y = 1.0;
+						ui.label(RichText::new(&app.name).family(theme::semibold()));
+						ui.label(RichText::new(format!("{} · {}", app.version, app.repository)).small().color(theme::muted(ui)));
+						ui.label(RichText::new(format!("Installed {}", launcher_model::local_time::date(app.installed_at))).small().color(theme::muted(ui)));
+					});
+				});
+
+				ui.add_space(10.0);
+				ui.label(RichText::new("Where it lives").small().color(theme::muted(ui)));
+				ui.label(RichText::new(&app.root).monospace().small());
+				ui.add_space(10.0);
+
+				ui.label("What happens:");
+				ui.add_space(2.0);
+				ui.label("•  The files the launcher installed are removed.");
+				ui.label("•  Anything you edited, and data the app saved itself, is kept.");
+				ui.label("•  Afterwards you see exactly what was removed and what stayed.");
 
 				ui.add_space(14.0);
 

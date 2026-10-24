@@ -9,6 +9,7 @@ use launcher_model::{InstallationId, UpdateMode};
 use super::library::{Progress, status_text};
 use super::sheet::{bytes, when};
 use super::{Action, page};
+use crate::ui::components::{app_tile, version_change};
 use crate::ui::theme;
 
 pub(crate) struct UpdatesView<'a> {
@@ -110,14 +111,11 @@ fn available_row(
 			ui.set_width(ui.available_width());
 
 			ui.horizontal(|ui| {
+				app_tile(ui, &status.name, 36.0);
 				ui.label(
 					RichText::new(&status.name)
 						.size(16.0)
 						.family(theme::semibold()),
-				);
-				ui.label(
-					RichText::new(format!("{} → {}", status.installed_version, update.version))
-						.color(theme::muted(ui)),
 				);
 				ui.label(
 					RichText::new(bytes(update.size))
@@ -125,6 +123,10 @@ fn available_row(
 						.color(theme::muted(ui)),
 				);
 			});
+
+			ui.add_space(6.0);
+			version_change(ui, &status.installed_version, &update.version);
+			ui.add_space(4.0);
 
 			if let Some(at) = update.published_at {
 				ui.label(

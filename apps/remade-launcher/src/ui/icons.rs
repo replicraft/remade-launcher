@@ -22,6 +22,7 @@ pub(crate) const STAR: &str = "\u{E46A}";
 pub(crate) const TRASH: &str = "\u{E4A6}";
 pub(crate) const PLAY: &str = "\u{E3D0}";
 pub(crate) const ARROW_CLOCKWISE: &str = "\u{E036}";
+pub(crate) const ARROW_RIGHT: &str = "\u{E06C}";
 pub(crate) const SIDEBAR: &str = "\u{EC24}";
 
 #[cfg(test)]
@@ -31,7 +32,16 @@ mod tests {
 	#[test]
 	fn every_icon_is_a_single_private_use_character() {
 		for icon in [
-			COMPASS, BOOKS, DOWNLOAD, GITHUB, GEAR, SEARCH, X, SIDEBAR, WARNING,
+			COMPASS,
+			BOOKS,
+			DOWNLOAD,
+			GITHUB,
+			GEAR,
+			SEARCH,
+			X,
+			ARROW_RIGHT,
+			SIDEBAR,
+			WARNING,
 		] {
 			let mut characters = icon.chars();
 			let first = characters.next().unwrap();

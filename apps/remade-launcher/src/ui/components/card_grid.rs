@@ -2,7 +2,9 @@
 
 use egui::{Layout, Ui, vec2};
 
-const GAP: f32 = 14.0;
+const GAP: f32 = 20.0;
+/// Kept clear on the right so cards never touch the scroll bar.
+const SCROLL_ROOM: f32 = 10.0;
 
 /// How many columns of at least `min_width` fit in `available`, and how wide
 /// each card then is.
@@ -22,7 +24,7 @@ pub(crate) fn card_grid(
 	height: f32,
 	mut card: impl FnMut(&mut Ui, usize),
 ) {
-	let (per_row, width) = columns(ui.available_width(), min_width);
+	let (per_row, width) = columns((ui.available_width() - SCROLL_ROOM).max(1.0), min_width);
 
 	for start in (0..count).step_by(per_row) {
 		ui.horizontal_top(|ui| {

@@ -45,6 +45,10 @@ pub(crate) struct LauncherApp {
 	library: LibraryState,
 	/// The app whose update settings dialog is open.
 	app_settings: Option<InstallationId>,
+	/// The person has picked a screen, so startup must not move them.
+	navigated: bool,
+	/// Demo uninstalls in flight, so the removal can be watched.
+	demo_removals: Vec<(InstalledApp, std::time::Instant)>,
 	history: Vec<OperationSummary>,
 	/// An update check has finished this session.
 	checked: bool,
@@ -93,6 +97,8 @@ impl LauncherApp {
 			adding: false,
 			library: LibraryState::default(),
 			app_settings: None,
+			navigated: false,
+			demo_removals: Vec::new(),
 			history: Vec::new(),
 			checked: false,
 			installed: Vec::new(),
@@ -130,7 +136,10 @@ impl LauncherApp {
 				| Message::History(_)
 					if self.demo.is_some() => {}
 				Message::Explore { request, rows } => self.explore.receive(request, rows),
-				Message::Installed(apps) => self.installed = apps,
+				Message::Installed(apps) => {
+					self.installed = apps;
+					self.open_library_if_any();
+				}
 				Message::Prepared(preparation) => self.show_preparation(preparation),
 				Message::CustomLookedUp(lookup) => self.add.set_lookup(lookup),
 				Message::CustomChosen(ready) => {
@@ -220,6 +229,64 @@ impl LauncherApp {
 		self.policies.clone_from(&demo.policies);
 		self.history.clone_from(&demo.history);
 		self.checked = true;
+
+		self.open_library_if_any();
+		self.advance_demo_removals();
+	}
+
+	/// Plays an uninstall: a progress bar for a moment, then the app is gone
+	/// from the in-memory list and the result is shown. Nothing real is
+	/// touched.
+	fn advance_demo_removals(&mut self) {
+		const DURATION: f32 = 1.8;
+
+		if self.demo_removals.is_empty() {
+			return;
+		}
+
+		let mut finished = Vec::new();
+
+		for (app, started) in &self.demo_removals {
+			let done = started.elapsed().as_secs_f32() / DURATION;
+
+			if done >= 1.0 {
+				finished.push(app.clone());
+			} else {
+				self.progress.insert(
+					app.id,
+					screens::library::Progress {
+						label: "Removing files".into(),
+						fraction: Some(done),
+						stoppable: false,
+					},
+				);
+			}
+		}
+
+		self.context.request_repaint();
+
+		for app in finished {
+			self.demo_removals
+				.retain(|(pending, _)| pending.id != app.id);
+			self.progress.remove(&app.id);
+
+			if let Some(demo) = &mut self.demo {
+				demo.installed.retain(|kept| kept.id != app.id);
+				demo.statuses.remove(&app.id);
+				demo.policies.remove(&app.id);
+			}
+
+			self.installed.retain(|kept| kept.id != app.id);
+			self.sheet = Some(Sheet::Removed {
+				name: app.name,
+				report: launcher_core::RemovalReport {
+					removed_files: 214,
+					kept_modified: vec!["settings.json".into()],
+					kept_unknown: vec!["saved/workspace.db".into()],
+					leftover_folder: Some(app.root),
+				},
+			});
+		}
 	}
 
 	/// Actions in demo mode change only the invented data, or explain that
@@ -248,6 +315,7 @@ impl LauncherApp {
 					version: tag,
 				});
 			}
+			Action::Uninstall(app) => self.sheet = Some(Sheet::ConfirmUninstall(app)),
 			Action::CheckUpdates | Action::Cancel => {}
 			Action::OpenAppSettings(id) => self.app_settings = Some(id),
 			Action::LookUp(_) => {
@@ -382,7 +450,12 @@ impl LauncherApp {
 			}
 			Outcome::Uninstall(app) => {
 				self.sheet = None;
-				self.commands.uninstall(app);
+
+				if self.demo.is_some() {
+					self.demo_removals.push((app, std::time::Instant::now()));
+				} else {
+					self.commands.uninstall(app);
+				}
 			}
 			Outcome::SetMode { mode, acknowledged } => {
 				self.sheet = None;
@@ -428,7 +501,21 @@ impl LauncherApp {
 		}
 	}
 
+	/// Starts on the Library when there is something in it, and on Explore
+	/// when there is not. Only the first answer counts, and never after the
+	/// person has chosen a screen.
+	fn open_library_if_any(&mut self) {
+		if self.navigated || self.installed.is_empty() {
+			return;
+		}
+
+		self.navigated = true;
+		self.screen = Screen::Library;
+	}
+
 	fn go(&mut self, screen: Screen) {
+		self.navigated = true;
+
 		if screen == Screen::Updates {
 			self.commands.refresh_history();
 		}
@@ -501,8 +588,9 @@ impl LauncherApp {
 
 				ui.add_space(14.0);
 
-				// Both the corner × and a button, so it is easy to leave.
-				if dialog_ok(ui, "Close") || dialog_close(ui, origin, 520.0) {
+				// Both the corner × and a button, so it is easy to leave. This
+				// one sits on the left, away from the lookup button.
+				if ui.button("Close").clicked() || dialog_close(ui, origin, 520.0) {
 					close = true;
 				}
 			});
