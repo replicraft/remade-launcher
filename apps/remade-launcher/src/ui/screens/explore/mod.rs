@@ -17,12 +17,13 @@ use self::banner::{banner, demo_banner};
 use self::cards::{CATEGORY_TILE_HEIGHT, GRID_CARD_HEIGHT, category_tile, grid_card, list_row};
 use self::detail::{demo_detail, detail};
 use self::filters::{
-	Filter, KindFilter, Sort, categories, category_label, featured, filter_demo, recent, visible,
+	Filter, KindFilter, Sort, categories, category_label, featured, filter_demo, languages,
+	platforms, recent, visible,
 };
 use super::{Action, page};
 use crate::ui::commands::Commands;
 use crate::ui::components::{
-	ViewMode, card_grid, chip, dropdown, search_bar, section_title, view_toggle,
+	ViewMode, card_grid, chip, choice_dropdown, dropdown, search_bar, section_title, view_toggle,
 };
 use crate::ui::{icons, theme};
 
@@ -159,6 +160,38 @@ impl ExploreView {
 				&mut self.filter.kind,
 				&KindFilter::OPTIONS,
 			);
+
+			let spoken: Vec<(String, String)> = languages(&self.rows)
+				.into_iter()
+				.map(|name| (name.clone(), name))
+				.collect();
+			let systems: Vec<(launcher_model::Os, String)> = platforms(&self.rows)
+				.into_iter()
+				.map(|os| (os, os.label().to_owned()))
+				.collect();
+
+			if !spoken.is_empty() {
+				choice_dropdown(
+					ui,
+					"explore-language",
+					"Language",
+					&mut self.filter.language,
+					"All",
+					&spoken,
+				);
+			}
+
+			if !systems.is_empty() {
+				choice_dropdown(
+					ui,
+					"explore-platform",
+					"Platform",
+					&mut self.filter.platform,
+					"All",
+					&systems,
+				);
+			}
+
 			ui.checkbox(&mut self.compatible_only, "Only apps for this device");
 
 			ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

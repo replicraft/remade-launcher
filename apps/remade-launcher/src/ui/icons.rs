@@ -25,6 +25,19 @@ pub(crate) const ARROW_CLOCKWISE: &str = "\u{E036}";
 pub(crate) const ARROW_RIGHT: &str = "\u{E06C}";
 pub(crate) const WIFI_SLASH: &str = "\u{E4F2}";
 pub(crate) const WARNING_CIRCLE: &str = "\u{E4E2}";
+pub(crate) const APPLE: &str = "\u{E516}";
+pub(crate) const WINDOWS: &str = "\u{E692}";
+pub(crate) const LINUX: &str = "\u{EB02}";
+pub(crate) const TERMINAL: &str = "\u{E47E}";
+pub(crate) const NOTE_PENCIL: &str = "\u{E34C}";
+pub(crate) const TERMINAL_WINDOW: &str = "\u{EAE8}";
+pub(crate) const MUSIC_NOTES: &str = "\u{E340}";
+pub(crate) const PAINT_BRUSH: &str = "\u{E6F0}";
+pub(crate) const GAUGE: &str = "\u{E628}";
+pub(crate) const HARD_DRIVES: &str = "\u{E2A0}";
+pub(crate) const NEWSPAPER: &str = "\u{E344}";
+pub(crate) const IMAGE: &str = "\u{E2CA}";
+pub(crate) const PENCIL_LINE: &str = "\u{EBC6}";
 pub(crate) const SIDEBAR: &str = "\u{EC24}";
 
 #[cfg(test)]

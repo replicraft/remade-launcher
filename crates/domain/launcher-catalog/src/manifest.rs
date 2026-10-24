@@ -53,6 +53,9 @@ pub struct Display {
 	pub icon_url: Option<String>,
 	#[serde(default)]
 	pub screenshots: Vec<String>,
+	/// Programming languages the app is written in, for display.
+	#[serde(default)]
+	pub languages: Vec<String>,
 	/// The catalog's editors chose to highlight this app.
 	#[serde(default)]
 	pub featured: bool,
@@ -385,6 +388,7 @@ mod tests {
 	fn featured_and_added_at_are_optional() {
 		let plain = display("");
 
+		assert!(plain.languages.is_empty());
 		assert!(!plain.featured);
 		assert_eq!(plain.added_at_unix(), None);
 	}

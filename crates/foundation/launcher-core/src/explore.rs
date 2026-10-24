@@ -43,6 +43,10 @@ pub struct ExploreRow {
 	pub repository: String,
 	pub categories: Vec<String>,
 	pub availability: Availability,
+	/// Programming languages, as the catalog lists them.
+	pub languages: Vec<String>,
+	/// The systems it has a package for, in a steady order.
+	pub platforms: Vec<Os>,
 	/// Highlighted by the catalog's editors.
 	pub featured: bool,
 	/// When the app joined the catalog, as Unix seconds, if it says.
@@ -135,9 +139,32 @@ fn row(slug: &str, project: &Project, host: Option<HostTarget>, supported: &[&st
 		repository: project.source.display_name(),
 		categories: project.display.categories.clone(),
 		availability: availability(project, host, supported),
+		languages: project.display.languages.clone(),
+		platforms: platforms(project),
 		featured: project.display.featured,
 		added_at: project.display.added_at_unix(),
 	}
+}
+
+/// The systems with at least one package, in the order of [`Os`].
+fn platforms(project: &Project) -> Vec<Os> {
+	const ORDER: [Os; 10] = [
+		Os::Windows,
+		Os::Macos,
+		Os::Linux,
+		Os::Freebsd,
+		Os::Netbsd,
+		Os::Openbsd,
+		Os::Dragonfly,
+		Os::Illumos,
+		Os::Solaris,
+		Os::Haiku,
+	];
+
+	ORDER
+		.into_iter()
+		.filter(|os| project.variants.iter().any(|variant| variant.os == *os))
+		.collect()
 }
 
 pub(crate) fn availability(

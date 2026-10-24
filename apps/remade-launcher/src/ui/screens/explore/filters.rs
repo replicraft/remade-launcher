@@ -3,6 +3,7 @@
 
 use launcher_catalog::ProjectKind;
 use launcher_core::{Availability, ExploreRow};
+use launcher_model::Os;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum Sort {
@@ -49,12 +50,18 @@ pub(super) struct Filter {
 	pub(super) sort: Sort,
 	pub(super) kind: KindFilter,
 	pub(super) category: Option<String>,
+	pub(super) language: Option<String>,
+	pub(super) platform: Option<Os>,
 }
 
 impl Filter {
 	/// Nothing narrows the list, so the page can show its sections.
 	pub(super) fn is_open(&self, query: &str) -> bool {
-		query.trim().is_empty() && self.kind == KindFilter::All && self.category.is_none()
+		query.trim().is_empty()
+			&& self.kind == KindFilter::All
+			&& self.category.is_none()
+			&& self.language.is_none()
+			&& self.platform.is_none()
 	}
 }
 
@@ -68,6 +75,17 @@ pub(super) fn visible<'a>(rows: &'a [ExploreRow], filter: &Filter) -> Vec<&'a Ex
 				.category
 				.as_ref()
 				.is_none_or(|wanted| row.categories.contains(wanted))
+		})
+		.filter(|row| {
+			filter
+				.language
+				.as_ref()
+				.is_none_or(|wanted| row.languages.contains(wanted))
+		})
+		.filter(|row| {
+			filter
+				.platform
+				.is_none_or(|wanted| row.platforms.contains(&wanted))
 		})
 		.collect();
 
@@ -98,6 +116,37 @@ pub(super) fn categories(rows: &[ExploreRow]) -> Vec<(String, usize)> {
 	counted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
 	counted
+}
+
+/// Languages in use, most common first.
+pub(super) fn languages(rows: &[ExploreRow]) -> Vec<String> {
+	let mut counts: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+
+	for language in rows.iter().flat_map(|row| &row.languages) {
+		*counts.entry(language).or_default() += 1;
+	}
+
+	let mut counted: Vec<(&str, usize)> = counts.into_iter().collect();
+
+	counted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+
+	counted
+		.into_iter()
+		.map(|(name, _)| name.to_owned())
+		.collect()
+}
+
+/// Systems in use, in the order first seen.
+pub(super) fn platforms(rows: &[ExploreRow]) -> Vec<Os> {
+	let mut found: Vec<Os> = Vec::new();
+
+	for os in rows.iter().flat_map(|row| &row.platforms) {
+		if !found.contains(os) {
+			found.push(*os);
+		}
+	}
+
+	found
 }
 
 pub(super) fn featured(rows: &[ExploreRow]) -> Vec<&ExploreRow> {
@@ -176,6 +225,8 @@ mod tests {
 			repository: format!("o/{name}"),
 			categories: categories.iter().map(|c| (*c).to_owned()).collect(),
 			availability: Availability::ThisDevice,
+			languages: Vec::new(),
+			platforms: Vec::new(),
 			featured,
 			added_at,
 		}
@@ -280,6 +331,31 @@ mod tests {
 			}
 			.is_open("")
 		);
+	}
+
+	#[test]
+	fn language_and_platform_filters_narrow_the_list() {
+		let mut rows = sample();
+
+		rows[0].languages = vec!["Rust".into()];
+		rows[0].platforms = vec![Os::Macos, Os::Linux];
+		rows[1].languages = vec!["Rust".into(), "Go".into()];
+		rows[1].platforms = vec![Os::Windows];
+
+		let rust = Filter {
+			language: Some("Rust".into()),
+			..Filter::default()
+		};
+		let mac = Filter {
+			platform: Some(Os::Macos),
+			..Filter::default()
+		};
+
+		assert_eq!(names(&visible(&rows, &rust)), ["alpha", "Beta"]);
+		assert_eq!(names(&visible(&rows, &mac)), ["Beta"]);
+		assert_eq!(languages(&rows), ["Rust", "Go"]);
+		assert_eq!(platforms(&rows), [Os::Macos, Os::Linux, Os::Windows]);
+		assert!(!rust.is_open(""));
 	}
 
 	#[test]

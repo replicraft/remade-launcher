@@ -12,12 +12,58 @@ use launcher_core::{
 	AutoStatus, Availability, AvailableUpdate, Decision, ExploreRow, InstalledApp,
 	OperationSummary, SkipReason, UpdateState, UpdateStatus,
 };
-use launcher_model::{InstallationId, MinimumAge, UpdateMode};
+use launcher_model::{InstallationId, MinimumAge, Os, UpdateMode};
+
+use super::icons;
 use launcher_storage::AppPolicy;
 
-/// True when the person asked for demo data.
+/// True when the person asked for demo data. Read once.
 pub(crate) fn enabled() -> bool {
-	std::env::var_os("REMADE_DEMO").is_some_and(|value| !value.is_empty() && value != "0")
+	static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+	*ENABLED.get_or_init(|| {
+		std::env::var_os("REMADE_DEMO").is_some_and(|value| !value.is_empty() && value != "0")
+	})
+}
+
+/// An icon for a demo app, standing in for the image a real catalog entry
+/// would link to.
+pub(crate) fn glyph(slug: &str) -> Option<&'static str> {
+	if !enabled() {
+		return None;
+	}
+
+	Some(match slug {
+		"lumen-notes" => icons::NOTE_PENCIL,
+		"orbit-terminal" => icons::TERMINAL_WINDOW,
+		"fathom-player" => icons::MUSIC_NOTES,
+		"quill" => icons::PENCIL_LINE,
+		"pixelforge" => icons::PAINT_BRUSH,
+		"tidepool" => icons::NEWSPAPER,
+		"cinder" => icons::GAUGE,
+		"harbor" => icons::HARD_DRIVES,
+		"ferrite-db" => icons::TERMINAL,
+		"mosaic" => icons::IMAGE,
+		_ => return None,
+	})
+}
+
+/// Languages and platforms for the demo apps.
+fn tech(slug: &str) -> (&'static [&'static str], &'static [Os]) {
+	use Os::{Linux, Macos, Windows};
+
+	match slug {
+		"lumen-notes" => (&["Rust", "TypeScript"], &[Windows, Macos, Linux]),
+		"orbit-terminal" => (&["Rust"], &[Macos, Linux]),
+		"fathom-player" => (&["C++"], &[Windows, Macos, Linux]),
+		"quill" => (&["Swift"], &[Macos]),
+		"pixelforge" => (&["C#"], &[Windows, Linux]),
+		"tidepool" => (&["Go"], &[Windows, Macos, Linux]),
+		"cinder" => (&["Swift"], &[Macos]),
+		"harbor" => (&["Python"], &[Windows, Macos, Linux]),
+		"ferrite-db" => (&["Rust", "C"], &[Linux]),
+		_ => (&["Python", "C"], &[Windows]),
+	}
 }
 
 pub(crate) struct Demo {
@@ -220,11 +266,13 @@ fn catalog(now: i64) -> Vec<ExploreRow> {
 			.collect(),
 		availability,
 		featured,
+		languages: Vec::new(),
+		platforms: Vec::new(),
 		added_at: days_ago.map(|days| now - days * day),
 	};
 	let device = Availability::ThisDevice;
 
-	vec![
+	let mut rows = vec![
 		row(
 			"lumen-notes",
 			"Lumen Notes",
@@ -325,7 +373,19 @@ fn catalog(now: i64) -> Vec<ExploreRow> {
 			false,
 			None,
 		),
-	]
+	];
+
+	for row in &mut rows {
+		let (languages, platforms) = tech(&row.slug);
+
+		row.languages = languages
+			.iter()
+			.map(|language| (*language).to_owned())
+			.collect();
+		row.platforms = platforms.to_vec();
+	}
+
+	rows
 }
 
 /// Release notes for demo apps.

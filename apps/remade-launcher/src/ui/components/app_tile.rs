@@ -17,22 +17,37 @@ const HUES: [(u8, u8, u8); 8] = [
 	(0x6B, 0x7A, 0x8C),
 ];
 
+/// A tile for an app that may have a catalog slug. Demo apps get a glyph;
+/// everything else gets its first letter until real icons can be loaded.
+pub(crate) fn app_tile_for(ui: &mut Ui, slug: Option<&str>, name: &str, size: f32) {
+	paint(ui, name, slug.and_then(crate::ui::demo::glyph), size);
+}
+
 pub(crate) fn app_tile(ui: &mut Ui, name: &str, size: f32) {
+	paint(ui, name, None, size);
+}
+
+fn paint(ui: &mut Ui, name: &str, glyph: Option<&str>, size: f32) {
 	let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
 	let (red, green, blue) = HUES[hue_index(name)];
 	let base = Color32::from_rgb(red, green, blue);
 	let initial = name
 		.chars()
 		.find(|c| c.is_alphanumeric())
-		.map_or('?', |c| c.to_ascii_uppercase());
+		.map_or('?', |c| c.to_ascii_uppercase())
+		.to_string();
+	let (mark, mark_size) = match glyph {
+		Some(glyph) => (glyph.to_owned(), size * 0.54),
+		None => (initial, size * 0.46),
+	};
 
 	ui.painter()
 		.rect_filled(rect, size * 0.24, base.gamma_multiply(0.30));
 	ui.painter().text(
 		rect.center(),
 		Align2::CENTER_CENTER,
-		initial,
-		FontId::new(size * 0.46, theme::semibold()),
+		mark,
+		FontId::new(mark_size, theme::semibold()),
 		base,
 	);
 }

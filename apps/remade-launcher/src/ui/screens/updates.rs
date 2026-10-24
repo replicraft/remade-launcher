@@ -9,7 +9,7 @@ use launcher_model::{InstallationId, UpdateMode};
 use super::library::{Progress, status_text};
 use super::sheet::{bytes, when};
 use super::{Action, page};
-use crate::ui::components::{app_tile, version_change};
+use crate::ui::components::{app_tile_for, version_change};
 use crate::ui::theme;
 
 pub(crate) struct UpdatesView<'a> {
@@ -111,7 +111,7 @@ fn available_row(
 			ui.set_width(ui.available_width());
 
 			ui.horizontal(|ui| {
-				app_tile(ui, &status.name, 36.0);
+				app_tile_for(ui, status.catalog_slug.as_deref(), &status.name, 36.0);
 				ui.label(
 					RichText::new(&status.name)
 						.size(16.0)

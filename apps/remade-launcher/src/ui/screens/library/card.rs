@@ -6,7 +6,7 @@ use launcher_model::UpdateMode;
 
 use super::Progress;
 use super::status::status_text;
-use crate::ui::components::{app_tile, icon_button, verified_badge};
+use crate::ui::components::{app_tile_for, icon_button, verified_badge};
 use crate::ui::screens::Action;
 use crate::ui::{icons, theme};
 
@@ -172,7 +172,7 @@ pub(super) fn grid_card(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	);
 
 	top.horizontal(|ui| {
-		app_tile(ui, &item.app.name, 44.0);
+		app_tile_for(ui, item.app.catalog_slug.as_deref(), &item.app.name, 44.0);
 		title(ui, item);
 	});
 
@@ -228,7 +228,12 @@ pub(super) fn list_row(ui: &mut Ui, item: &Item<'_>) -> Option<Action> {
 	};
 
 	let mut tile = column(ui, inner.left(), middle - 24.0, 48.0, 48.0);
-	app_tile(&mut tile, &item.app.name, 48.0);
+	app_tile_for(
+		&mut tile,
+		item.app.catalog_slug.as_deref(),
+		&item.app.name,
+		48.0,
+	);
 
 	let title_left = inner.left() + 48.0 + 14.0;
 	let mut name = column(

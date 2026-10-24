@@ -77,6 +77,14 @@ fn validate_project(slug: &str, project: &Project) -> Result<(), CatalogError> {
 		return Err(schema("too many screenshots"));
 	}
 
+	if display.languages.len() > 8 {
+		return Err(schema("too many languages"));
+	}
+
+	for language in &display.languages {
+		check_text(language, 40, "language")?;
+	}
+
 	if display.added_at.is_some() && display.added_at_unix().is_none() {
 		return Err(schema("added_at is not a UTC whole-second timestamp"));
 	}

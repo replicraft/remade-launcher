@@ -9,7 +9,9 @@ use launcher_core::{InstalledApp, OperatorUpdate, Ready, RemovalReport};
 use launcher_model::{InstallationId, UpdateMode};
 use launcher_resolver::{Candidate, EvidenceLevel};
 
-use crate::ui::components::{Choice, Confirm, app_tile, dialog_buttons, dialog_close, dialog_ok};
+use crate::ui::components::{
+	Choice, Confirm, app_tile_for, dialog_buttons, dialog_close, dialog_ok,
+};
 use crate::ui::icons;
 use crate::ui::theme;
 
@@ -113,7 +115,7 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 				ui.add_space(8.0);
 
 				ui.horizontal(|ui| {
-					app_tile(ui, &app.name, 44.0);
+					app_tile_for(ui, app.catalog_slug.as_deref(), &app.name, 44.0);
 
 					ui.vertical(|ui| {
 						ui.spacing_mut().item_spacing.y = 1.0;

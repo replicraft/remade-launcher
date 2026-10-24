@@ -39,6 +39,10 @@ pub(super) fn detail(
 				fact(ui, "Categories", &project.display.categories.join(", "));
 			}
 
+			if !project.display.languages.is_empty() {
+				fact(ui, "Languages", &project.display.languages.join(", "));
+			}
+
 			if let Some(license) = &project.display.license {
 				fact(ui, "License", license);
 			}
@@ -141,6 +145,16 @@ pub(super) fn demo_detail(
 	fact(ui, "Source", &row.repository);
 	fact(ui, "Type", row.kind.label());
 	fact(ui, "Categories", &row.categories.join(", "));
+
+	if !row.languages.is_empty() {
+		fact(ui, "Languages", &row.languages.join(", "));
+	}
+
+	if !row.platforms.is_empty() {
+		let names: Vec<&str> = row.platforms.iter().map(|os| os.label()).collect();
+
+		fact(ui, "Platforms", &names.join(", "));
+	}
 
 	ui.add_space(12.0);
 

@@ -5,7 +5,7 @@ use egui::{Align, Align2, FontId, Layout, Rect, RichText, Sense, Ui, UiBuilder, 
 use launcher_core::{Availability, ExploreRow};
 
 use super::filters::category_label;
-use crate::ui::components::{app_tile, verified_badge};
+use crate::ui::components::{app_tile, app_tile_for, platform_badges, verified_badge};
 use crate::ui::theme;
 
 pub(super) const GRID_CARD_HEIGHT: f32 = 160.0;
@@ -65,7 +65,7 @@ pub(super) fn grid_card(
 	);
 
 	content.horizontal(|ui| {
-		app_tile(ui, &row.name, 44.0);
+		app_tile_for(ui, Some(&row.slug), &row.name, 44.0);
 
 		ui.vertical(|ui| {
 			ui.spacing_mut().item_spacing.y = 1.0;
@@ -100,21 +100,32 @@ pub(super) fn grid_card(
 		inner.width(),
 	));
 
-	let footer = note.unwrap_or_else(|| {
-		row.categories
-			.first()
-			.map(|slug| category_label(slug))
-			.unwrap_or_default()
-	});
-	let baseline = inner.left_bottom();
-
-	ui.painter().text(
-		baseline,
-		Align2::LEFT_BOTTOM,
-		footer,
-		FontId::proportional(12.0),
-		palette.text_muted,
+	// Where it runs, then what it is written in (or when it was added).
+	let footer_area = Rect::from_min_max(
+		pos2(inner.left(), inner.bottom() - 20.0),
+		pos2(inner.right() - 120.0, inner.bottom()),
 	);
+	let mut footer = ui.new_child(
+		UiBuilder::new()
+			.max_rect(footer_area)
+			.layout(Layout::left_to_right(Align::Center)),
+	);
+
+	platform_badges(&mut footer, &row.platforms);
+
+	let detail = note.unwrap_or_else(|| row.languages.join(", "));
+
+	if !detail.is_empty() {
+		footer.add(
+			egui::Label::new(
+				RichText::new(format!("·  {detail}"))
+					.small()
+					.color(palette.text_muted),
+			)
+			.truncate(),
+		);
+	}
+
 	ui.painter().text(
 		inner.right_bottom(),
 		Align2::RIGHT_BOTTOM,
@@ -148,7 +159,7 @@ pub(super) fn list_row(ui: &mut Ui, row: &ExploreRow, selected: bool) -> bool {
 			))
 			.layout(Layout::top_down(Align::Min)),
 	);
-	app_tile(&mut tile, &row.name, 40.0);
+	app_tile_for(&mut tile, Some(&row.slug), &row.name, 40.0);
 
 	let text_left = inner.left() + 40.0 + 14.0;
 	let text_area = Rect::from_min_size(
@@ -178,6 +189,15 @@ pub(super) fn list_row(ui: &mut Ui, row: &ExploreRow, selected: bool) -> bool {
 				.small()
 				.color(palette.text_muted),
 		);
+		platform_badges(ui, &row.platforms);
+
+		if !row.languages.is_empty() {
+			ui.label(
+				RichText::new(row.languages.join(", "))
+					.small()
+					.color(palette.text_muted),
+			);
+		}
 	});
 	text.add(egui::Label::new(RichText::new(&row.summary).color(palette.text_muted)).truncate());
 
