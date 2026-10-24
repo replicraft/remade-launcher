@@ -772,6 +772,50 @@ impl LauncherApp {
 		self.screen = screen;
 	}
 
+	/// The downloads tray: a floating card in the bottom-right corner, over
+	/// whatever page is showing. It stays out of the way of everything else
+	/// and offers a way to the Library.
+	fn show_tray(&mut self, context: &Context) {
+		if !self.transfers.prune() {
+			return;
+		}
+
+		context.request_repaint_after(std::time::Duration::from_millis(250));
+
+		let mut stop = false;
+		let mut library = false;
+		let on_library = self.screen == Screen::Library;
+
+		egui::Area::new(egui::Id::unique("transfers"))
+			.order(egui::Order::Foreground)
+			.anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-24.0, -24.0))
+			.show(context, |ui| {
+				theme::floating_frame(context).show(ui, |ui| {
+					ui.set_width(430.0);
+
+					stop = self.transfers.show(ui);
+
+					if !on_library {
+						ui.add_space(12.0);
+
+						ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+							library = ui
+								.button(format!("{}  Go to Library", crate::ui::icons::BOOKS))
+								.clicked();
+						});
+					}
+				});
+			});
+
+		if stop {
+			self.commands.cancel_operation();
+		}
+
+		if library {
+			self.go(Screen::Library);
+		}
+	}
+
 	/// One app's update settings, in a dialog.
 	fn show_app_settings(&mut self, context: &Context) {
 		let Some(id) = self.app_settings else {
@@ -900,29 +944,6 @@ impl eframe::App for LauncherApp {
 			),
 		);
 
-		// The downloads tray runs along the bottom, like a store's.
-		let busy = self.transfers.prune();
-
-		if busy {
-			context.request_repaint_after(std::time::Duration::from_millis(250));
-
-			let mut stop = false;
-
-			Panel::bottom("transfers")
-				.frame(
-					egui::Frame::new()
-						.fill(sidebar_fill)
-						.stroke(egui::Stroke::new(1.0, theme::palette(ui).border))
-						.inner_margin(egui::Margin::symmetric(24, 14)),
-				)
-				.resizable(false)
-				.show(ui, |ui| stop = self.transfers.show(ui));
-
-			if stop {
-				self.commands.cancel_operation();
-			}
-		}
-
 		Panel::left("navigation")
 			.frame(egui::Frame::new().fill(sidebar_fill))
 			.resizable(false)
@@ -1022,6 +1043,7 @@ impl eframe::App for LauncherApp {
 			self.perform(action);
 		}
 
+		self.show_tray(&context);
 		self.show_app_settings(&context);
 		self.show_add(&context);
 		self.show_sheet(&context);

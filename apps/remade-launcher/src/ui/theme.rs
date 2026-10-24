@@ -84,6 +84,14 @@ pub(crate) fn dialog_frame(context: &egui::Context) -> egui::Frame {
 	egui::Frame::popup(&context.global_style()).inner_margin(egui::Margin::same(DIALOG_PADDING))
 }
 
+/// A card that floats over the page, such as the downloads tray: the popup
+/// look, with its own padding.
+pub(crate) fn floating_frame(context: &egui::Context) -> egui::Frame {
+	egui::Frame::popup(&context.global_style())
+		.inner_margin(egui::Margin::same(18))
+		.corner_radius(14)
+}
+
 /// A semi-bold family, for headings and emphasis. egui cannot make text bold
 /// by itself, so emphasis uses the real semi-bold font.
 pub(crate) fn semibold() -> FontFamily {
