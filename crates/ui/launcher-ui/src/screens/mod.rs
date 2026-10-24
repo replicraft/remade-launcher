@@ -5,7 +5,7 @@ mod library;
 mod navigation;
 mod settings;
 
-pub(crate) use explore::explore;
+pub(crate) use explore::ExploreView;
 pub(crate) use library::library;
 pub(crate) use navigation::navigation;
 pub(crate) use settings::settings;

@@ -7,7 +7,7 @@ use launcher_model::ThemePreference;
 use tokio::runtime::Handle;
 
 use crate::commands::{Commands, Message};
-use crate::screens::{self, Screen};
+use crate::screens::{self, ExploreView, Screen};
 use crate::{branding, theme};
 
 pub(crate) struct LauncherApp {
@@ -16,6 +16,7 @@ pub(crate) struct LauncherApp {
 	logo: TextureHandle,
 
 	screen: Screen,
+	explore: ExploreView,
 	theme: ThemePreference,
 	notice: Option<String>,
 }
@@ -40,6 +41,7 @@ impl LauncherApp {
 			messages,
 			logo,
 			screen: Screen::Explore,
+			explore: ExploreView::new(),
 			theme: initial_theme,
 			notice: None,
 		}
@@ -49,6 +51,7 @@ impl LauncherApp {
 		while let Ok(message) = self.messages.try_recv() {
 			match message {
 				Message::Failed(text) => self.notice = Some(text),
+				Message::Explore { request, rows } => self.explore.receive(request, rows),
 			}
 		}
 	}
@@ -75,7 +78,7 @@ impl eframe::App for LauncherApp {
 			});
 
 		egui::CentralPanel::default().show(ui, |ui| match self.screen {
-			Screen::Explore => screens::explore(ui),
+			Screen::Explore => self.explore.show(ui, &self.commands),
 			Screen::Library => screens::library(ui),
 			Screen::Settings => {
 				let chosen = screens::settings(ui, self.theme, self.notice.as_deref());

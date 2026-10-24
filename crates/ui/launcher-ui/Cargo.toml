@@ -10,8 +10,10 @@ publish.workspace = true
 eframe.workspace = true
 egui.workspace = true
 image.workspace = true
+launcher-catalog.workspace = true
 launcher-core.workspace = true
 launcher-model.workspace = true
+time.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 

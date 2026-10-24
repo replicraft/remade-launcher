@@ -2116,8 +2116,10 @@ dependencies = [
  "eframe",
  "egui",
  "image",
+ "launcher-catalog",
  "launcher-core",
  "launcher-model",
+ "time",
  "tokio",
  "tracing",
 ]
