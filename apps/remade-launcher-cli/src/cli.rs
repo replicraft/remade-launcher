@@ -121,6 +121,8 @@ pub(crate) enum Command {
 	Repair(RepairArgs),
 	/// Watch an app that is already on this computer. It is never changed.
 	Adopt(AdoptArgs),
+	/// Download and check an app's file without installing or running it.
+	Download(DownloadArgs),
 	/// Hold an app at its current version.
 	Pin(AppArgs),
 	/// Let a pinned app update again.
@@ -217,6 +219,20 @@ pub(crate) struct AppArgs {
 #[derive(Debug, Args)]
 pub(crate) struct OptionalAppArgs {
 	pub(crate) app: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct DownloadArgs {
+	/// A catalog name, or a github.com repository or release link.
+	pub(crate) target: String,
+
+	/// Where to save it. The current folder if you leave it out.
+	#[arg(short, long, value_name = "FOLDER", default_value = ".")]
+	pub(crate) out: String,
+
+	/// For a GitHub link: the exact file to download.
+	#[arg(long, value_name = "FILENAME")]
+	pub(crate) file: Option<String>,
 }
 
 #[derive(Debug, Args)]

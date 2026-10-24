@@ -622,3 +622,22 @@ fn broad_folders_cannot_be_adopted() {
 		);
 	}
 }
+
+#[test]
+fn downloading_offline_says_so_and_saves_nothing() {
+	let run = run();
+	let folder = run._data.path().join("saved");
+	let (code, value, _) = run.json(&[
+		"--offline",
+		"download",
+		"sample-editor",
+		"--out",
+		folder.to_str().unwrap(),
+	]);
+
+	assert_eq!(
+		(code, value["error"]["code"].as_str()),
+		(5, Some("OFFLINE"))
+	);
+	assert!(!folder.exists(), "no folder was created");
+}

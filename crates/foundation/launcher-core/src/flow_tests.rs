@@ -1774,3 +1774,93 @@ async fn a_pinned_app_can_be_repaired_at_its_own_release_but_not_upgraded_by_it(
 
 	assert!(why.contains("pinned"), "{why}");
 }
+
+// ---------------------------------------------------------------------------
+// Download without installing
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn a_download_is_checked_and_saved_but_nothing_is_installed() {
+	let world = world().await;
+	let ready = ready(prepare(&world, "sample-editor").await.unwrap());
+	let folder = tempfile::tempdir().unwrap();
+	let mut seen = 0;
+
+	let saved = world
+		.engine
+		.download_artifact(&ready, folder.path(), &mut |received, _| seen = received)
+		.await
+		.unwrap();
+
+	assert!(saved.path.starts_with(folder.path()) && saved.path.exists());
+	assert_eq!(saved.size, std::fs::metadata(&saved.path).unwrap().len());
+	assert_eq!(
+		saved.sha256,
+		hex::encode(Sha256::digest(std::fs::read(&saved.path).unwrap()))
+	);
+	assert!(
+		saved.matched_expected_sha256,
+		"the host's checksum was known"
+	);
+	assert!(
+		world.engine.installed().await.unwrap().is_empty(),
+		"nothing was installed"
+	);
+	assert!(
+		std::fs::read_dir(folder.path())
+			.unwrap()
+			.flatten()
+			.all(|entry| !entry.file_name().to_string_lossy().ends_with(".part")),
+		"no partial file is left"
+	);
+	let _ = seen;
+}
+
+#[tokio::test]
+async fn an_existing_file_is_never_overwritten() {
+	let world = world().await;
+	let ready = ready(prepare(&world, "sample-editor").await.unwrap());
+	let folder = tempfile::tempdir().unwrap();
+
+	world
+		.engine
+		.download_artifact(&ready, folder.path(), &mut |_, _| {})
+		.await
+		.unwrap();
+
+	let error = world
+		.engine
+		.download_artifact(&ready, folder.path(), &mut |_, _| {})
+		.await
+		.unwrap_err();
+
+	assert_eq!(error.code(), ErrorCode::InstallationChanged);
+}
+
+#[tokio::test]
+async fn a_download_that_does_not_match_its_checksum_leaves_nothing() {
+	let world = world().await;
+	let ready = ready(prepare(&world, "sample-editor").await.unwrap());
+	let folder = tempfile::tempdir().unwrap();
+
+	// The server now serves different bytes under the same address.
+	world
+		.artifacts
+		.0
+		.lock()
+		.unwrap()
+		.insert(asset_url("v1.0.0"), tarball("9.9.9"));
+
+	let error = world
+		.engine
+		.download_artifact(&ready, folder.path(), &mut |_, _| {})
+		.await
+		.unwrap_err();
+
+	assert_eq!(error.code(), ErrorCode::ArtifactDigestMismatch);
+	assert_eq!(
+		std::fs::read_dir(folder.path()).unwrap().count(),
+		0,
+		"neither the file nor a partial one remains"
+	);
+}
