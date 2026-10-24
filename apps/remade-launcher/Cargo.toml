@@ -1,0 +1,50 @@
+[package]
+name = "remade-launcher"
+description = "The official launcher for unofficial apps."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+launcher-core.workspace = true
+launcher-model.workspace = true
+launcher-ui.workspace = true
+mimalloc.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
+
+# ---------------------------------------------------------------------------
+# Linux packages: `cargo deb -p remade-launcher`
+# and `cargo generate-rpm -p apps/remade-launcher`
+# ---------------------------------------------------------------------------
+
+[package.metadata.deb]
+name = "remade-launcher"
+maintainer = "Remade <hello@remade.wiki>"
+section = "utils"
+priority = "optional"
+extended-description = "Installs, updates, and removes apps from the Remade catalog and from public GitHub releases you choose to add."
+depends = "$auto, libgl1, libxkbcommon0"
+assets = [
+	["target/release/remade-launcher", "usr/bin/", "755"],
+	["../../packaging/linux/wiki.remade.Launcher.desktop", "usr/share/applications/", "644"],
+	["../../packaging/linux/wiki.remade.Launcher.metainfo.xml", "usr/share/metainfo/", "644"],
+	["../../assets/linux/hicolor/**/*", "usr/share/icons/hicolor/", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "remade-launcher"
+summary = "The official launcher for unofficial apps."
+group = "Applications/System"
+assets = [
+	{ source = "target/release/remade-launcher", dest = "/usr/bin/remade-launcher", mode = "755" },
+	{ source = "packaging/linux/wiki.remade.Launcher.desktop", dest = "/usr/share/applications/wiki.remade.Launcher.desktop", mode = "644" },
+	{ source = "packaging/linux/wiki.remade.Launcher.metainfo.xml", dest = "/usr/share/metainfo/wiki.remade.Launcher.metainfo.xml", mode = "644" },
+	{ source = "assets/linux/hicolor/256x256/apps/wiki.remade.Launcher.png", dest = "/usr/share/icons/hicolor/256x256/apps/wiki.remade.Launcher.png", mode = "644" },
+	{ source = "assets/linux/hicolor/scalable/apps/wiki.remade.Launcher.svg", dest = "/usr/share/icons/hicolor/scalable/apps/wiki.remade.Launcher.svg", mode = "644" },
+]
