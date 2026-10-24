@@ -249,6 +249,13 @@ fn words(language: Language) -> Words {
 			today: "Heute",
 			yesterday: "Gestern",
 		},
+		Language::Spanish => Words {
+			months: [
+				"ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic",
+			],
+			today: "Hoy",
+			yesterday: "Ayer",
+		},
 		Language::PortugueseBrazil => Words {
 			months: [
 				"jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.",
@@ -352,6 +359,10 @@ fn clock_text(when: &jiff::Zoned, twelve_hour: bool, language: Language) -> Stri
 			} else {
 				"पूर्वाह्न"
 			}
+		),
+		Language::Spanish => format!(
+			"{shown}:{minute:02} {}",
+			if afternoon { "p. m." } else { "a. m." }
 		),
 		_ => format!(
 			"{shown}:{minute:02} {}",
@@ -577,6 +588,18 @@ mod tests {
 		assert_eq!(
 			friendly_in(NOW - 600, NOW, &minus_five(), german, Language::English),
 			"Today, 15:32"
+		);
+	}
+
+	#[test]
+	fn spanish_dates_and_clocks() {
+		assert_eq!(
+			date_time_in(NOW, &minus_five(), us(), Language::Spanish),
+			"oct 24, 2026, 3:42 p. m. -05"
+		);
+		assert_eq!(
+			friendly_in(NOW - 600, NOW, &minus_five(), us(), Language::Spanish),
+			"Hoy, 3:32 p. m."
 		);
 	}
 

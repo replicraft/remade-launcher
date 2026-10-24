@@ -13,7 +13,7 @@ use egui::{
 };
 use launcher_model::{Language, ThemePreference};
 
-use super::fonts::system_fallbacks;
+use super::fonts::{bundled, system_fallbacks};
 
 pub(crate) const SIDEBAR_WIDTH: f32 = 244.0;
 pub(crate) const SIDEBAR_COLLAPSED_WIDTH: f32 = 64.0;
@@ -122,35 +122,47 @@ fn fonts(language: Language) -> FontDefinitions {
 		data(include_bytes!("../../../../assets/fonts/Phosphor.ttf")),
 	);
 
-	// Open Sans first, then the icon font, then whatever egui ships as
-	// fallbacks for scripts Open Sans does not cover.
-	let proportional = fonts.families.entry(FontFamily::Proportional).or_default();
+	// Open Sans first, then the icon font, then Noto Sans for the scripts Open
+	// Sans lacks, then the system's fonts for anything rarer, and last
+	// whatever egui ships.
+	let mut regular_names = Vec::new();
+	let mut semibold_names = Vec::new();
 
-	proportional.insert(0, "open-sans".into());
-	proportional.insert(1, "phosphor".into());
+	for script in bundled(language) {
+		let (regular, semi) = (
+			format!("noto-{}", script.key),
+			format!("noto-{}-semibold", script.key),
+		);
 
-	// Scripts Open Sans lacks borrow the system's fonts, after the icons so
-	// they never replace a glyph the bundled fonts have.
-	for (name, data) in system_fallbacks(language) {
-		fonts.font_data.insert(name.clone(), Arc::new(data));
 		fonts
-			.families
-			.entry(FontFamily::Proportional)
-			.or_default()
-			.push(name);
+			.font_data
+			.insert(regular.clone(), data(script.regular));
+		fonts.font_data.insert(semi.clone(), data(script.semibold));
+		regular_names.push(regular);
+		semibold_names.push(semi);
 	}
 
-	let mut semi = vec!["open-sans-semibold".to_owned(), "phosphor".to_owned()];
+	for (name, font) in system_fallbacks(language) {
+		fonts.font_data.insert(name.clone(), Arc::new(font));
+		regular_names.push(name.clone());
+		semibold_names.push(name);
+	}
 
-	semi.extend(
-		fonts
-			.families
-			.get(&FontFamily::Proportional)
-			.into_iter()
-			.flatten()
-			.filter(|name| !name.starts_with("open-sans") && *name != "phosphor")
-			.cloned(),
-	);
+	let proportional = fonts.families.entry(FontFamily::Proportional).or_default();
+	let defaults = std::mem::take(proportional);
+
+	*proportional = ["open-sans".to_owned(), "phosphor".to_owned()]
+		.into_iter()
+		.chain(regular_names.iter().cloned())
+		.chain(defaults.iter().cloned())
+		.collect();
+
+	let semi: Vec<String> = ["open-sans-semibold".to_owned(), "phosphor".to_owned()]
+		.into_iter()
+		.chain(semibold_names)
+		.chain(defaults)
+		.collect();
+
 	fonts.families.insert(semibold(), semi);
 
 	fonts
@@ -314,5 +326,18 @@ mod tests {
 		assert_eq!(proportional[0], "open-sans");
 		assert!(proportional.contains(&"phosphor".to_owned()));
 		assert_eq!(definitions.families[&semibold()][0], "open-sans-semibold");
+
+		for family in [&proportional[..], &definitions.families[&semibold()][..]] {
+			assert!(
+				family.iter().any(|name| name.starts_with("noto-deva")),
+				"every language can be named in its own script"
+			);
+		}
+
+		// Chinese tries its own hanzi first, Japanese its own kanji.
+		let first = |language| fonts(language).families[&FontFamily::Proportional][2].clone();
+
+		assert_eq!(first(Language::Japanese), "noto-jp");
+		assert_eq!(first(Language::ChineseSimplified), "noto-sc");
 	}
 }

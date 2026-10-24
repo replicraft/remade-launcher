@@ -40,6 +40,7 @@ macro_rules! locale {
 /// The source of each translated language.
 fn sources(language: Language) -> &'static [&'static str] {
 	match language {
+		Language::Spanish => locale!("es"),
 		Language::Japanese => locale!("ja"),
 		Language::PortugueseBrazil => locale!("pt-BR"),
 		Language::ChineseSimplified => locale!("zh-CN"),

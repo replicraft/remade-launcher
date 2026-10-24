@@ -18,6 +18,7 @@ pub enum Language {
 	Auto,
 	English,
 	Japanese,
+	Spanish,
 	PortugueseBrazil,
 	ChineseSimplified,
 	German,
@@ -25,9 +26,10 @@ pub enum Language {
 }
 
 impl Language {
-	pub const ALL: [Self; 7] = [
+	pub const ALL: [Self; 8] = [
 		Self::Auto,
 		Self::English,
+		Self::Spanish,
 		Self::Japanese,
 		Self::PortugueseBrazil,
 		Self::ChineseSimplified,
@@ -36,8 +38,9 @@ impl Language {
 	];
 
 	/// The languages with translations, which `Auto` chooses among.
-	pub const TRANSLATED: [Self; 6] = [
+	pub const TRANSLATED: [Self; 7] = [
 		Self::English,
+		Self::Spanish,
 		Self::Japanese,
 		Self::PortugueseBrazil,
 		Self::ChineseSimplified,
@@ -52,6 +55,7 @@ impl Language {
 		match self {
 			Self::Auto => None,
 			Self::English => Some("English"),
+			Self::Spanish => Some("Español"),
 			Self::Japanese => Some("日本語"),
 			Self::PortugueseBrazil => Some("Português (Brasil)"),
 			Self::ChineseSimplified => Some("简体中文"),
@@ -64,6 +68,7 @@ impl Language {
 		match self {
 			Self::Auto => "auto",
 			Self::English => "english",
+			Self::Spanish => "spanish",
 			Self::Japanese => "japanese",
 			Self::PortugueseBrazil => "portuguese_brazil",
 			Self::ChineseSimplified => "chinese_simplified",
@@ -77,6 +82,7 @@ impl Language {
 		match self {
 			Self::Auto => None,
 			Self::English => Some("en"),
+			Self::Spanish => Some("es"),
 			Self::Japanese => Some("ja"),
 			Self::PortugueseBrazil => Some("pt-BR"),
 			Self::ChineseSimplified => Some("zh-CN"),
@@ -100,6 +106,7 @@ impl Language {
 			.to_ascii_lowercase();
 
 		match primary.as_str() {
+			"es" => Self::Spanish,
 			"ja" => Self::Japanese,
 			"pt" => Self::PortugueseBrazil,
 			"zh" => Self::ChineseSimplified,
@@ -120,6 +127,7 @@ impl std::str::FromStr for Language {
 		match text.as_str() {
 			"auto" => Ok(Self::Auto),
 			"english" | "en" | "en-us" | "en-gb" => Ok(Self::English),
+			"spanish" | "es" | "es-es" | "es-mx" | "es-419" => Ok(Self::Spanish),
 			"japanese" | "ja" | "ja-jp" => Ok(Self::Japanese),
 			"portuguese-brazil" | "portuguese" | "pt" | "pt-br" => Ok(Self::PortugueseBrazil),
 			"chinese-simplified" | "chinese" | "zh" | "zh-cn" | "zh-hans" => {
@@ -466,6 +474,7 @@ mod tests {
 	#[test]
 	fn automatic_follows_the_system_and_falls_back_to_english() {
 		for (tag, expected) in [
+			("es-MX", Language::Spanish),
 			("ja-JP", Language::Japanese),
 			("pt-PT", Language::PortugueseBrazil),
 			("zh_Hans_CN", Language::ChineseSimplified),

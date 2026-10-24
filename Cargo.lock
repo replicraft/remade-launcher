@@ -4277,6 +4277,7 @@ dependencies = [
  "mimalloc",
  "muda",
  "notify-rust",
+ "skrifa",
  "time",
  "tokio",
  "tracing",

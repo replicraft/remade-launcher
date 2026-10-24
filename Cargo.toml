@@ -97,6 +97,7 @@ hex = "0.4"
 sha2 = "0.11"
 
 # Testing
+skrifa = "0.44"
 tempfile = "3"
 url = "2"
 

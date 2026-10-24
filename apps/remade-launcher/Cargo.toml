@@ -31,6 +31,7 @@ unic-langid.workspace = true
 
 [dev-dependencies]
 fluent-syntax.workspace = true
+skrifa.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 muda.workspace = true

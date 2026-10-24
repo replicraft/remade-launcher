@@ -2,3 +2,4 @@
 .codesight/
 /target
 /dist
+.DS_Store
