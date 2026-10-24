@@ -4,6 +4,7 @@ use launcher_catalog::{KeyRegistry, SUPPORTED_CAPABILITIES};
 use launcher_model::product;
 use launcher_net::Url;
 
+use crate::credentials::SecretStore;
 use crate::lifecycle::ArtifactSource;
 
 /// Where the catalog lives and which keys may sign it.
@@ -40,6 +41,9 @@ pub struct EngineConfig {
 	/// Where artifact bytes come from. `None` downloads over HTTPS; tests
 	/// supply local files.
 	pub artifacts: Option<Arc<dyn ArtifactSource>>,
+	/// Where the GitHub token is kept. `None` uses the system's credential
+	/// store; tests supply memory.
+	pub secrets: Option<Arc<dyn SecretStore>>,
 }
 
 impl EngineConfig {
@@ -47,6 +51,7 @@ impl EngineConfig {
 		Self {
 			catalog: CatalogConfig::production(),
 			artifacts: None,
+			secrets: None,
 		}
 	}
 }

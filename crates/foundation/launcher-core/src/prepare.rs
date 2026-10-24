@@ -63,7 +63,7 @@ pub struct CustomPreparation {
 impl Engine {
 	/// Plans an install of a catalog app for this device.
 	pub async fn prepare_install(&self, slug: &str) -> Result<Preparation, LauncherError> {
-		let provider = GithubProvider::new(self.http.clone());
+		let provider = self.provider();
 
 		self.prepare_curated(&provider, slug, None, HostTarget::current(), now_unix())
 			.await
@@ -74,7 +74,7 @@ impl Engine {
 		&self,
 		installation: InstallationId,
 	) -> Result<Preparation, LauncherError> {
-		let provider = GithubProvider::new(self.http.clone());
+		let provider = self.provider();
 
 		self.prepare_update_with(&provider, installation, HostTarget::current(), now_unix())
 			.await
@@ -291,7 +291,7 @@ impl Engine {
 	/// Looks up a repository the user pasted. Nothing is installable from the
 	/// result until the user picks a file and acknowledges the source.
 	pub async fn prepare_custom(&self, url: &str) -> Result<CustomPreparation, LauncherError> {
-		let provider = GithubProvider::new(self.http.clone());
+		let provider = self.provider();
 
 		self.prepare_custom_with(&provider, url, HostTarget::current())
 			.await

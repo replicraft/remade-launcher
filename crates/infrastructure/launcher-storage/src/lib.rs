@@ -8,6 +8,7 @@
 mod catalog_trust;
 mod database;
 mod error;
+mod http_cache;
 mod lifecycle;
 mod migrations;
 mod plans;
@@ -17,6 +18,7 @@ mod settings;
 
 pub use catalog_trust::StoredCatalog;
 pub use database::Database;
+pub use http_cache::CachedResponse;
 pub use lifecycle::{InstallationRecord, OperationRecord};
 pub use plans::{ConsentRecord, StoredPlan};
 pub use policy::{AppPolicy, AssetObservation, DecisionRecord, ObservedAsset};

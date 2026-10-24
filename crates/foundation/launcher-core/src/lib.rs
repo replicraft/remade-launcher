@@ -6,12 +6,14 @@
 mod browse;
 mod catalog;
 mod config;
+mod credentials;
 mod diagnostics;
 mod engine;
 mod events;
 mod explore;
 mod inspect;
 mod lifecycle;
+mod network;
 mod paths;
 mod prepare;
 mod saved_plans;
@@ -23,6 +25,7 @@ mod flow_tests;
 pub use browse::{Changelog, PlatformReport, TrustStatus, VariantSupport};
 pub use catalog::{CatalogService, CatalogState, Origin, Problem, ProblemKind};
 pub use config::{CatalogConfig, EngineConfig};
+pub use credentials::{Keychain, MemorySecret, SecretError, SecretStore, TokenState};
 pub use engine::Engine;
 pub use events::{EngineEvent, OperationEvent, Stage};
 pub use explore::{Availability, ExploreQuery, ExploreRow};
@@ -35,6 +38,7 @@ pub use lifecycle::{
 	ArtifactSource, HttpArtifacts, InstallMeta, InstalledApp, LifecycleService, OperationSummary,
 	RecoveryReport, RemovalReport,
 };
+pub use network::{RateLimit, StoredResponses, TOKEN_VARIABLE};
 pub use paths::DataDirectory;
 pub use prepare::{CustomPreparation, Preparation, Ready, custom_plan};
 pub use saved_plans::{Applied, Approval, SavedPlan, UninstallPlan};

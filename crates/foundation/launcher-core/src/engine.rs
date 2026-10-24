@@ -7,9 +7,11 @@ use tokio::sync::broadcast;
 
 use crate::catalog::CatalogService;
 use crate::config::EngineConfig;
+use crate::credentials::{Keychain, SecretStore};
 use crate::events::{EngineEvent, EventBus};
 use crate::explore::{self, ExploreQuery, ExploreRow};
 use crate::lifecycle::{HttpArtifacts, InstalledApp, LifecycleService, OperationSummary};
+use crate::network;
 use crate::paths::DataDirectory;
 
 pub(crate) fn now_unix() -> i64 {
@@ -26,6 +28,8 @@ pub struct Engine {
 	pub(crate) data: DataDirectory,
 	pub(crate) database: Arc<Database>,
 	pub(crate) http: HttpClient,
+	/// Keeps the GitHub token.
+	pub(crate) secrets: Arc<dyn SecretStore>,
 	/// Identifies this process, so "once per launch" can be told apart from
 	/// "once per day".
 	pub(crate) session_id: String,
@@ -49,7 +53,29 @@ impl Engine {
 		data.ensure_exists()?;
 
 		let database = Arc::new(Database::open(data.database_file()).await?);
-		let http = HttpClient::new()?;
+		let secrets: Arc<dyn SecretStore> =
+			config.secrets.clone().unwrap_or_else(|| Arc::new(Keychain));
+		let preferences = network::read_preferences(&database).await;
+
+		launcher_model::local_time::configure(preferences.time_format, preferences.date_format);
+
+		// The token is read once here. Only a person's action in Settings
+		// changes it afterwards.
+		let token = if preferences.network.token_saved {
+			let secrets = Arc::clone(&secrets);
+
+			tokio::task::spawn_blocking(move || secrets.get().ok().flatten())
+				.await
+				.ok()
+				.flatten()
+		} else {
+			None
+		};
+		let token = std::env::var(network::TOKEN_VARIABLE)
+			.ok()
+			.filter(|value| !value.trim().is_empty())
+			.or(token);
+		let http = HttpClient::with_options(&network::network_options(&preferences, token))?;
 		let catalog = CatalogService::new(config.catalog, Arc::clone(&database), http.clone());
 
 		catalog.load_cached().await;
@@ -76,6 +102,7 @@ impl Engine {
 			data: data.clone(),
 			database,
 			http,
+			secrets,
 			session_id: launcher_model::OperationId::new().to_string(),
 			catalog,
 			lifecycle,

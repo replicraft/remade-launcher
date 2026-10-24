@@ -35,5 +35,14 @@ launcher-catalog = { workspace = true, features = ["test-keys"] }
 serde_json.workspace = true
 tempfile.workspace = true
 
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { workspace = true, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { workspace = true, features = ["windows-native"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+keyring = { workspace = true, features = ["async-secret-service", "crypto-rust", "tokio"] }
+
 [lints]
 workspace = true

@@ -122,6 +122,10 @@ pub struct Network {
 	pub proxy: Proxy,
 	/// How long a request may take, in seconds.
 	pub timeout_seconds: u32,
+	/// A GitHub token is saved in the system's credential store. The store
+	/// is not touched at all unless this is set, so a launcher that never
+	/// had a token never asks the system for one.
+	pub token_saved: bool,
 }
 
 impl Default for Network {
@@ -129,6 +133,7 @@ impl Default for Network {
 		Self {
 			proxy: Proxy::System,
 			timeout_seconds: 30,
+			token_saved: false,
 		}
 	}
 }

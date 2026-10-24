@@ -84,7 +84,7 @@ impl Engine {
 		&self,
 		only: Option<InstallationId>,
 	) -> Result<Vec<UpdateStatus>, LauncherError> {
-		let provider = GithubProvider::new(self.http.clone());
+		let provider = self.provider();
 
 		self.check_updates_with(&provider, only, HostTarget::current(), now_unix())
 			.await
@@ -110,7 +110,7 @@ impl Engine {
 		&self,
 		only: Option<InstallationId>,
 	) -> Result<Vec<OperatorUpdate>, LauncherError> {
-		let provider = GithubProvider::new(self.http.clone());
+		let provider = self.provider();
 
 		self.plan_operator_updates_with(&provider, only, HostTarget::current(), now_unix())
 			.await

@@ -84,7 +84,7 @@ impl CycleReport {
 impl Engine {
 	/// Runs one cycle with the real provider.
 	pub async fn run_update_cycle(&self, trigger: Trigger) -> Result<CycleReport, LauncherError> {
-		let provider = GithubProvider::new(self.http.clone());
+		let provider = self.provider();
 
 		self.run_update_cycle_with(&provider, trigger, HostTarget::current(), now_unix())
 			.await

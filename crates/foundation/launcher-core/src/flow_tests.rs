@@ -211,6 +211,7 @@ async fn world() -> World {
 			supported_capabilities: &["safe-archive-v1"],
 		},
 		artifacts: Some(artifacts.clone()),
+		secrets: Some(Arc::new(crate::MemorySecret::default())),
 	};
 
 	let engine = Engine::open_with(&DataDirectory::at(directory.path().join("data")), config)

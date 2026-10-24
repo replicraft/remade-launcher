@@ -77,7 +77,7 @@ impl Engine {
 	/// Every release GitHub lists for an app, with the verdict the launcher
 	/// gives each.
 	pub async fn releases(&self, slug: &str) -> Result<Vec<ReleaseView>, LauncherError> {
-		let provider = GithubProvider::new(self.http.clone());
+		let provider = self.provider();
 
 		self.releases_with(&provider, slug, HostTarget::current())
 			.await
@@ -116,7 +116,7 @@ impl Engine {
 		slug: &str,
 		tag: Option<&str>,
 	) -> Result<Changelog, LauncherError> {
-		let provider = GithubProvider::new(self.http.clone());
+		let provider = self.provider();
 
 		self.changelog_with(&provider, slug, tag).await
 	}
