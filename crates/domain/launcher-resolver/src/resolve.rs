@@ -292,7 +292,7 @@ fn eligible_releases<'a>(
 			Some(Eligible { release, version })
 		})
 		.filter(|entry| {
-			policy.channel != Channel::Stable
+			channel != Channel::Stable
 				|| (!entry.release.prerelease && !entry.version.is_prerelease())
 		})
 		.collect();
