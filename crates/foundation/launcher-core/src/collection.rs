@@ -360,6 +360,11 @@ impl Engine {
 	}
 }
 
+/// The largest collection file, for callers that read the file themselves.
+pub const fn collection_max_bytes() -> usize {
+	MAX_BYTES
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -493,9 +498,4 @@ mod tests {
 		assert!(engine.remove_favorite("owner/repo").await.unwrap());
 		assert!(engine.favorites().await.unwrap().is_empty());
 	}
-}
-
-/// The largest collection file, for callers that read the file themselves.
-pub const fn collection_max_bytes() -> usize {
-	MAX_BYTES
 }

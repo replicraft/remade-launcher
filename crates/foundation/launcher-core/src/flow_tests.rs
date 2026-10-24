@@ -164,6 +164,8 @@ impl ArtifactSource for Artifacts {
 				.expect("an unexpected download");
 
 			file.write_all(&bytes).await.unwrap();
+			// The real client flushes before it returns, and so must a stand-in.
+			file.flush().await.unwrap();
 
 			Ok(Downloaded {
 				size: bytes.len() as u64,
