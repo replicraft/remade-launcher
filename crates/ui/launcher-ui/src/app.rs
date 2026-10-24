@@ -3,13 +3,19 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 
 use egui::{Context, Panel, TextureHandle, TextureOptions};
-use launcher_core::{Engine, EngineEvent, InstalledApp, Preparation, Stage};
-use launcher_model::{InstallationId, ThemePreference};
+use launcher_background::control::BackgroundStatus;
+use launcher_core::{
+	Engine, EngineEvent, InstalledApp, Preparation, Stage, UpdateSettings, UpdateStatus,
+};
+use launcher_model::{InstallationId, ThemePreference, UpdateMode};
+use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
 
 use crate::commands::{Commands, Message};
 use crate::screens::sheet::{self, Outcome, Sheet};
-use crate::screens::{self, Action, AddView, ExploreView, Screen, SettingsAction};
+use crate::screens::{
+	self, Action, AddView, ExploreView, LibraryView, Screen, SettingsAction, SettingsView,
+};
 use crate::{branding, theme};
 
 pub(crate) struct LauncherApp {
@@ -28,6 +34,12 @@ pub(crate) struct LauncherApp {
 	update_of: Option<InstallationId>,
 	theme: ThemePreference,
 	notice: Option<String>,
+	update_settings: UpdateSettings,
+	background: Option<BackgroundStatus>,
+	statuses: HashMap<InstallationId, UpdateStatus>,
+	policies: HashMap<InstallationId, AppPolicy>,
+	custom_age: String,
+	age_error: Option<String>,
 }
 
 impl LauncherApp {
@@ -59,6 +71,15 @@ impl LauncherApp {
 			update_of: None,
 			theme: initial_theme,
 			notice: None,
+			update_settings: UpdateSettings {
+				mode: UpdateMode::Manual,
+				minimum_age: launcher_model::MinimumAge::DEFAULT,
+			},
+			background: None,
+			statuses: HashMap::new(),
+			policies: HashMap::new(),
+			custom_age: String::new(),
+			age_error: None,
 		}
 	}
 
@@ -91,6 +112,22 @@ impl LauncherApp {
 					self.commands.refresh_installed();
 				}
 				Message::Engine(event) => self.handle_event(event),
+				Message::UpdateInfo(settings, background) => {
+					self.update_settings = *settings;
+					self.background = Some(*background);
+				}
+				Message::Statuses(statuses) => {
+					self.statuses = statuses
+						.into_iter()
+						.map(|status| (status.installation, status))
+						.collect();
+				}
+				Message::Policies(policies) => self.policies = policies,
+				Message::Notice(text) => {
+					if !text.is_empty() {
+						self.notice = Some(text);
+					}
+				}
 				Message::Diagnostics(text) => {
 					self.context.copy_text(text);
 					self.sheet = Some(Sheet::Message {
@@ -135,6 +172,8 @@ impl LauncherApp {
 			Stage::Removing => ("Removing".into(), None),
 			Stage::Completed | Stage::Failed { .. } | Stage::RecoveryRequired { .. } => {
 				self.progress.remove(&event.installation);
+				// What was true before this operation no longer is.
+				self.statuses.remove(&event.installation);
 				self.commands.refresh_installed();
 
 				if let Stage::Failed { message } | Stage::RecoveryRequired { message } =
@@ -166,6 +205,9 @@ impl LauncherApp {
 				self.commands.prepare_update(id);
 			}
 			Action::Launch(id) => self.commands.launch(id),
+			Action::SetPolicy(id, policy) => self.commands.set_app_policy(id, policy),
+			Action::Pin(id, pinned) => self.commands.set_pinned(id, pinned),
+			Action::CheckUpdates => self.commands.check_updates(),
 			Action::Uninstall(app) => self.sheet = Some(Sheet::ConfirmUninstall(app)),
 			Action::LookUp(url) => self.commands.look_up_custom(url),
 			Action::ChooseFile {
@@ -198,6 +240,23 @@ impl LauncherApp {
 				self.sheet = None;
 				self.commands.uninstall(app);
 			}
+			Outcome::SetMode { mode, acknowledged } => {
+				self.sheet = None;
+				self.commands.set_update_mode(mode, acknowledged);
+			}
+		}
+	}
+
+	/// Switching to Manual needs no question. Anything automatic asks first,
+	/// with the box unchecked.
+	fn pick_mode(&mut self, mode: UpdateMode) {
+		if mode.is_automatic() {
+			self.sheet = Some(Sheet::ConfirmMode {
+				mode,
+				acknowledged: false,
+			});
+		} else {
+			self.commands.set_update_mode(mode, false);
 		}
 	}
 
@@ -237,13 +296,42 @@ impl eframe::App for LauncherApp {
 
 			match self.screen {
 				Screen::Explore => action = self.explore.show(ui, &self.commands),
-				Screen::Library => action = screens::library(ui, &self.installed, &self.progress),
+				Screen::Library => {
+					action = screens::library(
+						ui,
+						&LibraryView {
+							apps: &self.installed,
+							busy: &self.progress,
+							statuses: &self.statuses,
+							policies: &self.policies,
+							mode: self.update_settings.mode,
+							global_age: self.update_settings.minimum_age,
+						},
+					);
+				}
 				Screen::Add => action = self.add.show(ui),
-				Screen::Settings => match screens::settings(ui, self.theme) {
-					SettingsAction::None => {}
-					SettingsAction::Theme(theme) => self.change_theme(&context, theme),
-					SettingsAction::CopyDiagnostics => self.commands.diagnostics(),
-				},
+				Screen::Settings => {
+					let view = SettingsView {
+						theme: self.theme,
+						updates: self.update_settings,
+						background: self.background.as_ref(),
+						custom_age: &mut self.custom_age,
+						age_error: self.age_error.as_deref(),
+					};
+
+					match screens::settings(ui, view) {
+						SettingsAction::None => {}
+						SettingsAction::Theme(theme) => self.change_theme(&context, theme),
+						SettingsAction::CopyDiagnostics => self.commands.diagnostics(),
+						SettingsAction::PickMode(mode) => self.pick_mode(mode),
+						SettingsAction::SetMinimumAge(age) => {
+							self.age_error = None;
+							self.commands.set_minimum_age(age);
+						}
+						SettingsAction::BadAge(why) => self.age_error = Some(why),
+						SettingsAction::StopBackground => self.commands.stop_background_updates(),
+					}
+				}
 			}
 		});
 

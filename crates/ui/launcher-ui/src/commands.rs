@@ -4,15 +4,19 @@
 //! storage, the network, hashing, or extraction. Results come back as
 //! [`Message`]s, and the interface repaints when one arrives.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
+use launcher_background::control::{self, BackgroundStatus};
 use launcher_core::{
 	CatalogState, CustomPreparation, Engine, EngineEvent, ExploreQuery, ExploreRow, InstalledApp,
-	Preparation, Ready, RemovalReport, custom_plan,
+	LaunchOutcome, ModeConsent, Preparation, Ready, RemovalReport, UpdateSettings, UpdateStatus,
+	custom_plan,
 };
-use launcher_model::{InstallationId, ThemePreference};
+use launcher_model::{InstallationId, MinimumAge, ThemePreference, UpdateMode};
 use launcher_resolver::Consent;
+use launcher_storage::AppPolicy;
 use tokio::runtime::Handle;
 
 /// What a finished command reports back to the interface.
@@ -36,6 +40,12 @@ pub(crate) enum Message {
 	},
 	Engine(EngineEvent),
 	Diagnostics(String),
+	/// The saved update settings and the background updater's real state.
+	UpdateInfo(Box<UpdateSettings>, Box<BackgroundStatus>),
+	Statuses(Vec<UpdateStatus>),
+	Policies(HashMap<InstallationId, AppPolicy>),
+	/// A sentence about what an automatic update pass did.
+	Notice(String),
 }
 
 /// A handle for submitting commands.
@@ -64,6 +74,8 @@ impl Commands {
 		commands.repaint_on_catalog_changes();
 		commands.refresh_catalog();
 		commands.refresh_installed();
+		commands.refresh_update_info();
+		commands.launcher_started();
 
 		commands
 	}
@@ -172,6 +184,149 @@ impl Commands {
 		self.spawn_result(
 			|engine| async move { engine.diagnostics().await.map(Message::Diagnostics) },
 		);
+	}
+
+	/// Reloads the update settings, per-app policies, and the background
+	/// updater's true state.
+	pub(crate) fn refresh_update_info(&self) {
+		self.spawn(|engine| async move {
+			let settings = engine.update_settings().await;
+			let background = control::status(&engine).await;
+
+			Some(Message::UpdateInfo(
+				Box::new(settings),
+				Box::new(background),
+			))
+		});
+
+		self.spawn(|engine| async move {
+			let mut policies = HashMap::new();
+
+			for app in engine.installed().await.ok()? {
+				policies.insert(app.id, engine.app_update_policy(app.id).await.ok()?);
+			}
+
+			Some(Message::Policies(policies))
+		});
+	}
+
+	/// What a genuine launcher start does. Called once, when the window opens.
+	pub(crate) fn launcher_started(&self) {
+		self.spawn_result(|engine| async move {
+			Ok(match engine.launcher_started().await? {
+				LaunchOutcome::AlreadyHandled => Message::Notice(String::new()),
+				LaunchOutcome::Checked(statuses) => Message::Statuses(statuses),
+				LaunchOutcome::Cycle(report) => {
+					let text = if report.already_running {
+						"Another update pass was already running.".to_owned()
+					} else if report.updated() > 0 || report.failed() > 0 {
+						format!(
+							"Automatic updates: {} updated, {} failed.",
+							report.updated(),
+							report.failed()
+						)
+					} else {
+						String::new()
+					};
+
+					Message::Notice(text)
+				}
+			})
+		});
+	}
+
+	/// A read-only look for updates. Installs nothing.
+	pub(crate) fn check_updates(&self) {
+		self.spawn_result(|engine| async move {
+			engine.check_updates(None).await.map(Message::Statuses)
+		});
+	}
+
+	pub(crate) fn set_update_mode(&self, mode: UpdateMode, acknowledged: bool) {
+		self.spawn_result(move |engine| async move {
+			let consent = ModeConsent {
+				actor: "desktop".into(),
+				acknowledged_risks: acknowledged,
+			};
+
+			control::apply_mode(&engine, mode, &consent, None)
+				.await
+				.map_err(|error| match error {
+					control::ControlError::Engine(error) => error,
+					other => launcher_model::LauncherError::new(
+						launcher_model::ErrorCode::ConsentRequired,
+						other.to_string(),
+					),
+				})?;
+
+			let settings = engine.update_settings().await;
+			let background = control::status(&engine).await;
+
+			Ok(Message::UpdateInfo(
+				Box::new(settings),
+				Box::new(background),
+			))
+		});
+	}
+
+	pub(crate) fn set_minimum_age(&self, age: MinimumAge) {
+		self.spawn_result(move |engine| async move {
+			engine.set_minimum_age(age).await?;
+
+			let settings = engine.update_settings().await;
+			let background = control::status(&engine).await;
+
+			Ok(Message::UpdateInfo(
+				Box::new(settings),
+				Box::new(background),
+			))
+		});
+	}
+
+	pub(crate) fn set_app_policy(&self, installation: InstallationId, policy: AppPolicy) {
+		self.spawn_result(move |engine| async move {
+			engine.set_app_update_policy(installation, policy).await?;
+
+			let mut policies = HashMap::new();
+
+			for app in engine.installed().await? {
+				policies.insert(app.id, engine.app_update_policy(app.id).await?);
+			}
+
+			Ok(Message::Policies(policies))
+		});
+	}
+
+	pub(crate) fn set_pinned(&self, installation: InstallationId, pinned: bool) {
+		self.spawn_result(move |engine| async move {
+			if pinned {
+				engine.pin(installation).await?
+			} else {
+				engine.unpin(installation).await?
+			}
+
+			let mut policies = HashMap::new();
+
+			for app in engine.installed().await? {
+				policies.insert(app.id, engine.app_update_policy(app.id).await?);
+			}
+
+			Ok(Message::Policies(policies))
+		});
+	}
+
+	pub(crate) fn stop_background_updates(&self) {
+		self.spawn_result(|engine| async move {
+			let _ = control::stop(&engine).await;
+
+			let settings = engine.update_settings().await;
+			let background = control::status(&engine).await;
+
+			Ok(Message::UpdateInfo(
+				Box::new(settings),
+				Box::new(background),
+			))
+		});
 	}
 
 	pub(crate) fn set_theme(&self, theme: ThemePreference) {

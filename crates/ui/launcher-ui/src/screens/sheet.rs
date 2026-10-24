@@ -6,7 +6,7 @@
 
 use egui::{Id, Modal, RichText, Ui};
 use launcher_core::{InstalledApp, Ready, RemovalReport};
-use launcher_model::InstallationId;
+use launcher_model::{InstallationId, UpdateMode};
 use launcher_resolver::{Candidate, EvidenceLevel};
 
 use crate::theme;
@@ -24,6 +24,11 @@ pub(crate) enum Sheet {
 	},
 	Choose(Vec<Candidate>),
 	ConfirmUninstall(InstalledApp),
+	/// Turning on an automatic update mode. Never pre-checked.
+	ConfirmMode {
+		mode: UpdateMode,
+		acknowledged: bool,
+	},
 	Removed {
 		name: String,
 		report: RemovalReport,
@@ -39,6 +44,10 @@ pub(crate) enum Outcome {
 		acknowledged: bool,
 	},
 	Uninstall(InstalledApp),
+	SetMode {
+		mode: UpdateMode,
+		acknowledged: bool,
+	},
 }
 
 pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
@@ -93,6 +102,37 @@ pub(crate) fn show(ctx: &egui::Context, sheet: &mut Sheet) -> Outcome {
 
 					if ui.button("Uninstall").clicked() {
 						outcome = Outcome::Uninstall(app.clone());
+					}
+				});
+			}
+			Sheet::ConfirmMode { mode, acknowledged } => {
+				ui.heading(mode.label());
+				ui.label(mode.description());
+				ui.add_space(6.0);
+				ui.label("Before you turn this on, know that:");
+				ui.label("• A new version can change how an app behaves, or stop it working.");
+				ui.label("• If a publisher's account is compromised, a harmful release could be installed.");
+				ui.label("• An update can migrate an app's data in a way older versions cannot read.");
+				ui.label("• Updates run without asking, and no scan can promise software is safe.");
+
+				if *mode == UpdateMode::Daemon {
+					ui.add_space(4.0);
+					ui.colored_label(
+						ui.visuals().warn_fg_color,
+						"This also registers a background program that starts each time you sign in, and keeps running after you close the Launcher. You can turn it off here or in your system's login items.",
+					);
+				}
+
+				ui.add_space(6.0);
+				ui.checkbox(acknowledged, "I understand, and I want automatic updates");
+
+				ui.horizontal(|ui| {
+					if ui.button("Cancel").clicked() {
+						outcome = Outcome::Close;
+					}
+
+					if ui.add_enabled(*acknowledged, egui::Button::new("Turn on")).clicked() {
+						outcome = Outcome::SetMode { mode: *mode, acknowledged: *acknowledged };
 					}
 				});
 			}
@@ -246,6 +286,21 @@ fn evidence(level: EvidenceLevel) -> &'static str {
 			"nothing beyond the download itself. No checksum was published to compare"
 		}
 	}
+}
+
+/// A UTC date and time for display.
+pub(crate) fn when(unix: i64) -> String {
+	let time =
+		time::OffsetDateTime::from_unix_timestamp(unix).unwrap_or(time::OffsetDateTime::UNIX_EPOCH);
+
+	format!(
+		"{}-{:02}-{:02} {:02}:{:02} UTC",
+		time.year(),
+		u8::from(time.month()),
+		time.day(),
+		time.hour(),
+		time.minute()
+	)
 }
 
 pub(crate) fn bytes(size: u64) -> String {

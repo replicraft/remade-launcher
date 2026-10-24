@@ -34,7 +34,12 @@ fn run() -> Result<(), String> {
 		.build()
 		.map_err(|error| format!("could not start the async runtime: {error}"))?;
 
-	let data = DataDirectory::platform_default().map_err(|error| error.to_string())?;
+	// `REMADE_DATA_DIR` points both programs at another folder, for testing
+	// and for keeping several profiles apart.
+	let data = match std::env::var_os("REMADE_DATA_DIR") {
+		Some(path) if !path.is_empty() => DataDirectory::at(path),
+		_ => DataDirectory::platform_default().map_err(|error| error.to_string())?,
+	};
 	let engine = runtime
 		.block_on(Engine::open(&data))
 		.map(Arc::new)
