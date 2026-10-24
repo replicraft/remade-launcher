@@ -341,6 +341,9 @@ impl Database {
 					.prepare_cached("DELETE FROM installations WHERE id = ?1")?
 					.execute([installation.as_bytes().as_slice()])?;
 				transaction
+					.prepare_cached("DELETE FROM app_update_policy WHERE installation_id = ?1")?
+					.execute([installation.as_bytes().as_slice()])?;
+				transaction
 					.prepare_cached(
 						"UPDATE operations SET state = 'completed', detail = ?3, updated_at = ?2 WHERE id = ?1",
 					)?

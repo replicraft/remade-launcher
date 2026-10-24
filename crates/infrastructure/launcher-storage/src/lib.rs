@@ -10,9 +10,13 @@ mod database;
 mod error;
 mod lifecycle;
 mod migrations;
+mod plans;
+mod policy;
 mod pragmas;
 mod settings;
 
 pub use catalog_trust::StoredCatalog;
 pub use database::Database;
 pub use lifecycle::{InstallationRecord, OperationRecord};
+pub use plans::{ConsentRecord, StoredPlan};
+pub use policy::{AppPolicy, AssetObservation, DecisionRecord, ObservedAsset};
