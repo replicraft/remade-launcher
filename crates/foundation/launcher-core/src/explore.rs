@@ -43,6 +43,10 @@ pub struct ExploreRow {
 	pub repository: String,
 	pub categories: Vec<String>,
 	pub availability: Availability,
+	/// Highlighted by the catalog's editors.
+	pub featured: bool,
+	/// When the app joined the catalog, as Unix seconds, if it says.
+	pub added_at: Option<i64>,
 }
 
 /// Runs `query` against `catalog`.
@@ -131,6 +135,8 @@ fn row(slug: &str, project: &Project, host: Option<HostTarget>, supported: &[&st
 		repository: project.source.display_name(),
 		categories: project.display.categories.clone(),
 		availability: availability(project, host, supported),
+		featured: project.display.featured,
+		added_at: project.display.added_at_unix(),
 	}
 }
 

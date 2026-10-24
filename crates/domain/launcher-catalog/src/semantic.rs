@@ -77,6 +77,10 @@ fn validate_project(slug: &str, project: &Project) -> Result<(), CatalogError> {
 		return Err(schema("too many screenshots"));
 	}
 
+	if display.added_at.is_some() && display.added_at_unix().is_none() {
+		return Err(schema("added_at is not a UTC whole-second timestamp"));
+	}
+
 	check_numeric_id(&project.source.repository_id)?;
 	check_numeric_id(&project.source.owner_id)?;
 	check_text(&project.source.owner, 100, "owner")?;

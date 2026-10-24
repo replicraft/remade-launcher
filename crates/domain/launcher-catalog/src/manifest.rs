@@ -53,6 +53,23 @@ pub struct Display {
 	pub icon_url: Option<String>,
 	#[serde(default)]
 	pub screenshots: Vec<String>,
+	/// The catalog's editors chose to highlight this app.
+	#[serde(default)]
+	pub featured: bool,
+	/// When the app joined the catalog, as a UTC whole-second timestamp.
+	#[serde(default)]
+	pub added_at: Option<String>,
+}
+
+impl Display {
+	/// [`Self::added_at`] as Unix seconds. Verification has already rejected
+	/// anything that does not parse.
+	pub fn added_at_unix(&self) -> Option<i64> {
+		self.added_at
+			.as_deref()
+			.and_then(crate::timestamp::parse)
+			.map(|time| time.unix_timestamp())
+	}
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
@@ -350,4 +367,38 @@ pub struct SignatureAssets {
 pub struct Detection {
 	pub identities: Vec<ExpectedIdentity>,
 	pub standard_locations_only: bool,
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn display(extra: &str) -> Display {
+		let json = format!(
+			r#"{{"name":"A","summary":"s","kind":"desktop","categories":[],"links":{{}}{extra}}}"#
+		);
+
+		serde_json::from_str(&json).expect("a valid display")
+	}
+
+	#[test]
+	fn featured_and_added_at_are_optional() {
+		let plain = display("");
+
+		assert!(!plain.featured);
+		assert_eq!(plain.added_at_unix(), None);
+	}
+
+	#[test]
+	fn added_at_reads_as_unix_seconds() {
+		let shown = display(r#","featured":true,"added_at":"2030-01-15T00:00:00Z""#);
+
+		assert!(shown.featured);
+		assert_eq!(shown.added_at_unix(), Some(1_894_665_600));
+	}
+
+	#[test]
+	fn a_malformed_added_at_has_no_value() {
+		assert_eq!(display(r#","added_at":"yesterday""#).added_at_unix(), None);
+	}
 }
