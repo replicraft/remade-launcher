@@ -168,6 +168,23 @@ fn page(ui: &mut Ui, facts: &Facts<'_>) -> Option<Action> {
 
 			ui.add_space(14.0);
 			card(ui, "Packages", |ui| packages(ui, facts));
+			// A quiet second Install, for when the person has read this far.
+			ui.add_space(16.0);
+
+			let label = format!("{}  Install", icons::DOWNLOAD);
+
+			if ui
+				.add_enabled(
+					installable,
+					egui::Button::new(label).min_size(vec2(130.0, 36.0)),
+				)
+				.clicked()
+			{
+				action = Some(Action::Install {
+					slug: facts.slug.to_owned(),
+				});
+			}
+
 			ui.add_space(24.0);
 		});
 
@@ -181,7 +198,7 @@ fn header(ui: &mut Ui, facts: &Facts<'_>, installable: bool, action: &mut Option
 		ui.add_space(8.0);
 
 		ui.vertical(|ui| {
-			ui.set_max_width((ui.available_width() - 240.0).max(240.0));
+			ui.set_max_width((ui.available_width() - 240.0 - 40.0).max(240.0));
 			ui.spacing_mut().item_spacing.y = 4.0;
 
 			ui.horizontal(|ui| {
