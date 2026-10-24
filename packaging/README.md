@@ -79,3 +79,10 @@ registers it as a per-user login item. Package notes:
 
 `packaging/macos/make-background.py` draws the arrow with the standard library
 only. Run it when the artwork changes and commit the two PNGs.
+
+## Image files
+
+Every PNG, including the ones inside `remade-launcher.ico` and
+`RemadeLauncher.icns`, is optimized with `optipng -o7 -strip all`. Do the same
+for any image you add. The `.ico` holds PNG-compressed entries rather than
+raw bitmaps. The SVGs are a few hundred bytes and already minimal.
